@@ -678,7 +678,7 @@ def ask_claude(client, system: str, history: list, user_input: str) -> str:
         )
         return r.content[0].text
     except anthropic.AuthenticationError:
-        return "❌ API Key không hợp lệ. Kiểm tra lại ở sidebar."
+        return "❌ API Key không hợp lệ. Kiểm tra lại ở thanh cài đặt phía trên."
     except anthropic.RateLimitError:
         return "⚠️ Vượt giới hạn API. Thử lại sau vài giây."
     except Exception as e:
@@ -1381,7 +1381,7 @@ def tab_chat(api_key, role, level, loc):
     user_input = st.chat_input("Nhập câu hỏi...") or preset
     if user_input:
         if not api_key:
-            st.warning("⚠️ Vui lòng nhập API Key ở cài đặt trong sidebar.")
+            st.warning("⚠️ Vui lòng nhập API Key ở thanh cài đặt phía trên.")
             st.stop()
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
@@ -1480,7 +1480,7 @@ def tab_checklist(api_key: str = ""):
     elif ai_on and not menu:
         st.caption("💡 Nhập thực đơn hôm nay bên trên để AI tạo câu hỏi kiểm tra riêng.")
     else:
-        st.caption("🔌 Kết nối API key ở sidebar để dùng tính năng tạo câu hỏi theo thực đơn.")
+        st.caption("🔌 Kết nối API key ở thanh cài đặt phía trên để dùng tính năng tạo câu hỏi theo thực đơn.")
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     cl = get_checklist(level_key)
@@ -2781,9 +2781,9 @@ def main():
         '🟢 Live</span>'
     )
     _stat = lambda val, lbl, clr: (
-        f'<div style="flex:1;min-width:72px;text-align:center;padding:0 6px">'
-        f'<div style="color:{clr};font-size:1.35rem;font-weight:800;line-height:1">{val}</div>'
-        f'<div style="color:#93C5FD;font-size:0.7rem;margin-top:3px">{lbl}</div></div>'
+        f'<div style="flex:1;min-width:80px;text-align:center;padding:0 8px">'
+        f'<div style="color:{clr};font-size:1.8rem;font-weight:800;line-height:1.1">{val}</div>'
+        f'<div style="color:#BFDBFE;font-size:0.82rem;margin-top:5px;font-weight:500">{lbl}</div></div>'
     )
     _sep = '<div style="width:1px;background:rgba(255,255,255,0.15);margin:0 2px"></div>'
     _stats = (
@@ -2834,28 +2834,30 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Hàng 1: Vai trò / Cấp trường / Tỉnh TP / API status ─────────────────
     ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([2, 2, 1.5, 2.5])
     with ctrl1:
         role = st.selectbox(
             "Vai trò",
             ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)",
              "Y Tế Học Đường", "Ban Giám Hiệu"],
-            label_visibility="visible",
         )
     with ctrl2:
         level = st.selectbox(
             "Cấp trường",
             ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
-            label_visibility="visible",
         )
     with ctrl3:
         loc = st.text_input("Tỉnh/TP", value="TP.HCM")
     with ctrl4:
         if api_key:
+            # Dùng label ẩn để căn thẳng hàng với các input khác
             st.markdown(
-                '<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-                'padding:8px 12px;font-size:0.82rem;color:#166534;margin-top:20px">'
-                '✅ <b>AI đã kết nối</b></div>',
+                '<div style="font-size:0.875rem;font-weight:600;color:#374151;'
+                'margin-bottom:8px">Trạng thái AI</div>'
+                '<div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:8px;'
+                'padding:10px 14px;font-size:0.85rem;color:#166534;font-weight:600">'
+                '✅ AI đã kết nối — sẵn sàng</div>',
                 unsafe_allow_html=True,
             )
         else:
@@ -2863,31 +2865,68 @@ def main():
                 "Claude API Key (tuỳ chọn)",
                 type="password",
                 placeholder="sk-ant-...",
-                help="Để trống nếu chưa có — Checklist vẫn dùng được",
+                help="Không có key? Checklist vẫn dùng được đầy đủ",
             )
             if manual_key:
                 api_key = manual_key
 
-    # Hiển thị mô tả vai trò + hotline nhỏ
+    # ── Hàng 2: Mô tả vai trò + lịch nhắc nhở + hotline ─────────────────────
     DESCS = {
-        "Phụ Huynh": "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
+        "Phụ Huynh":                    "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
         "Ban Giám Sát (Đại Diện PHHS)": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức theo luật",
-        "Y Tế Học Đường": "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
-        "Ban Giám Hiệu": "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
+        "Y Tế Học Đường":               "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
+        "Ban Giám Hiệu":                "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
     }
-    role_desc  = DESCS.get(role, "")
-    role_color = {"Phụ Huynh": "#2563EB", "Ban Giám Sát (Đại Diện PHHS)": "#7C3AED",
-                  "Y Tế Học Đường": "#0D9488", "Ban Giám Hiệu": "#B45309"}.get(role, "#64748B")
+    ROLE_CLR = {
+        "Phụ Huynh": "#2563EB", "Ban Giám Sát (Đại Diện PHHS)": "#7C3AED",
+        "Y Tế Học Đường": "#0D9488", "Ban Giám Hiệu": "#B45309",
+    }
+
+    # Tính nhắc nhở
+    _t_info   = _REMINDER_TIMES.get(role)
+    _now      = now_vn()
+    _reminder_txt = ""
+    if _t_info and _now.weekday() < 5:
+        _it     = _t_info["hour"] * 60 + _t_info["min"]
+        _ct     = _now.hour * 60 + _now.minute
+        _ml     = _it - _ct
+        _is_day = _now.weekday() in _t_info["days"]
+        if _is_day and 0 <= _ml <= 15:
+            _reminder_txt = (
+                f'&nbsp;&nbsp;<span style="background:#FEF9C3;color:#92400E;font-weight:700;'
+                f'padding:2px 10px;border-radius:12px;font-size:0.78rem">'
+                f'⏰ NHẮC: Còn {_ml} phút đến giờ kiểm tra!</span>'
+            )
+        elif _is_day and _ml > 0:
+            _rt  = _it - 15
+            _reminder_txt = (
+                f'&nbsp;&nbsp;<span style="color:#64748B;font-size:0.78rem">'
+                f'⏰ Nhắc nhở lúc {_rt//60:02d}:{_rt%60:02d} — Kiểm tra {_t_info["hour"]:02d}:{_t_info["min"]:02d}</span>'
+            )
+        elif _is_day and _ml <= 0:
+            _reminder_txt = (
+                f'&nbsp;&nbsp;<span style="color:#94A3B8;font-size:0.78rem">'
+                f'Đã qua giờ kiểm tra hôm nay</span>'
+            )
+        elif not _is_day:
+            _next_d = next((d for d in sorted(_t_info["days"]) if d > _now.weekday()), min(_t_info["days"]))
+            _day_vn = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6"][_next_d]
+            _reminder_txt = (
+                f'&nbsp;&nbsp;<span style="color:#64748B;font-size:0.78rem">'
+                f'📅 Lịch tiếp theo: {_day_vn} {_t_info["hour"]:02d}:{_t_info["min"]:02d}</span>'
+            )
+
     st.markdown(
         f'<div style="display:flex;justify-content:space-between;align-items:center;'
-        f'font-size:0.8rem;color:#475569;margin-bottom:4px;flex-wrap:wrap;gap:4px">'
-        f'<span><b style="color:{role_color}">{role}:</b> {role_desc}</span>'
+        f'font-size:0.82rem;color:#475569;margin-bottom:6px;flex-wrap:wrap;gap:4px">'
+        f'<span><b style="color:{ROLE_CLR.get(role,"#64748B")}">{role}:</b> '
+        f'{DESCS.get(role,"")}{_reminder_txt}</span>'
         f'<span style="color:#94A3B8">🔴 Khẩn cấp: <b>115</b> &nbsp;·&nbsp; Cục ATTP: <b>1800 6838</b></span>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
-    # Nhắc nhở kiểm tra nếu trong 15 phút trước giờ thực hiện
+    # Hiển thị banner nhắc nhở nổi bật nếu trong 15 phút
     show_reminder_banner(role)
 
     # Nhãn tab thay đổi theo vai trò
