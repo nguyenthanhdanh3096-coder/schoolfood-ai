@@ -26,7 +26,11 @@ if not LEGAL_DIR.exists():
 PROMPT_FILE = ROOT / "prompts/regulatory_qa_v1.md"
 if not PROMPT_FILE.exists():
     PROMPT_FILE = ROOT.parent / "03_Product/AI_Prompts/regulatory_qa_v1.md"
-MODEL, MAX_TOK = "claude-sonnet-4-6", 1500
+# Model mặc định — Sonnet 4.6 cho tất cả text tasks
+# Vision (ảnh): dùng Sonnet 4.6 (cũng hỗ trợ vision, rẻ hơn Opus ~5x)
+MODEL         = "claude-sonnet-4-6"
+MODEL_VISION  = "claude-sonnet-4-6"   # Thay vì opus — cùng chất lượng vision, tiết kiệm hơn
+MAX_TOK       = 1200                   # Giảm từ 1500 — đủ cho hầu hết câu trả lời
 
 # ── Định nghĩa mục bắt buộc & ngưỡng điểm ────────────────────────────────────
 CRITICAL_ITEMS = {"C03", "C07", "C09", "C10", "C11", "C18", "C20"}
@@ -855,8 +859,8 @@ def analyze_photo_ai(photo_bytes: bytes, group_name: str, api_key: str) -> dict:
         client = anthropic.Anthropic(api_key=api_key)
         b64 = base64.standard_b64encode(photo_bytes).decode()
         resp = client.messages.create(
-            model="claude-opus-4-8",
-            max_tokens=700,
+            model=MODEL_VISION,
+            max_tokens=500,   # JSON output ngắn gọn, không cần nhiều
             messages=[{
                 "role": "user",
                 "content": [
@@ -895,8 +899,8 @@ def generate_extra_checklist(menu: str, school_level: str, api_key: str) -> list
     try:
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
+            model=MODEL,
+            max_tokens=800,   # JSON array 3-5 items, giảm từ 1200
             messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
 Thực đơn hôm nay ({school_level}): {menu}
 
@@ -947,8 +951,8 @@ def generate_ai_narrative(results: dict, notes: dict, alert_level: str,
             f"Mục không đạt: {', '.join(fail_list) if fail_list else 'Không có'}"
         )
         resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=500,
+            model=MODEL,
+            max_tokens=400,   # Đoạn văn 120-160 từ, giảm từ 500
             messages=[{"role": "user", "content": f"""Viết đoạn tóm tắt báo cáo ATTP (120–160 từ) bằng tiếng Việt:
 {context}
 
@@ -1330,9 +1334,10 @@ CÁCH PHẢN HỒI:
     messages = history + [{"role": "user", "content": user_msg}]
     try:
         resp = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=600,
-            system=INCIDENT_SYSTEM,
+            model=MODEL,
+            max_tokens=500,   # Giảm từ 600 — hướng dẫn từng bước ngắn gọn
+            system=[{"type": "text", "text": INCIDENT_SYSTEM,
+                     "cache_control": {"type": "ephemeral"}}],  # Cache system prompt
             messages=messages,
         )
         return resp.content[0].text
