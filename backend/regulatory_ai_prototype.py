@@ -2745,20 +2745,40 @@ def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
     for step in KIEM_THUC:
         b_num = step["buoc"]
         ts    = ts_map.get(b_num, "")
-        # Xác minh timeline: thời điểm xác nhận có nằm trong khung giờ chuẩn không
-        window_start = int(step["time_window"].split("–")[0].split(":")[0])
-        ts_hour = int(ts.split(":")[0]) if ts and ":" in ts else -1
-        on_time = (ts_hour >= window_start) if ts_hour >= 0 else None
+        # Xác minh timeline — kiểm tra ĐẦY ĐỦ khung giờ (start <= ts <= end)
+        def _parse_hhmm(t: str) -> int:
+            """Chuyển 'HH:MM' hoặc 'HH:MM:SS' thành tổng phút."""
+            parts = t.strip().split(":")
+            return int(parts[0]) * 60 + int(parts[1]) if len(parts) >= 2 else -1
+
+        # Phân tích "8:00 – 9:30" → start=480 phút, end=570 phút
+        w_parts = step["time_window"].replace("–", "-").replace("—", "-").split("-")
+        w_start = _parse_hhmm(w_parts[0]) if len(w_parts) >= 1 else 0
+        w_end   = _parse_hhmm(w_parts[1]) if len(w_parts) >= 2 else 1439
+
+        ts_mins  = _parse_hhmm(ts) if ts else -1
+        on_time  = (w_start <= ts_mins <= w_end) if ts_mins >= 0 else None
 
         ts_label = (
-            f"  ✅ Xác nhận lúc {ts}"
-            + (" — đúng khung giờ" if on_time else " — NGOÀI khung giờ chuẩn ⚠️")
-            if ts else "  ❌ Chưa xác nhận"
+            f" ✅ Xác nhận lúc {ts} — đúng khung giờ ({step['time_window']})"
+            if on_time is True else
+            f" ⚠️ NGOÀI KHUNG GIỜ: Xác nhận lúc {ts} (yêu cầu: {step['time_window']})"
+            if on_time is False else
+            " ❌ Chưa xác nhận"
         )
+
         _docx_para(doc,
                    f"{step['icon']}  {step['label']}  ({step['time_window']})  —  {step['law']}",
                    bold=True, size=13, space_before=8, space_after=2)
-        _docx_para(doc, f"⏱ Thời gian thực hiện:{ts_label}", size=11, space_after=2)
+
+        # Dòng thời gian — highlight đỏ nếu ngoài khung giờ
+        p_ts = doc.add_paragraph()
+        p_ts.paragraph_format.space_after = Pt(4)
+        r_ts = p_ts.add_run(f"⏱ Thời gian thực hiện:{ts_label}")
+        _docx_set_font(r_ts, bold=(on_time is False), size_pt=11,
+                       color=(192, 0, 0) if on_time is False else
+                       (22, 163, 74) if on_time is True else (100, 116, 139))
+
         _docx_para(doc, step["desc"], size=11, space_after=4)
 
         tbl = doc.add_table(rows=1 + len(step["items"]), cols=4)
