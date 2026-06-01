@@ -417,7 +417,7 @@ def get_checklist(level_key: str) -> list:
     mg, vg, lvl = n["meat_g"], n["veg_g"], n["short"]
     fail_m, fail_v = int(mg * 0.7), int(vg * 0.7)
     return [
-        ("📦 Nguồn Gốc Nguyên Liệu", [
+        ("📦 Nguồn gốc nguyên liệu", [
             ("C01", False, "Thịt/cá có tem kiểm dịch thú y còn hiệu lực",
              "Xem nhãn mác trên bao bì từng lô hàng",
              "Có tem còn hiệu lực", "Không có tem, hoặc tem đã hết hạn"),
@@ -431,7 +431,7 @@ def get_checklist(level_key: str) -> list:
              "Yêu cầu xem toàn bộ hóa đơn mua hàng trong ngày",
              "Có hóa đơn hợp lệ, đúng ngày, đủ loại", "Thiếu hóa đơn hoặc không xuất trình được"),
         ]),
-        ("🌡️ Bảo Quản & Vận Chuyển", [
+        ("🌡️ Bảo quản & vận chuyển", [
             ("C05", False, "Nhiệt độ tủ lạnh thực phẩm sống dưới 5°C",
              "Đọc đồng hồ hoặc đo nhiệt kế tủ trực tiếp",
              "Dưới 5°C", "Từ 5°C trở lên — vùng nguy hiểm, vi khuẩn tăng gấp đôi mỗi 20 phút"),
@@ -445,7 +445,7 @@ def get_checklist(level_key: str) -> list:
              "Quan sát trực tiếp từng thùng chứa khi bàn giao",
              "Kín nắp, bề mặt sạch, không mùi lạ", "Hở nắp, bẩn, hoặc có mùi khó chịu"),
         ]),
-        ("🍽️ Thức Ăn Khi Phục Vụ", [
+        ("🍽️ Thức ăn khi phục vụ", [
             ("C09", True,  "Nhiệt độ thức ăn khi chia đúng chuẩn an toàn",
              "Đo nhiệt kế thực phẩm trực tiếp tại thời điểm bắt đầu chia",
              "Nóng ≥ 60°C · Lạnh ≤ 5°C", "5°C < T < 60°C — VÙNG NGUY HIỂM tuyệt đối"),
@@ -462,7 +462,7 @@ def get_checklist(level_key: str) -> list:
              f"Ước lượng lượng rau trong suất ăn thực tế, tiêu chuẩn {n['veg_range']}",
              f"Từ {vg}g/học sinh (cấp {lvl})", f"Dưới {fail_v}g — thiếu rau nghiêm trọng"),
         ]),
-        ("🧼 Vệ Sinh Dụng Cụ & Nhân Viên", [
+        ("🧼 Vệ sinh dụng cụ & nhân viên", [
             ("C14", False, "Bát đũa muỗng sạch, khô ráo, không còn vết thức ăn cũ",
              "Kiểm tra ngẫu nhiên 5–10 bộ dụng cụ",
              "Sạch, khô, không mùi", "Còn thức ăn cũ, ẩm ướt, hoặc có mùi hôi"),
@@ -476,7 +476,7 @@ def get_checklist(level_key: str) -> list:
              "Quan sát mặt bàn, sàn, cửa sổ và các góc xung quanh khu vực chia",
              "Sạch sẽ, không có ruồi/gián/kiến", "Bẩn, hoặc có côn trùng xuất hiện"),
         ]),
-        ("📋 Hồ Sơ & Giấy Tờ", [
+        ("📋 Hồ sơ & giấy tờ", [
             ("C18", True,  "Sổ kiểm thực 3 bước điền đầy đủ hôm nay, có chữ ký xác nhận",
              "Yêu cầu xem sổ tại bếp — đây là tài liệu bắt buộc theo pháp luật",
              "Ghi đủ 3 bước (trước/trong/sau chế biến), có chữ ký Y Tế", "Chưa điền, thiếu bước, hoặc không có chữ ký"),
@@ -569,19 +569,19 @@ _REMINDER_TIMES = {
         "hour": 10, "min": 0,
         "days": [0, 1, 2, 3, 4],          # Thứ 2–6
         "task": "Kiểm thực 3 bước bữa trưa (trước 10:45)",
-        "tab":  "✅ Checklist Kiểm Tra",
+        "tab":  "✅ Checklist kiểm tra",
     },
     "Ban Giám Sát": {
         "hour": 10, "min": 0,
         "days": [0, 2],                    # Thứ 2, Thứ 4 (định kỳ có báo trước)
         "task": "Checklist 20 điểm định kỳ (Thứ 2 & Thứ 4)",
-        "tab":  "✅ Checklist Kiểm Tra",
+        "tab":  "✅ Checklist kiểm tra",
     },
     "Ban Giám Hiệu": {
         "hour": 9, "min": 0,
         "days": [0, 1, 2, 3, 4],
         "task": "Xem tổng hợp báo cáo tuần & duyệt checklist",
-        "tab":  "📅 Lịch & Thông Báo",
+        "tab":  "📅 Lịch & thông báo",
         "last_week_only": True,
     },
 }
@@ -668,7 +668,7 @@ def validate_checklist(results: dict, photos: dict) -> list[str]:
 # ── TAB 1: Hỏi đáp AI ─────────────────────────────────────────────────────────
 def tab_chat(api_key, role, level, loc):
     st.markdown("""<div class="sf-card">
-        <div class="sf-card-title">💬 Hỏi Đáp Pháp Luật ATTP</div>
+        <div class="sf-card-title">💬 Hỏi đáp pháp luật ATTP</div>
         <div class="sf-card-body">Đặt câu hỏi bằng tiếng Việt thông thường — AI trả lời dựa trên văn bản pháp luật thực tế.</div>
     </div>""", unsafe_allow_html=True)
 
@@ -717,7 +717,7 @@ def tab_chat(api_key, role, level, loc):
     user_input = st.chat_input("Nhập câu hỏi...") or preset
     if user_input:
         if not api_key:
-            st.warning("⚠️ Vui lòng nhập API Key ở Cài Đặt trong sidebar.")
+            st.warning("⚠️ Vui lòng nhập API Key ở cài đặt trong sidebar.")
             st.stop()
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
@@ -739,7 +739,7 @@ def tab_chat(api_key, role, level, loc):
 # ── TAB 2: Checklist ──────────────────────────────────────────────────────────
 def tab_checklist():
     st.markdown("""<div class="sf-card">
-        <div class="sf-card-title">✅ Checklist Kiểm Tra ATTP Bữa Ăn Học Đường</div>
+        <div class="sf-card-title">✅ Checklist kiểm tra ATTP bữa ăn học đường</div>
         <div class="sf-card-body">20 điểm kiểm tra chuẩn hoá · Mục có <span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:8px;font-weight:700;font-size:0.75rem">BẮT BUỘC</span> phải đạt tuyệt đối</div>
     </div>""", unsafe_allow_html=True)
 
@@ -763,7 +763,7 @@ def tab_checklist():
     </div>""", unsafe_allow_html=True)
 
     # Thông tin kiểm tra
-    st.markdown('<div class="sec-hdr">Thông Tin Buổi Kiểm Tra</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Thông tin buổi kiểm tra</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     school = c1.text_input("Tên trường", placeholder="VD: TH Nguyễn Du, Q.1")
     date   = c2.date_input("Ngày kiểm tra", value=datetime.today(), format="DD/MM/YYYY")
@@ -912,14 +912,14 @@ def tab_checklist():
 
     # ── Kết quả & Cảnh báo ───────────────────────────────────────────────────
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">Kết Quả Tổng Hợp</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Kết quả tổng hợp</div>', unsafe_allow_html=True)
 
     total_answered = pass_count + fail_count
     critical_fails = CRITICAL_ITEMS & {c for c, v in st.session_state.cl_r.items() if v == "❌ Không Đạt"}
 
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Đã Kiểm Tra</div>
+        <div class="metric-lbl">Đã kiểm tra</div>
         <div class="metric-num c-blue">{total_answered}</div>
         <div class="metric-lbl">/ {TOTAL_ITEMS} điểm</div>
     </div>""", unsafe_allow_html=True)
@@ -937,14 +937,14 @@ def tab_checklist():
     crit_num   = str(len(critical_fails)) if critical_fails else "✓"
     crit_sub   = "vi phạm" if critical_fails else "Tất cả đạt"
     m4.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Mục Bắt Buộc</div>
+        <div class="metric-lbl">Mục bắt buộc</div>
         <div class="metric-num {crit_color}">{crit_num}</div>
         <div class="metric-lbl">{crit_sub} / {len(CRITICAL_ITEMS)} mục</div>
     </div>""", unsafe_allow_html=True)
     pct = int(pass_count / total_answered * 100) if total_answered else 0
     pct_color = "c-green" if pct >= 90 else "c-orange" if pct >= 75 else "c-red"
     m5.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Tỷ Lệ Đạt</div>
+        <div class="metric-lbl">Tỷ lệ đạt</div>
         <div class="metric-num {pct_color}">{pct}%</div>
         <div class="metric-lbl">trong số đã chấm</div>
     </div>""", unsafe_allow_html=True)
@@ -1008,7 +1008,7 @@ def tab_checklist():
 
     can_submit = len(errors) == 0
     if st.button(
-        "📄 Tạo Báo Cáo Kiểm Tra" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
+        "📄 Tạo báo cáo kiểm tra" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
         type="primary" if can_submit else "secondary",
         disabled=not can_submit,
         use_container_width=True,
@@ -1097,7 +1097,7 @@ def tab_schedule():
         <div class="sf-card-body">Quy định rõ ai kiểm tra gì, khi nào, báo cáo ai — để không có khoảng trống trách nhiệm.</div>
     </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="sec-hdr">Lịch Kiểm Tra Theo Vai Trò</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Lịch kiểm tra theo vai trò</div>', unsafe_allow_html=True)
 
     for s in SCHEDULE:
         st.markdown(f"""
@@ -1112,7 +1112,7 @@ def tab_schedule():
         """, unsafe_allow_html=True)
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">Hệ Thống Cảnh Báo Theo Cấp Độ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Hệ thống cảnh báo theo cấp độ</div>', unsafe_allow_html=True)
 
     for key, a in ALERT_SYSTEM.items():
         triggers_html = "".join(f"<li>{t}</li>" for t in a["triggers"])
@@ -1133,7 +1133,7 @@ def tab_schedule():
         """, unsafe_allow_html=True)
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">Tiêu Chí Đánh Giá Tổng Thể</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Tiêu chí đánh giá tổng thể</div>', unsafe_allow_html=True)
 
     st.markdown("""<div class="sf-card">
     <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
@@ -1193,7 +1193,7 @@ def tab_emergency():
             <div class="sf-card-body">{body}</div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="sec-hdr">Số Điện Thoại Quan Trọng</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Số điện thoại quan trọng</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.markdown('<div class="metric-box"><div class="metric-lbl">Cấp Cứu</div><div class="metric-num c-red">115</div><div class="metric-lbl">Miễn phí · 24/7</div></div>', unsafe_allow_html=True)
     c2.markdown('<div class="metric-box"><div class="metric-lbl">Cục ATTP</div><div class="metric-num c-blue" style="font-size:1.4rem">1800 6838</div><div class="metric-lbl">Miễn phí · Giờ hành chính</div></div>', unsafe_allow_html=True)
@@ -1213,7 +1213,7 @@ def tab_about():
             <div class="sf-card-body">{s['freq']} · {s['what']}</div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="sec-hdr">Tài Liệu Pháp Luật Đã Tải</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Tài liệu pháp luật đã tải</div>', unsafe_allow_html=True)
     pdfs = sorted(LEGAL_DIR.glob("*.pdf"))
     for p in pdfs:
         st.success(f"✅ {p.name} ({p.stat().st_size // 1024} KB)")
@@ -1238,7 +1238,7 @@ def main():
     </div>""", unsafe_allow_html=True)
 
     with st.sidebar:
-        st.markdown("### ⚙️ Cài Đặt")
+        st.markdown("### ⚙️ Cài đặt")
 
         # ── Tự động đọc API key theo thứ tự ưu tiên ──────────────────────────
         # 1. Streamlit Cloud Secrets  (khi deploy — người dùng không cần nhập)
@@ -1267,7 +1267,7 @@ def main():
             )
             if not api_key:
                 st.caption("💡 Không có key? Tab Checklist vẫn dùng được đầy đủ.")
-        st.markdown('<div class="sec-hdr">Hồ Sơ Người Dùng</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-hdr">Hồ sơ người dùng</div>', unsafe_allow_html=True)
         role  = st.selectbox("Vai trò", ["Phụ Huynh", "Ban Giám Sát", "Y Tế Học Đường", "Ban Giám Hiệu"])
         level = st.selectbox("Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"])
         loc   = st.text_input("Tỉnh/Thành phố", value="TP. Hồ Chí Minh")
@@ -1281,7 +1281,7 @@ def main():
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
         # ── Trạng thái nhắc nhở ──────────────────────────────────────────────
-        st.markdown('<div class="sec-hdr">🔔 Nhắc Nhở Kiểm Tra</div>',
+        st.markdown('<div class="sec-hdr">🔔 Nhắc nhở kiểm tra</div>',
                     unsafe_allow_html=True)
         now = now_vn()
         _t = _REMINDER_TIMES.get(role)
@@ -1341,11 +1341,11 @@ def main():
     show_reminder_banner(role)
 
     t1, t2, t3, t4, t5 = st.tabs([
-        "💬 Hỏi Đáp AI",
-        "✅ Checklist Kiểm Tra",
-        "📅 Lịch & Thông Báo",
-        "🚨 Khẩn Cấp",
-        "ℹ️ Về Ứng Dụng",
+        "💬 Hỏi đáp AI",
+        "✅ Checklist kiểm tra",
+        "📅 Lịch & thông báo",
+        "🚨 Khẩn cấp",
+        "ℹ️ Về ứng dụng",
     ])
     with t1: tab_chat(api_key, role, level, loc)
     with t2: tab_checklist()
