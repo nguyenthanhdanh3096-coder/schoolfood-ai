@@ -667,30 +667,61 @@ def validate_checklist(results: dict, photos: dict) -> list[str]:
     return errors
 
 
+# ── Cơ sở pháp lý dùng cho tất cả AI analysis ───────────────────────────────
+_LEGAL_BASIS = """
+CĂN CỨ PHÁP LÝ VÀ TIÊU CHUẨN KỸ THUẬT ÁP DỤNG:
+1. NĐ 15/2018/NĐ-CP — Quy định điều kiện đảm bảo ATTP, yêu cầu bếp ăn tập thể
+2. TTLT 13/2016/TTLT-BYT-BGDĐT — Công tác y tế trường học, kiểm soát bữa ăn học đường
+3. QĐ 3958/QĐ-BYT ngày 25/12/2025 — Hướng dẫn dinh dưỡng bữa ăn học đường
+4. QCVN 8-1:2011/BYT — Giới hạn ô nhiễm vi sinh vật (E.coli, Salmonella, Staphylococcus)
+5. QCVN 8-2:2011/BYT — Giới hạn ô nhiễm kim loại nặng (chì, cadimi, thuỷ ngân)
+6. QCVN 8-3:2012/BYT — Giới hạn dư lượng thuốc bảo vệ thực vật trong thực phẩm
+7. Luật ATTP số 55/2010/QH12 — Khung pháp lý tổng thể về an toàn thực phẩm
+8. WHO Five Keys to Safer Food — 5 nguyên tắc vệ sinh thực phẩm của WHO
+9. Codex Alimentarius CAC/RCP 1-1969 — Quy phạm thực hành vệ sinh tổng quát
+10. Nguyên tắc HACCP (Hazard Analysis Critical Control Points) — Phân tích mối nguy
+VÙNG NHIỆT ĐỘ NGUY HIỂM: 5°C – 60°C (vi khuẩn tăng gấp đôi mỗi 20 phút)
+"""
+
+_VISUAL_CRITERIA = """
+TIÊU CHÍ ĐÁNH GIÁ TRỰC QUAN (Căn cứ WHO Food Safety Visual Inspection Guide + QCVN):
+- Màu sắc thực phẩm: bất thường (xanh, đen, xám) → nguy cơ nhiễm khuẩn/mốc
+- Bề mặt: nhớt, ẩm ướt bất thường → dấu hiệu vi khuẩn phát triển
+- Mùi: chua, hôi, khác lạ → phân huỷ protein hoặc nhiễm khuẩn
+- Nấm mốc: đốm trắng/xanh/đen → Aspergillus, Penicillium, Fusarium
+- Côn trùng: ruồi, gián, kiến → vector lây truyền Salmonella, E.coli
+- Nhiệt độ: <60°C (nóng) hoặc >5°C (lạnh) → vùng nguy hiểm theo HACCP
+- Sổ kiểm thực: thiếu chữ ký, thiếu bước → vi phạm TTLT 13/2016 Điều 9
+- Dụng cụ: rỉ sét, nứt vỡ → nơi trú ẩn vi khuẩn, không đảm bảo NĐ 15/2018
+"""
+
+
 # ── AI #2: Phân tích ảnh rủi ro ATTP (Claude Vision) ─────────────────────────
 def analyze_photo_ai(photo_bytes: bytes, group_name: str, api_key: str) -> dict:
-    """Gọi Claude Vision phân tích ảnh ATTP, trả về dict risk assessment."""
+    """Gọi Claude Vision phân tích ảnh ATTP dựa trên chuẩn WHO + QCVN + NĐ 15/2018."""
     try:
         client = anthropic.Anthropic(api_key=api_key)
         b64 = base64.standard_b64encode(photo_bytes).decode()
         resp = client.messages.create(
             model="claude-opus-4-8",
-            max_tokens=600,
+            max_tokens=700,
             messages=[{
                 "role": "user",
                 "content": [
                     {"type": "image",
                      "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
-                    {"type": "text", "text": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
-Phân tích ảnh trong bối cảnh kiểm tra bữa ăn học đường.
+                    {"type": "text", "text": f"""Bạn là chuyên gia kiểm tra ATTP trường học Việt Nam.
 Nhóm kiểm tra: {group_name}
 
-Trả lời JSON (không thêm text khác bên ngoài JSON):
+{_VISUAL_CRITERIA}
+
+Phân tích ảnh theo các tiêu chí trên. Trả lời JSON (không thêm text ngoài JSON):
 {{
   "risk_level": "OK" hoặc "WARNING" hoặc "CRITICAL",
-  "issues": ["mô tả vấn đề cụ thể nếu có"],
-  "positives": ["điểm nhìn thấy đạt chuẩn"],
-  "recommendation": "hành động cần làm (để trống nếu OK)",
+  "issues": ["vấn đề cụ thể + căn cứ pháp lý/kỹ thuật nếu có"],
+  "positives": ["điểm đạt chuẩn quan sát được"],
+  "recommendation": "hành động khắc phục cụ thể + thời hạn (để trống nếu OK)",
+  "legal_ref": "văn bản pháp lý áp dụng chính (ví dụ: QCVN 8-1:2011/BYT)",
   "confidence": 0.85
 }}"""}
                 ]
@@ -699,43 +730,47 @@ Trả lời JSON (không thêm text khác bên ngoài JSON):
         text = resp.content[0].text.strip()
         s, e = text.find("{"), text.rfind("}") + 1
         return json.loads(text[s:e]) if s != -1 and e > s else \
-               {"risk_level": "OK", "issues": [], "positives": [], "recommendation": "", "confidence": 0.5}
+               {"risk_level": "OK", "issues": [], "positives": [],
+                "recommendation": "", "legal_ref": "", "confidence": 0.5}
     except Exception as ex:
         return {"risk_level": "ERROR", "issues": [str(ex)], "positives": [],
-                "recommendation": "", "confidence": 0}
+                "recommendation": "", "legal_ref": "", "confidence": 0}
 
 
 # ── AI #1: Checklist động theo thực đơn ──────────────────────────────────────
 def generate_extra_checklist(menu: str, school_level: str, api_key: str) -> list:
-    """Tạo 3-5 điểm kiểm tra bổ sung đặc thù theo thực đơn hôm nay."""
+    """Tạo 3-5 điểm kiểm tra bổ sung đặc thù theo thực đơn, có căn cứ QCVN/NĐ 15."""
     try:
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1000,
-            system=[{"type": "text", "text": build_system_prompt("Ban Giám Sát", school_level, "Việt Nam"),
-                     "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": f"""Thực đơn hôm nay ({school_level}): {menu}
+            max_tokens=1200,
+            messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
+Thực đơn hôm nay ({school_level}): {menu}
 
-Tạo 3-5 điểm kiểm tra ATTP BỔ SUNG (ngoài 20 điểm chuẩn), đặc thù cho nguyên liệu này.
+{_LEGAL_BASIS}
+
+Dựa trên từng nguyên liệu trong thực đơn, tạo 3-5 điểm kiểm tra ATTP BỔ SUNG
+(ngoài 20 điểm chuẩn), đặc thù cho nguyên liệu đó, có dẫn chiếu quy chuẩn.
+
 Trả lời JSON array (không thêm text khác):
 [
   {{
     "code": "E01",
     "ingredient": "Tên nguyên liệu cụ thể",
     "desc": "Mô tả điểm kiểm tra (ngắn gọn, dưới 15 từ)",
-    "how": "Cách kiểm tra thực tế",
-    "pass": "Tiêu chí đạt",
-    "fail": "Tiêu chí không đạt",
+    "how": "Cách kiểm tra thực tế (dụng cụ cần thiết nếu có)",
+    "pass": "Tiêu chí đạt (kèm giá trị cụ thể nếu có: nhiệt độ, màu sắc...)",
+    "fail": "Tiêu chí không đạt (dấu hiệu cụ thể cần nhận biết)",
     "is_critical": false,
-    "why": "Lý do ATTP cần kiểm tra (1 câu, trích dẫn quy chuẩn nếu có)"
+    "legal_ref": "Căn cứ: QCVN... / NĐ 15/2018 Điều... / WHO...",
+    "why": "Giải thích ngắn tại sao nguyên liệu này cần kiểm tra điểm này"
   }}
 ]"""}]
         )
         text = resp.content[0].text.strip()
         s, e = text.find("["), text.rfind("]") + 1
         items = json.loads(text[s:e]) if s != -1 and e > s else []
-        # Đánh lại code E01, E02... cho nhất quán
         for i, item in enumerate(items):
             item["code"] = f"E{i+1:02d}"
         return items
@@ -776,6 +811,346 @@ Yêu cầu:
         return resp.content[0].text.strip()
     except Exception as ex:
         return f"(Không tạo được tóm tắt AI: {ex})"
+
+
+# ── Tạo báo cáo Word chuẩn chính phủ (.docx) ────────────────────────────────
+def _docx_set_font(run, bold=False, size_pt=12, color=None):
+    """Helper: thiết lập font Times New Roman cho run."""
+    from docx.shared import Pt, RGBColor
+    run.font.name     = "Times New Roman"
+    run.font.size     = Pt(size_pt)
+    run.font.bold     = bold
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+
+
+def _docx_para(doc, text, bold=False, size=12, align="left", space_before=0, space_after=6):
+    """Thêm paragraph với Times New Roman, trả về paragraph."""
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(space_before)
+    p.paragraph_format.space_after  = Pt(space_after)
+    _MAP = {"left": WD_ALIGN_PARAGRAPH.LEFT,
+            "center": WD_ALIGN_PARAGRAPH.CENTER,
+            "right": WD_ALIGN_PARAGRAPH.RIGHT,
+            "justify": WD_ALIGN_PARAGRAPH.JUSTIFY}
+    p.alignment = _MAP.get(align, WD_ALIGN_PARAGRAPH.LEFT)
+    run = p.add_run(text)
+    _docx_set_font(run, bold=bold, size_pt=size)
+    return p
+
+
+def _docx_table_header(table, headers: list, bg_color="1B3B6F"):
+    """Tô màu header row của table."""
+    from docx.oxml.ns import qn
+    from docx.oxml   import OxmlElement
+    from docx.shared  import Pt, RGBColor
+    row = table.rows[0]
+    for i, (cell, hdr) in enumerate(zip(row.cells, headers)):
+        cell.text = ""
+        run = cell.paragraphs[0].add_run(hdr)
+        _docx_set_font(run, bold=True, size_pt=11, color=(255, 255, 255))
+        tc   = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd  = OxmlElement("w:shd")
+        shd.set(qn("w:val"),   "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"),  bg_color)
+        tcPr.append(shd)
+
+
+def generate_word_report(school: str, date_str: str, insp: str, menu: str,
+                          level_key: str, results: dict, notes: dict,
+                          pass_count: int, fail_count: int, alert_key: str,
+                          cl: list, ai_narrative: str,
+                          photo_analysis: dict) -> bytes:
+    """
+    Tạo báo cáo kiểm tra ATTP định dạng Word (.docx) chuẩn văn bản hành chính Việt Nam.
+    Font Times New Roman, trình bày như báo cáo gửi cấp Bộ/Chính phủ.
+    """
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns  import qn
+    from docx.oxml     import OxmlElement
+    from io import BytesIO
+
+    doc = Document()
+
+    # ── Lề trang (chuẩn văn bản hành chính Việt Nam) ─────────────────────────
+    sec = doc.sections[0]
+    sec.top_margin    = Cm(2.0)
+    sec.bottom_margin = Cm(2.0)
+    sec.left_margin   = Cm(3.0)   # lề trái rộng cho đóng bìa
+    sec.right_margin  = Cm(2.0)
+
+    # ── Quốc hiệu & Tiêu ngữ ─────────────────────────────────────────────────
+    _docx_para(doc, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+               bold=True, size=13, align="center", space_after=2)
+    _docx_para(doc, "Độc lập – Tự do – Hạnh phúc",
+               bold=True, size=12, align="center", space_after=2)
+    # Đường kẻ ngang
+    p_line = doc.add_paragraph()
+    p_line.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p_line.add_run("───────────────────────")
+    _docx_set_font(r, size_pt=11)
+    p_line.paragraph_format.space_after = Pt(4)
+
+    # Số hiệu và ngày
+    vn_days = ["Thứ Hai","Thứ Ba","Thứ Tư","Thứ Năm","Thứ Sáu","Thứ Bảy","Chủ Nhật"]
+    try:
+        dt_obj   = datetime.strptime(date_str, "%d/%m/%Y")
+        day_name = vn_days[dt_obj.weekday()]
+        date_full = f"TP. Hồ Chí Minh, {day_name} ngày {dt_obj.day} tháng {dt_obj.month} năm {dt_obj.year}"
+    except Exception:
+        date_full = f"TP. Hồ Chí Minh, ngày ... tháng ... năm 2026"
+    _docx_para(doc, date_full, size=12, align="right", space_before=4, space_after=12)
+
+    # ── Tiêu đề báo cáo ──────────────────────────────────────────────────────
+    _docx_para(doc, "BÁO CÁO", bold=True, size=14, align="center", space_before=6, space_after=2)
+    _docx_para(doc, "KIỂM TRA AN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG",
+               bold=True, size=14, align="center", space_after=12)
+
+    a = ALERT_SYSTEM.get(alert_key, {})
+    _docx_para(doc,
+               f"Kính gửi: Ban Giám hiệu Trường {school or '...'} và Sở Giáo dục & Đào tạo",
+               size=12, align="left", space_after=8)
+
+    # ── I. THÔNG TIN CHUNG ────────────────────────────────────────────────────
+    _docx_para(doc, "I. THÔNG TIN CHUNG", bold=True, size=13, space_before=6, space_after=4)
+
+    info_rows = [
+        ("1. Cơ sở giáo dục",       school or "(chưa nhập)"),
+        ("2. Cấp học",               level_key),
+        ("3. Ngày kiểm tra",         date_str),
+        ("4. Người kiểm tra",        insp or "(chưa nhập)"),
+        ("5. Thực đơn hôm nay",      menu or "(chưa nhập)"),
+        ("6. Mức cảnh báo",          f"{a.get('icon','')} {a.get('label','')}"),
+        ("7. Kết quả tổng quát",     f"{pass_count} ĐẠT / {pass_count+fail_count} điểm đã kiểm tra"),
+    ]
+    t = doc.add_table(rows=len(info_rows), cols=2)
+    t.style = "Table Grid"
+    for i, (k, v) in enumerate(info_rows):
+        r0 = t.rows[i].cells[0].paragraphs[0].add_run(k)
+        r1 = t.rows[i].cells[1].paragraphs[0].add_run(v)
+        _docx_set_font(r0, bold=True, size_pt=11)
+        _docx_set_font(r1, size_pt=11)
+        t.rows[i].cells[0].width = Cm(6)
+        t.rows[i].cells[1].width = Cm(10)
+    doc.add_paragraph()
+
+    # ── II. CĂN CỨ PHÁP LÝ ───────────────────────────────────────────────────
+    _docx_para(doc, "II. CĂN CỨ PHÁP LÝ", bold=True, size=13, space_before=6, space_after=4)
+    legal_refs = [
+        "Nghị định số 15/2018/NĐ-CP ngày 02/02/2018 của Chính phủ — Quy định chi tiết thi hành một số điều của Luật An toàn thực phẩm;",
+        "Thông tư liên tịch số 13/2016/TTLT-BYT-BGDĐT ngày 12/5/2016 — Quy định về công tác y tế trường học;",
+        "Quyết định số 3958/QĐ-BYT ngày 25/12/2025 của Bộ Y tế — Hướng dẫn dinh dưỡng bữa ăn học đường;",
+        "QCVN 8-1:2011/BYT — Quy chuẩn kỹ thuật quốc gia về giới hạn ô nhiễm vi sinh vật trong thực phẩm;",
+        "QCVN 8-2:2011/BYT — Quy chuẩn kỹ thuật quốc gia về giới hạn ô nhiễm kim loại nặng trong thực phẩm;",
+        "Luật An toàn thực phẩm số 55/2010/QH12 ngày 17/6/2010 của Quốc hội.",
+    ]
+    for ref in legal_refs:
+        p = doc.add_paragraph(style="List Bullet")
+        r = p.add_run(ref)
+        _docx_set_font(r, size_pt=11)
+        p.paragraph_format.space_after = Pt(3)
+
+    # ── III. KẾT QUẢ KIỂM TRA ────────────────────────────────────────────────
+    _docx_para(doc, "III. KẾT QUẢ KIỂM TRA CHI TIẾT",
+               bold=True, size=13, space_before=8, space_after=4)
+
+    # Bảng chi tiết
+    item_map = {code: (desc, is_crit, grp)
+                for grp, items in cl for code, is_crit, desc, *_ in items}
+    headers = ["Mã", "Bắt buộc", "Nội dung kiểm tra", "Kết quả", "Ghi chú"]
+    tbl = doc.add_table(rows=1 + len(results), cols=5)
+    tbl.style = "Table Grid"
+    _docx_table_header(tbl, headers)
+
+    col_widths = [Cm(1.2), Cm(1.8), Cm(8.5), Cm(2.5), Cm(3.0)]
+    for i, (code, result) in enumerate(results.items()):
+        if code not in item_map:
+            continue
+        desc, is_crit, _ = item_map[code]
+        row = tbl.rows[i + 1]
+        cells_data = [
+            code,
+            "★ Bắt buộc" if is_crit else "",
+            desc,
+            result.replace("✅ Đạt", "ĐẠT").replace("❌ Không Đạt", "KHÔNG ĐẠT").replace("Chưa chấm", "—"),
+            notes.get(code, ""),
+        ]
+        for j, (cell, val, w) in enumerate(zip(row.cells, cells_data, col_widths)):
+            cell.width = w
+            is_fail = result == "❌ Không Đạt" and j == 3
+            r = cell.paragraphs[0].add_run(val)
+            _docx_set_font(r, bold=(j == 3 and is_fail), size_pt=10,
+                           color=(192, 0, 0) if is_fail else None)
+    doc.add_paragraph()
+
+    # ── IV. ĐÁNH GIÁ VÀ NHẬN XÉT (AI narrative) ─────────────────────────────
+    _docx_para(doc, "IV. ĐÁNH GIÁ VÀ NHẬN XÉT",
+               bold=True, size=13, space_before=8, space_after=4)
+    if ai_narrative and ai_narrative.startswith("(Không"):
+        _docx_para(doc, "(Chưa tạo tóm tắt AI — vui lòng kết nối API key)",
+                   size=11, align="justify")
+    else:
+        _docx_para(doc, ai_narrative or "(Chưa có đánh giá AI)",
+                   size=12, align="justify", space_after=6)
+
+    # Kết quả phân tích ảnh AI (nếu có)
+    if photo_analysis:
+        _docx_para(doc, "Kết quả phân tích ảnh minh chứng (AI):",
+                   bold=True, size=12, space_before=4, space_after=2)
+        RISK_VN = {"OK": "ĐẠT CHUẨN", "WARNING": "CẦN CHÚ Ý",
+                   "CRITICAL": "NGUY HIỂM", "ERROR": "Không xác định"}
+        for idx, (g_idx, r) in enumerate(photo_analysis.items()):
+            lvl = r.get("risk_level", "OK")
+            _docx_para(doc,
+                       f"  • Nhóm {g_idx+1}: {RISK_VN.get(lvl, lvl)} "
+                       f"(tin cậy {int(r.get('confidence',0.8)*100)}%) "
+                       f"— {r.get('legal_ref','')}",
+                       size=11, space_after=2)
+            for issue in r.get("issues", []):
+                _docx_para(doc, f"      → Vấn đề: {issue}", size=10, space_after=1)
+
+    # ── V. KIẾN NGHỊ ─────────────────────────────────────────────────────────
+    _docx_para(doc, "V. KIẾN NGHỊ VÀ YÊU CẦU XỬ LÝ",
+               bold=True, size=13, space_before=8, space_after=4)
+    fail_items = {c: v for c, v in results.items() if v == "❌ Không Đạt"}
+    critical_fails = CRITICAL_ITEMS & set(fail_items.keys())
+
+    if critical_fails:
+        _docx_para(doc,
+                   "1. YÊU CẦU KHẨN: Các mục bắt buộc dưới đây vi phạm — "
+                   "đề nghị xử lý ngay trước bữa ăn tiếp theo:",
+                   bold=True, size=12, space_after=2)
+        for code in sorted(critical_fails):
+            desc = item_map.get(code, ("",))[0]
+            _docx_para(doc, f"   • {code}: {desc}", size=11, space_after=2)
+
+    non_crit_fails = set(fail_items.keys()) - critical_fails
+    if non_crit_fails:
+        n = 2 if critical_fails else 1
+        _docx_para(doc,
+                   f"{n}. Các mục cần cải thiện trong 24 giờ:",
+                   bold=True, size=12, space_after=2)
+        for code in sorted(non_crit_fails):
+            desc = item_map.get(code, ("",))[0]
+            note = notes.get(code, "")
+            _docx_para(doc,
+                       f"   • {code}: {desc}" + (f" ({note})" if note else ""),
+                       size=11, space_after=2)
+
+    if not fail_items:
+        _docx_para(doc,
+                   "Bữa ăn đạt toàn bộ tiêu chí kiểm tra. "
+                   "Đề nghị duy trì và tiếp tục theo dõi định kỳ.",
+                   size=12, space_after=4)
+
+    # ── VI. KẾT LUẬN ─────────────────────────────────────────────────────────
+    _docx_para(doc, "VI. KẾT LUẬN", bold=True, size=13, space_before=8, space_after=4)
+    _docx_para(doc,
+               f"Trên đây là báo cáo kết quả kiểm tra An toàn thực phẩm bữa ăn học đường "
+               f"tại {school or 'cơ sở giáo dục'} ngày {date_str}. "
+               f"Tổng điểm đạt: {pass_count}/{pass_count+fail_count} điểm. "
+               f"Đánh giá tổng thể: {a.get('label','—')}. "
+               f"Báo cáo này được lập theo đúng quy định của TTLT 13/2016/TTLT-BYT-BGDĐT "
+               f"và NĐ 15/2018/NĐ-CP.",
+               size=12, align="justify", space_after=8)
+    _docx_para(doc,
+               "Kính đề nghị Ban Giám hiệu xem xét, chỉ đạo xử lý các vấn đề nêu trên "
+               "và thông báo kết quả khắc phục cho Ban Giám sát trong vòng 24 giờ.",
+               size=12, align="justify", space_after=16)
+
+    # ── Chữ ký ───────────────────────────────────────────────────────────────
+    sig_table = doc.add_table(rows=4, cols=2)
+    sig_table.style = "Table Grid"
+    sig_table.style = None  # Bỏ border cho bảng chữ ký
+
+    left_cells = ["Đại diện Ban Giám sát PHHS", "", "", ""]
+    right_cells = [f"TP. Hồ Chí Minh, {date_str}", "Người kiểm tra", "", f"{insp or '(ký và ghi rõ họ tên)'}"]
+    for i, (lc, rc) in enumerate(zip(left_cells, right_cells)):
+        for cell, txt, bold in [(sig_table.rows[i].cells[0], lc, i==0),
+                                 (sig_table.rows[i].cells[1], rc, i in (0,1))]:
+            r = cell.paragraphs[0].add_run(txt)
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _docx_set_font(r, bold=bold, size_pt=12)
+
+    # Ghi chú cuối trang
+    doc.add_paragraph()
+    _docx_para(doc,
+               "─────────────────────────────────────────────────────",
+               size=10, align="center", space_before=8, space_after=2)
+    _docx_para(doc,
+               f"Báo cáo được tạo tự động bởi SchoolFood AI v2.0 — {now_vn().strftime('%d/%m/%Y %H:%M')} (GMT+7)   |   "
+               f"Đường dây nóng Cục ATTP: 1800 6838 (miễn phí)",
+               size=9, align="center", space_after=0)
+
+    # ── Xuất ra bytes ─────────────────────────────────────────────────────────
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+def generate_word_incident(incident_log: list, school: str = "") -> bytes:
+    """Tạo biên bản sự cố ngộ độc định dạng Word chuẩn hành chính."""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from io import BytesIO
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.top_margin = sec.bottom_margin = Cm(2.0)
+    sec.left_margin = Cm(3.0); sec.right_margin = Cm(2.0)
+
+    _docx_para(doc, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+               bold=True, size=13, align="center", space_after=2)
+    _docx_para(doc, "Độc lập – Tự do – Hạnh phúc",
+               bold=True, size=12, align="center", space_after=2)
+    _docx_para(doc, "────────────────────────────────",
+               size=11, align="center", space_after=4)
+    _docx_para(doc, f"TP. Hồ Chí Minh, ngày {now_vn().strftime('%d tháng %m năm %Y')}",
+               size=12, align="right", space_after=12)
+    _docx_para(doc, "BIÊN BẢN SỰ CỐ AN TOÀN THỰC PHẨM",
+               bold=True, size=14, align="center", space_after=2)
+    _docx_para(doc, "Nghi ngờ ngộ độc thực phẩm tại cơ sở giáo dục",
+               bold=True, size=13, align="center", space_after=12)
+    _docx_para(doc, f"Cơ sở giáo dục: {school or '....................'}",
+               size=12, space_after=4)
+    _docx_para(doc, f"Thời gian lập biên bản: {now_vn().strftime('%H:%M ngày %d/%m/%Y')}",
+               size=12, space_after=8)
+
+    _docx_para(doc, "DIỄN BIẾN SỰ CỐ (TIMELINE):",
+               bold=True, size=13, space_before=4, space_after=4)
+    for entry in incident_log:
+        _docx_para(doc, entry, size=12, align="justify", space_after=3)
+
+    _docx_para(doc, "CĂN CỨ PHÁP LÝ ÁP DỤNG:",
+               bold=True, size=13, space_before=8, space_after=4)
+    for ref in [
+        "TTLT 13/2016/TTLT-BYT-BGDĐT — Xử lý ngộ độc thực phẩm tập thể tại trường học",
+        "NĐ 15/2018/NĐ-CP — Trách nhiệm báo cáo khi xảy ra ngộ độc thực phẩm",
+        "Luật ATTP 55/2010/QH12 — Nghĩa vụ báo cáo cơ quan quản lý trong 24 giờ",
+    ]:
+        p = doc.add_paragraph(style="List Bullet")
+        r = p.add_run(ref); _docx_set_font(r, size_pt=11)
+        p.paragraph_format.space_after = Pt(3)
+
+    _docx_para(doc, "Đường dây nóng Cục ATTP: 1800 6838 (miễn phí)  |  Cấp cứu: 115",
+               bold=True, size=12, align="center", space_before=8, space_after=16)
+
+    for label in ["Đại diện Nhà trường", "Người lập biên bản", "Đại diện Ban Giám sát"]:
+        p = doc.add_paragraph(f"{'':>40}{label}")
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        r = p.runs[0]; _docx_set_font(r, bold=True, size_pt=12)
+        doc.add_paragraph()
+
+    buf = BytesIO(); doc.save(buf); buf.seek(0)
+    return buf.read()
 
 
 # ── AI #7: Trợ lý ứng phó sự cố ngộ độc ─────────────────────────────────────
@@ -1288,7 +1663,6 @@ def tab_checklist(api_key: str = ""):
         report    = _build_report(school, date_vn, insp, menu, level_key,
                                   st.session_state.cl_r, st.session_state.cl_n,
                                   pass_count, fail_count, alert_key, cl)
-        fname = f"BaoCao_ATTP_{(school or 'Truong').replace(' ','_')}_{date.strftime('%d-%m-%Y')}.txt"
         photo_count = sum(
             (len(v) if isinstance(v, list) else 1)
             for v in st.session_state.cl_photos.values() if v
@@ -1313,11 +1687,27 @@ def tab_checklist(api_key: str = ""):
                 report = f"TÓM TẮT (AI):\n{narrative}\n\n{'='*64}\n\n" + report
 
         if photo_count:
-            st.info(f"📷 Kèm {photo_count} ảnh minh chứng + "
+            st.info(f"📷 Kèm {photo_count} ảnh + "
                     f"{len(st.session_state.photo_analysis)} kết quả phân tích AI")
-        st.download_button("⬇️ Tải báo cáo (.txt)", data=report,
-                           file_name=fname, mime="text/plain", use_container_width=True)
-        with st.expander("Xem trước nội dung báo cáo"):
+
+        # ── Tải báo cáo Word (.docx) ─────────────────────────────────────────
+        with st.spinner("⚙️ Đang tạo file Word..."):
+            docx_bytes = generate_word_report(
+                school, date_vn, insp, menu, level_key,
+                st.session_state.cl_r, st.session_state.cl_n,
+                pass_count, fail_count, alert_key, cl,
+                narrative if ai_on else "",
+                st.session_state.photo_analysis,
+            )
+        fname_docx = f"BaoCao_ATTP_{(school or 'Truong').replace(' ','_')}_{date.strftime('%d-%m-%Y')}.docx"
+        st.download_button(
+            "⬇️ Tải báo cáo Word (.docx) — Times New Roman, chuẩn hành chính",
+            data=docx_bytes, file_name=fname_docx,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True, type="primary",
+        )
+        # Vẫn giữ txt để xem nhanh
+        with st.expander("Xem trước nội dung (text)"):
             st.text(report)
 
 
