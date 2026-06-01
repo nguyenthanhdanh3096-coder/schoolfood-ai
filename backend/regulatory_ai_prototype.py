@@ -186,6 +186,100 @@ SCHEDULE = [
     },
 ]
 
+# ── Kiểm thực 3 bước — dành riêng cho Y Tế Học Đường (TTLT 13/2016 Điều 9) ──
+KIEM_THUC = [
+    {
+        "buoc": 1, "icon": "🥩",
+        "label": "Bước 1 — TRƯỚC chế biến",
+        "time_window": "8:00 – 9:30",
+        "law": "TTLT 13/2016 Điều 9 – Khoản a",
+        "desc": "Kiểm tra toàn bộ nguyên liệu đầu vào trước khi đưa vào sơ chế và chế biến",
+        "color": "#2563EB",
+        "items": [
+            ("B1_01", "Thịt/cá có tem kiểm dịch thú y còn hiệu lực",
+             "Xem tem trên bao bì hoặc trên thân con vật",
+             "Có tem, còn hiệu lực, đúng ngày", "Không có tem hoặc tem đã hết hạn",
+             "QCVN 8-1:2011/BYT"),
+            ("B1_02", "Rau củ có hóa đơn nguồn gốc từ vựa có đăng ký",
+             "Xem hóa đơn mua hàng trong ngày — phải có tên vựa, địa chỉ",
+             "Hóa đơn hợp lệ, đúng ngày, có địa chỉ vựa rõ ràng", "Không có hóa đơn hoặc hóa đơn mờ",
+             "NĐ 15/2018 Điều 11"),
+            ("B1_03", "Tất cả nguyên liệu đóng gói còn hạn sử dụng ≥ 3 ngày",
+             "Kiểm tra từng bao bì — ghi nhận loại nào hết hạn sớm nhất",
+             "Tất cả còn ≥ 3 ngày so với hôm nay", "Bất kỳ loại nào hết hạn hoặc không có ngày",
+             "Luật ATTP 55/2010 Điều 10"),
+            ("B1_04", "Nhiệt độ tủ lạnh bảo quản thực phẩm sống < 5°C",
+             "Đọc nhiệt kế gắn trên tủ hoặc đo bằng nhiệt kế thực phẩm",
+             "< 5°C", "≥ 5°C — vùng nguy hiểm vi khuẩn tăng nhanh",
+             "QCVN 8-1:2011/BYT + WHO Five Keys"),
+            ("B1_05", "Thực phẩm sống và chín bảo quản tách biệt hoàn toàn",
+             "Quan sát các ngăn tủ lạnh và khu vực sơ chế",
+             "Riêng biệt rõ ràng, có nhãn phân loại", "Để chung — nguy cơ nhiễm chéo vi khuẩn",
+             "NĐ 15/2018 Điều 12"),
+        ]
+    },
+    {
+        "buoc": 2, "icon": "🍳",
+        "label": "Bước 2 — TRONG chế biến",
+        "time_window": "9:30 – 10:30",
+        "law": "TTLT 13/2016 Điều 9 – Khoản b",
+        "desc": "Kiểm tra quá trình nấu ăn, vệ sinh nhân viên và an toàn trong bếp",
+        "color": "#7C3AED",
+        "items": [
+            ("B2_01", "Thức ăn được nấu chín kỹ, nhiệt độ lõi ≥ 70°C",
+             "Dùng nhiệt kế thực phẩm đo tại phần dày nhất",
+             "≥ 70°C — vi khuẩn (Salmonella, E.coli) bị tiêu diệt", "< 70°C — chưa đủ chín kỹ",
+             "WHO Five Keys to Safer Food — Key 4"),
+            ("B2_02", "Nhân viên đeo khẩu trang, găng tay và tạp dề sạch",
+             "Quan sát toàn bộ nhân viên trong bếp trong quá trình nấu",
+             "100% nhân viên đeo đầy đủ và đúng cách", "Thiếu bảo hộ — nguy cơ lây nhiễm từ người",
+             "NĐ 15/2018 Điều 13"),
+            ("B2_03", "Dao và thớt riêng biệt cho thực phẩm sống và chín",
+             "Kiểm tra màu sắc hoặc ký hiệu phân loại thớt/dao",
+             "Có phân loại rõ ràng (màu hoặc ký hiệu S/C)", "Dùng chung — nhiễm chéo vi khuẩn",
+             "HACCP nguyên tắc 2 + NĐ 15/2018"),
+            ("B2_04", "Dụng cụ nấu ăn sạch sẽ, không rỉ sét, không nứt vỡ",
+             "Quan sát nồi, chảo, muỗng, vá, rây... trước khi dùng",
+             "Sạch, nguyên vẹn, không rỉ sét", "Rỉ sét hoặc nứt vỡ — trú ẩn vi khuẩn",
+             "NĐ 15/2018 Điều 13"),
+            ("B2_05", "Khu vực bếp sạch sẽ, không có côn trùng",
+             "Quan sát mặt bếp, sàn, góc tường, ống thoát nước",
+             "Sạch, không có ruồi/gián/kiến xuất hiện", "Bẩn hoặc có côn trùng — vector lây E.coli",
+             "NĐ 15/2018 Điều 11"),
+        ]
+    },
+    {
+        "buoc": 3, "icon": "🍱",
+        "label": "Bước 3 — SAU chế biến",
+        "time_window": "10:30 – 11:00",
+        "law": "TTLT 13/2016 Điều 9 – Khoản c",
+        "desc": "Kiểm tra thức ăn trước khi phục vụ và lấy mẫu lưu nghiệm bắt buộc",
+        "color": "#0D9488",
+        "items": [
+            ("B3_01", "Nhiệt độ thức ăn khi chia đúng chuẩn an toàn",
+             "Đo nhiệt kế trực tiếp vào thức ăn tại thời điểm bắt đầu chia",
+             "Nóng ≥ 60°C | Lạnh ≤ 5°C — an toàn hoàn toàn", "5°C < T < 60°C — vùng NGUY HIỂM",
+             "QCVN 8-1:2011/BYT + HACCP CCP"),
+            ("B3_02", "Thời gian từ khi nấu xong đến khi phục vụ < 2 giờ",
+             "Ghi lại giờ nấu xong (từ bếp trưởng) và giờ bắt đầu chia",
+             "Dưới 2 giờ — ngưỡng an toàn tuyệt đối", "Trên 4 giờ ở nhiệt độ phòng — nguy hiểm",
+             "WHO Five Keys — Key 2"),
+            ("B3_03", "Màu sắc và mùi vị thức ăn bình thường, không có dấu hiệu hỏng",
+             "Quan sát màu từng món, ngửi mùi trực tiếp trước khi chia",
+             "Màu tự nhiên đặc trưng, mùi thơm ngon", "Màu lạ, mùi chua/hôi/đắng bất thường",
+             "QCVN 8-1:2011/BYT"),
+            ("B3_04", "Khẩu phần ăn đủ theo định mức đã đăng ký với nhà trường",
+             "Ước lượng hoặc cân thực tế một suất so với định mức đã ký hợp đồng",
+             "Đạt ≥ 90% định mức đăng ký", "Thiếu >20% — vi phạm hợp đồng cung cấp",
+             "QĐ 3958/QĐ-BYT 2025"),
+            ("B3_05", "Đã lấy mẫu lưu nghiệm 24h từng món — nhãn đầy đủ",
+             "Kiểm tra tủ lạnh lưu mẫu: mỗi món ≥ 100g, nhãn ghi tên món + giờ lấy + ngày",
+             "Có mẫu đủ lượng từng món, nhãn đầy đủ 3 thông tin", "Không có mẫu lưu hoặc thiếu nhãn",
+             "TTLT 13/2016 Điều 9 — BẮT BUỘC PHÁP LUẬT"),
+        ]
+    },
+]
+
 # ── CSS ────────────────────────────────────────────────────────────────────────
 def inject_css():
     st.markdown("""
@@ -2290,6 +2384,335 @@ def tab_parent_view(api_key: str = ""):
                 st.info(ans)
 
 
+# ── Kiểm thực 3 bước — Tab dành riêng Y Tế Học Đường ────────────────────────
+def tab_kiem_thuc():
+    """Kiểm thực 3 bước theo TTLT 13/2016 — dành riêng cho Y Tế Học Đường."""
+    st.markdown("""<div class="sf-card">
+        <div class="sf-card-title">🏥 Kiểm thực 3 bước — Y Tế Học Đường</div>
+        <div class="sf-card-body">
+            Căn cứ: <b>TTLT 13/2016/TTLT-BYT-BGDĐT Điều 9</b> — Thực hiện hàng ngày, song song
+            với sổ kiểm thực giấy bắt buộc. Mỗi bước ghi nhận <b>timestamp tự động</b>.
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    # Thông tin buổi kiểm tra
+    st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
+    kc1, kc2, kc3, kc4 = st.columns(4)
+    kt_school = kc1.text_input("Tên trường", placeholder="TH Nguyễn Du, Q.1",
+                                key="kt_school")
+    kt_date   = kc2.date_input("Ngày", value=datetime.today(), format="DD/MM/YYYY",
+                                key="kt_date")
+    kt_name   = kc3.text_input("Y Tế Học Đường", placeholder="Họ và tên",
+                                key="kt_name")
+    kt_menu   = kc4.text_input("Thực đơn hôm nay",
+                                placeholder="Cơm, thịt kho, rau...",
+                                key="kt_menu_yte")
+
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+
+    # Khởi tạo session state cho 3 bước
+    for b in [1, 2, 3]:
+        if f"kt_b{b}_r" not in st.session_state: st.session_state[f"kt_b{b}_r"] = {}
+        if f"kt_b{b}_n" not in st.session_state: st.session_state[f"kt_b{b}_n"] = {}
+        if f"kt_b{b}_done" not in st.session_state: st.session_state[f"kt_b{b}_done"] = None
+        if f"kt_b{b}_photos" not in st.session_state: st.session_state[f"kt_b{b}_photos"] = {}
+        # Pre-init segmented control keys
+        for step in KIEM_THUC:
+            if step["buoc"] == b:
+                for code, *_ in step["items"]:
+                    k = f"kt_seg_{code}"
+                    if k not in st.session_state:
+                        st.session_state[k] = "Chưa kiểm tra"
+
+    # ── Render từng bước ──────────────────────────────────────────────────────
+    for step in KIEM_THUC:
+        b      = step["buoc"]
+        clr    = step["color"]
+        done_t = st.session_state.get(f"kt_b{b}_done")
+
+        # Header bước
+        status_badge = (
+            f'<span style="background:#DCFCE7;color:#166534;font-size:0.75rem;'
+            f'font-weight:700;padding:2px 10px;border-radius:12px;margin-left:8px">'
+            f'✅ Hoàn thành lúc {done_t}</span>' if done_t else
+            f'<span style="background:#FEF9C3;color:#92400E;font-size:0.75rem;'
+            f'font-weight:700;padding:2px 10px;border-radius:12px;margin-left:8px">'
+            f'⏳ Chưa hoàn thành</span>'
+        )
+        st.markdown(
+            f'<div style="display:flex;align-items:center;padding:12px 0 4px 0;'
+            f'border-bottom:2px solid {clr}">'
+            f'<span style="font-size:1.5rem;margin-right:10px">{step["icon"]}</span>'
+            f'<div><div style="font-size:1rem;font-weight:700;color:{clr}">'
+            f'{step["label"]}</div>'
+            f'<div style="font-size:0.78rem;color:#64748B">'
+            f'⏰ {step["time_window"]} &nbsp;·&nbsp; {step["law"]}</div></div>'
+            f'{status_badge}</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(step["desc"])
+
+        # 5 câu hỏi của bước này
+        for (code, desc, how, pass_cond, fail_cond, legal) in step["items"]:
+            cur = st.session_state.get(f"kt_seg_{code}", "Chưa kiểm tra")
+            if cur == "✅ Đạt":
+                row_bg, row_left = "#F0FDF4", "#16A34A"
+                code_clr, code_icon, lbl = "#166534", "✅", "ĐẠT"
+            elif cur == "❌ Không Đạt":
+                row_bg, row_left = "#FFF5F5", "#DC2626"
+                code_clr, code_icon, lbl = "#991B1B", "❌", "KHÔNG ĐẠT"
+            else:
+                row_bg, row_left = "#FFFBEB", "#F59E0B"
+                code_clr, code_icon, lbl = "#D97706", "○", "chưa kiểm tra"
+
+            col_d, col_c = st.columns([0.62, 0.38])
+            with col_d:
+                is_critical_item = code == "B3_05"  # Mẫu lưu là bắt buộc pháp lý
+                crit_badge = (
+                    '<span style="background:#FEE2E2;color:#991B1B;font-size:0.65rem;'
+                    'font-weight:700;padding:1px 6px;border-radius:8px;margin-left:4px;'
+                    'border:1px solid #FECACA">BẮT BUỘC PHÁP LUẬT</span>'
+                    if is_critical_item else ""
+                )
+                st.markdown(
+                    f'<div style="background:{row_bg};border-left:3px solid {row_left};'
+                    f'border-radius:0 8px 8px 0;padding:10px 14px;margin:3px 0">'
+                    f'<span style="font-size:0.7rem;font-weight:800;color:{code_clr}">'
+                    f'{code_icon} {code}</span>'
+                    f'<span style="font-size:0.68rem;color:#64748B;margin-left:6px">{legal}</span>'
+                    f'{crit_badge}'
+                    f'<div style="font-size:0.875rem;font-weight:500;color:#1E293B;margin-top:3px">'
+                    f'{desc}</div></div>',
+                    unsafe_allow_html=True,
+                )
+                with st.expander("🔍 Hướng dẫn"):
+                    st.markdown(
+                        f"**Thực hiện:** {how}  \n"
+                        f"**✅ Đạt khi:** {pass_cond}  \n"
+                        f"**❌ Không đạt khi:** {fail_cond}"
+                    )
+            with col_c:
+                st.segmented_control(
+                    code, ["Chưa kiểm tra", "✅ Đạt", "❌ Không Đạt"],
+                    key=f"kt_seg_{code}", label_visibility="collapsed",
+                )
+                st.session_state[f"kt_b{b}_r"][code] = \
+                    st.session_state.get(f"kt_seg_{code}", "Chưa kiểm tra")
+                note = st.text_input(
+                    f"ghi chú {code}", label_visibility="collapsed",
+                    placeholder="Ghi chú...", key=f"kt_note_{code}",
+                )
+                st.session_state[f"kt_b{b}_n"][code] = note
+
+        # Ảnh + nút hoàn thành bước
+        with st.expander(f"📷 Ảnh minh chứng Bước {b}"):
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                cam = st.camera_input("Chụp ảnh", key=f"kt_cam_{b}",
+                                      label_visibility="collapsed")
+                if cam:
+                    st.session_state[f"kt_b{b}_photos"]["cam"] = cam
+                    st.success("✅ Đã lưu ảnh")
+            with pc2:
+                upl = st.file_uploader("Tải ảnh", type=["jpg","jpeg","png"],
+                                       key=f"kt_upl_{b}", label_visibility="collapsed",
+                                       accept_multiple_files=True)
+                if upl:
+                    st.session_state[f"kt_b{b}_photos"]["upl"] = upl
+                    st.success(f"✅ Đã tải {len(upl)} ảnh")
+
+        # Nút xác nhận hoàn thành bước
+        b_results = st.session_state.get(f"kt_b{b}_r", {})
+        b_answered = sum(1 for v in b_results.values() if v != "Chưa kiểm tra")
+        b_total    = len(step["items"])
+        b_fail     = sum(1 for v in b_results.values() if v == "❌ Không Đạt")
+
+        col_btn, col_prog = st.columns([0.4, 0.6])
+        with col_btn:
+            can_confirm = b_answered == b_total
+            if st.button(
+                f"✅ Xác nhận hoàn thành Bước {b}" if can_confirm
+                else f"⏳ Còn {b_total - b_answered} câu chưa kiểm tra",
+                key=f"kt_confirm_{b}",
+                type="primary" if can_confirm else "secondary",
+                disabled=not can_confirm,
+                use_container_width=True,
+            ):
+                ts = now_vn().strftime("%H:%M")
+                st.session_state[f"kt_b{b}_done"] = ts
+                st.rerun()
+        with col_prog:
+            pct = int(b_answered / b_total * 100) if b_total else 0
+            fail_note = f" — ⚠️ {b_fail} không đạt" if b_fail else ""
+            st.markdown(
+                f'<div style="margin-top:8px">'
+                f'<div style="font-size:0.78rem;color:#64748B;margin-bottom:3px">'
+                f'{b_answered}/{b_total} đã kiểm tra{fail_note}</div>'
+                f'<div style="background:#E2E8F0;border-radius:20px;height:6px">'
+                f'<div style="width:{pct}%;background:{"#16A34A" if pct==100 else "#2563EB"};'
+                f'border-radius:20px;height:100%"></div></div></div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Tổng kết 3 bước ───────────────────────────────────────────────────────
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">Tổng kết ca kiểm thực</div>', unsafe_allow_html=True)
+
+    all_results = {}
+    for b in [1, 2, 3]:
+        all_results.update(st.session_state.get(f"kt_b{b}_r", {}))
+    total_items  = sum(len(s["items"]) for s in KIEM_THUC)
+    total_done   = sum(1 for v in all_results.values() if v != "Chưa kiểm tra")
+    total_pass   = sum(1 for v in all_results.values() if v == "✅ Đạt")
+    total_fail   = sum(1 for v in all_results.values() if v == "❌ Không Đạt")
+    steps_done   = sum(1 for b in [1, 2, 3]
+                       if st.session_state.get(f"kt_b{b}_done"))
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">Bước hoàn thành</div>
+        <div class="metric-num {'c-green' if steps_done==3 else 'c-orange'}">{steps_done}/3</div>
+    </div>""", unsafe_allow_html=True)
+    m2.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">✅ Đạt chuẩn</div>
+        <div class="metric-num c-green">{total_pass}</div>
+        <div class="metric-lbl">/ {total_items} điểm</div>
+    </div>""", unsafe_allow_html=True)
+    m3.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">❌ Không đạt</div>
+        <div class="metric-num c-red">{total_fail}</div>
+        <div class="metric-lbl">điểm</div>
+    </div>""", unsafe_allow_html=True)
+    m4.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">Mẫu lưu B3_05</div>
+        <div class="metric-num {'c-green' if all_results.get('B3_05')=='✅ Đạt' else 'c-red'}">
+            {'✅' if all_results.get('B3_05')=='✅ Đạt' else '❌'}
+        </div>
+        <div class="metric-lbl">{'Đã lưu' if all_results.get('B3_05')=='✅ Đạt' else 'Chưa lưu!'}</div>
+    </div>""", unsafe_allow_html=True)
+
+    # Nút xuất sổ kiểm thực
+    st.markdown("<br>", unsafe_allow_html=True)
+    all_notes = {}
+    for b in [1, 2, 3]:
+        all_notes.update(st.session_state.get(f"kt_b{b}_n", {}))
+
+    if total_done >= 10:
+        with st.spinner("Đang tạo sổ kiểm thực..."):
+            docx_bytes = generate_so_kiem_thuc_docx(
+                kt_school, kt_date.strftime("%d/%m/%Y"),
+                kt_name, kt_menu, all_results, all_notes,
+            )
+        fname = f"SoKiemThuc_{(kt_school or 'Truong').replace(' ','_')}_{kt_date.strftime('%d-%m-%Y')}.docx"
+        st.download_button(
+            "📋 Xuất Sổ Kiểm Thực (.docx) — chuẩn TTLT 13/2016",
+            data=docx_bytes, file_name=fname,
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True, type="primary",
+        )
+    else:
+        st.info("Hoàn thành ít nhất 10/15 điểm kiểm tra để xuất sổ kiểm thực.")
+
+
+def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
+                                menu: str, results: dict, notes: dict) -> bytes:
+    """Tạo Sổ Kiểm Thực 3 Bước chuẩn TTLT 13/2016 — Times New Roman."""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from io import BytesIO
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.top_margin = sec.bottom_margin = Cm(2.0)
+    sec.left_margin = Cm(3.0); sec.right_margin = Cm(2.0)
+
+    # Quốc hiệu
+    _docx_para(doc, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+               bold=True, size=13, align="center", space_after=2)
+    _docx_para(doc, "Độc lập – Tự do – Hạnh phúc",
+               bold=True, size=12, align="center", space_after=2)
+    _docx_para(doc, "────────────────────────────",
+               size=10, align="center", space_after=4)
+    _docx_para(doc, f"TP. Hồ Chí Minh, ngày {date_str}",
+               size=12, align="right", space_after=10)
+
+    _docx_para(doc, "SỔ KIỂM THỰC 3 BƯỚC",
+               bold=True, size=15, align="center", space_after=2)
+    _docx_para(doc, "BỮA ĂN HỌC ĐƯỜNG",
+               bold=True, size=13, align="center", space_after=2)
+    _docx_para(doc,
+               "(Căn cứ: TTLT số 13/2016/TTLT-BYT-BGDĐT ngày 12/5/2016 – Điều 9)",
+               size=11, align="center", space_after=10)
+
+    # Thông tin chung
+    info_rows = [
+        ("Cơ sở giáo dục", school or "..."),
+        ("Ngày kiểm thực", date_str),
+        ("Nhân viên y tế thực hiện", yte_name or "..."),
+        ("Thực đơn bữa ăn", menu or "..."),
+    ]
+    t = doc.add_table(rows=len(info_rows), cols=2)
+    t.style = "Table Grid"
+    for i, (k, v) in enumerate(info_rows):
+        r0 = t.rows[i].cells[0].paragraphs[0].add_run(k)
+        r1 = t.rows[i].cells[1].paragraphs[0].add_run(v)
+        _docx_set_font(r0, bold=True, size_pt=11)
+        _docx_set_font(r1, size_pt=11)
+        t.rows[i].cells[0].width = Cm(6)
+    doc.add_paragraph()
+
+    # Chi tiết từng bước
+    for step in KIEM_THUC:
+        _docx_para(doc,
+                   f"{step['icon']}  {step['label']}  ({step['time_window']})  —  {step['law']}",
+                   bold=True, size=13, space_before=8, space_after=4)
+        _docx_para(doc, step["desc"], size=11, space_after=4)
+
+        tbl = doc.add_table(rows=1 + len(step["items"]), cols=4)
+        tbl.style = "Table Grid"
+        _docx_table_header(tbl, ["Mã", "Nội dung kiểm tra", "Kết quả", "Ghi chú"])
+        widths = [Cm(1.5), Cm(8.5), Cm(2.5), Cm(4.5)]
+        for i, (code, desc, *_) in enumerate(step["items"]):
+            row  = tbl.rows[i + 1]
+            res  = results.get(code, "Chưa kiểm tra")
+            note = notes.get(code, "")
+            status = res.replace("✅ Đạt", "ĐẠT").replace("❌ Không Đạt", "KHÔNG ĐẠT").replace("Chưa kiểm tra", "—")
+            cells_data = [code, desc, status, note]
+            for j, (cell, val, w) in enumerate(zip(row.cells, cells_data, widths)):
+                cell.width = w
+                r = cell.paragraphs[0].add_run(val)
+                is_fail = status == "KHÔNG ĐẠT" and j == 2
+                _docx_set_font(r, bold=is_fail, size_pt=10,
+                               color=(192, 0, 0) if is_fail else None)
+        doc.add_paragraph()
+
+    # Chữ ký
+    _docx_para(doc, f"Ngày kiểm thực: {date_str}   |   Giờ hoàn thành: ___:___",
+               size=11, space_before=10, space_after=10)
+    sig = doc.add_table(rows=3, cols=2)
+    for i, (l, r_) in enumerate([
+        ("Xác nhận Hiệu Trưởng", "Nhân viên Y Tế Học Đường"),
+        ("(ký, đóng dấu)", "(ký và ghi rõ họ tên)"),
+        ("", yte_name or ""),
+    ]):
+        for cell, txt in [(sig.rows[i].cells[0], l), (sig.rows[i].cells[1], r_)]:
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = cell.paragraphs[0].add_run(txt)
+            _docx_set_font(r, bold=(i == 0), size_pt=12)
+
+    _docx_para(doc, "─" * 50, size=9, align="center", space_before=14, space_after=2)
+    _docx_para(doc,
+               "Sổ kiểm thực này được tạo bằng SchoolFood AI v2.0 — "
+               f"song song với sổ giấy bắt buộc theo TTLT 13/2016 Điều 9",
+               size=9, align="center")
+
+    buf = BytesIO(); doc.save(buf); buf.seek(0)
+    return buf.read()
+
+
 # ── Nội dung sổ tay — dùng chung cho tab_guide() và generate_user_manual_docx()
 MANUAL_CONTENT = {
     "title": "SỔ TAY HƯỚNG DẪN SỬ DỤNG SCHOOLFOOD AI",
@@ -2954,7 +3377,14 @@ def main():
     show_reminder_banner(role)
 
     # Nhãn tab thay đổi theo vai trò
-    tab2_label = "👨‍👩‍👧 Góc Phụ Huynh" if role == "Phụ Huynh" else "✅ Checklist kiểm tra"
+    _tab2_labels = {
+        "Phụ Huynh":                    "👨‍👩‍👧 Góc Phụ Huynh",
+        "Y Tế Học Đường":               "🏥 Kiểm thực 3 bước",
+        "Ban Giám Sát (Đại Diện PHHS)": "✅ Checklist kiểm tra",
+        "Ban Giám Hiệu":                "✅ Checklist kiểm tra",
+    }
+    tab2_label = _tab2_labels.get(role, "✅ Checklist kiểm tra")
+
     t1, t2, t3, t4, t5, t6 = st.tabs([
         "💬 Hỏi đáp AI",
         tab2_label,
@@ -2964,12 +3394,13 @@ def main():
         "ℹ️ Về ứng dụng",
     ])
     with t1: tab_chat(api_key, role, level, loc)
-    # Phụ Huynh chỉ xem, không thực hiện checklist
     with t2:
         if role == "Phụ Huynh":
             tab_parent_view(api_key)
+        elif role == "Y Tế Học Đường":
+            tab_kiem_thuc()          # Module kiểm thực 3 bước riêng
         else:
-            tab_checklist(api_key)
+            tab_checklist(api_key)   # Ban Giám Sát + Ban Giám Hiệu dùng 20 câu
     with t3: tab_schedule()
     with t4: tab_emergency(api_key)
     with t5: tab_guide()
