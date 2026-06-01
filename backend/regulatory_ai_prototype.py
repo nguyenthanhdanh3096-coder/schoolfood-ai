@@ -2529,28 +2529,62 @@ def tab_kiem_thuc():
 
         col_btn, col_prog = st.columns([0.4, 0.6])
         with col_btn:
-            can_confirm = b_answered == b_total
-            if st.button(
-                f"✅ Xác nhận hoàn thành Bước {b}" if can_confirm
-                else f"⏳ Còn {b_total - b_answered} câu chưa kiểm tra",
-                key=f"kt_confirm_{b}",
-                type="primary" if can_confirm else "secondary",
-                disabled=not can_confirm,
-                use_container_width=True,
-            ):
-                ts = now_vn().strftime("%H:%M")
-                st.session_state[f"kt_b{b}_done"] = ts
-                st.rerun()
+            can_confirm = (b_answered == b_total)
+
+            if done_t:
+                # ── Đã xác nhận — hiển thị trạng thái hoàn thành rõ ràng ──
+                st.markdown(
+                    f'<div style="background:#DCFCE7;border:2px solid #16A34A;'
+                    f'border-radius:10px;padding:12px 16px;text-align:center">'
+                    f'<div style="font-weight:700;color:#166534;font-size:0.95rem">'
+                    f'✅ Bước {b} đã hoàn thành</div>'
+                    f'<div style="color:#16A34A;font-size:0.85rem;margin-top:4px">'
+                    f'🕐 Xác nhận lúc <b>{done_t}</b> '
+                    f'({["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","CN"][now_vn().weekday()]})'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                # Nút bỏ xác nhận (nếu cần chỉnh lại)
+                if st.button(f"↩ Bỏ xác nhận Bước {b}", key=f"kt_undo_{b}",
+                             use_container_width=True):
+                    st.session_state[f"kt_b{b}_done"] = None
+                    st.rerun()
+
+            elif can_confirm:
+                # ── Đủ điều kiện xác nhận ──
+                if st.button(
+                    f"☑ Xác nhận hoàn thành Bước {b}",
+                    key=f"kt_confirm_{b}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    ts = now_vn().strftime("%H:%M:%S")  # Lưu giờ:phút:giây
+                    st.session_state[f"kt_b{b}_done"] = ts
+                    st.toast(f"✅ Bước {b} xác nhận lúc {ts}", icon="🕐")
+                    st.rerun()
+            else:
+                # ── Chưa đủ điều kiện ──
+                st.markdown(
+                    f'<div style="background:#F8FAFC;border:1px dashed #CBD5E1;'
+                    f'border-radius:10px;padding:12px 16px;text-align:center;color:#94A3B8;'
+                    f'font-size:0.85rem">'
+                    f'⏳ Còn <b>{b_total - b_answered}</b> câu chưa kiểm tra</div>',
+                    unsafe_allow_html=True,
+                )
+
         with col_prog:
             pct = int(b_answered / b_total * 100) if b_total else 0
             fail_note = f" — ⚠️ {b_fail} không đạt" if b_fail else ""
+            bar_color = "#16A34A" if pct == 100 else "#2563EB"
             st.markdown(
                 f'<div style="margin-top:8px">'
                 f'<div style="font-size:0.78rem;color:#64748B;margin-bottom:3px">'
-                f'{b_answered}/{b_total} đã kiểm tra{fail_note}</div>'
-                f'<div style="background:#E2E8F0;border-radius:20px;height:6px">'
-                f'<div style="width:{pct}%;background:{"#16A34A" if pct==100 else "#2563EB"};'
-                f'border-radius:20px;height:100%"></div></div></div>',
+                f'{b_answered}/{b_total} câu đã kiểm tra{fail_note}</div>'
+                f'<div style="background:#E2E8F0;border-radius:20px;height:8px">'
+                f'<div style="width:{pct}%;background:{bar_color};'
+                f'border-radius:20px;height:100%;transition:width 0.4s ease"></div></div>'
+                f'{"<div style=font-size:0.75rem;color:#16A34A;margin-top:4px>✅ Tất cả câu đã kiểm tra</div>" if pct==100 else ""}'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
@@ -2593,17 +2627,52 @@ def tab_kiem_thuc():
         <div class="metric-lbl">{'Đã lưu' if all_results.get('B3_05')=='✅ Đạt' else 'Chưa lưu!'}</div>
     </div>""", unsafe_allow_html=True)
 
-    # Nút xuất sổ kiểm thực
+    # ── Nút xuất sổ kiểm thực ────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     all_notes = {}
     for b in [1, 2, 3]:
         all_notes.update(st.session_state.get(f"kt_b{b}_n", {}))
 
-    if total_done >= 10:
+    # Timestamps từng bước để đưa vào báo cáo
+    timestamps = {
+        b: st.session_state.get(f"kt_b{b}_done") or ""
+        for b in [1, 2, 3]
+    }
+
+    # Điều kiện xuất: PHẢI hoàn thành ĐỦ cả 3 bước VÀ đủ 15 câu
+    all_steps_confirmed = all(timestamps[b] for b in [1, 2, 3])
+    all_items_answered  = (total_done == total_items)
+    can_export = all_steps_confirmed and all_items_answered
+
+    # Hiển thị checklist điều kiện xuất
+    cond_rows = [
+        (all_items_answered, f"Đã kiểm tra đủ 15/15 câu hỏi ({total_done}/{total_items})"),
+        (bool(timestamps[1]),
+         f"Bước 1 đã xác nhận{' lúc ' + timestamps[1] if timestamps[1] else ' — chưa xác nhận'}"),
+        (bool(timestamps[2]),
+         f"Bước 2 đã xác nhận{' lúc ' + timestamps[2] if timestamps[2] else ' — chưa xác nhận'}"),
+        (bool(timestamps[3]),
+         f"Bước 3 đã xác nhận{' lúc ' + timestamps[3] if timestamps[3] else ' — chưa xác nhận'}"),
+    ]
+    cond_html = "".join(
+        f'<div style="font-size:0.82rem;padding:3px 0;color:{"#16A34A" if ok else "#DC2626"}">'
+        f'{"✅" if ok else "❌"} {label}</div>'
+        for ok, label in cond_rows
+    )
+    st.markdown(
+        f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;'
+        f'padding:14px 18px;margin-bottom:12px">'
+        f'<div style="font-size:0.8rem;font-weight:700;color:#334155;margin-bottom:6px">'
+        f'Điều kiện để xuất sổ kiểm thực:</div>'
+        f'{cond_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+    if can_export:
         with st.spinner("Đang tạo sổ kiểm thực..."):
             docx_bytes = generate_so_kiem_thuc_docx(
                 kt_school, kt_date.strftime("%d/%m/%Y"),
-                kt_name, kt_menu, all_results, all_notes,
+                kt_name, kt_menu, all_results, all_notes, timestamps,
             )
         fname = f"SoKiemThuc_{(kt_school or 'Truong').replace(' ','_')}_{kt_date.strftime('%d-%m-%Y')}.docx"
         st.download_button(
@@ -2613,12 +2682,19 @@ def tab_kiem_thuc():
             use_container_width=True, type="primary",
         )
     else:
-        st.info("Hoàn thành ít nhất 10/15 điểm kiểm tra để xuất sổ kiểm thực.")
+        missing = sum(1 for ok, _ in cond_rows if not ok)
+        st.button(
+            f"⛔ Chưa đủ điều kiện xuất — còn {missing} điều kiện chưa đáp ứng",
+            disabled=True, use_container_width=True,
+        )
 
 
 def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
-                                menu: str, results: dict, notes: dict) -> bytes:
-    """Tạo Sổ Kiểm Thực 3 Bước chuẩn TTLT 13/2016 — Times New Roman."""
+                                menu: str, results: dict, notes: dict,
+                                timestamps: dict | None = None) -> bytes:
+    """Tạo Sổ Kiểm Thực 3 Bước chuẩn TTLT 13/2016 — Times New Roman.
+    timestamps: {1: "HH:MM:SS", 2: "HH:MM:SS", 3: "HH:MM:SS"} để xác minh timeline.
+    """
     from docx import Document
     from docx.shared import Pt, Cm
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -2664,11 +2740,25 @@ def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
         t.rows[i].cells[0].width = Cm(6)
     doc.add_paragraph()
 
-    # Chi tiết từng bước
+    # Chi tiết từng bước — bao gồm timestamp xác nhận để xác minh timeline
+    ts_map = timestamps or {}
     for step in KIEM_THUC:
+        b_num = step["buoc"]
+        ts    = ts_map.get(b_num, "")
+        # Xác minh timeline: thời điểm xác nhận có nằm trong khung giờ chuẩn không
+        window_start = int(step["time_window"].split("–")[0].split(":")[0])
+        ts_hour = int(ts.split(":")[0]) if ts and ":" in ts else -1
+        on_time = (ts_hour >= window_start) if ts_hour >= 0 else None
+
+        ts_label = (
+            f"  ✅ Xác nhận lúc {ts}"
+            + (" — đúng khung giờ" if on_time else " — NGOÀI khung giờ chuẩn ⚠️")
+            if ts else "  ❌ Chưa xác nhận"
+        )
         _docx_para(doc,
                    f"{step['icon']}  {step['label']}  ({step['time_window']})  —  {step['law']}",
-                   bold=True, size=13, space_before=8, space_after=4)
+                   bold=True, size=13, space_before=8, space_after=2)
+        _docx_para(doc, f"⏱ Thời gian thực hiện:{ts_label}", size=11, space_after=2)
         _docx_para(doc, step["desc"], size=11, space_after=4)
 
         tbl = doc.add_table(rows=1 + len(step["items"]), cols=4)
