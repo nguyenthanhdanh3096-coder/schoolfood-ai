@@ -1,0 +1,6 @@
+# Không bao giờ commit những file này lên GitHub
+.streamlit/secrets.toml
+.env
+__pycache__/
+*.pyc
+.DS_Store
