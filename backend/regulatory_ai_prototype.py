@@ -186,17 +186,47 @@ SCHEDULE = [
 def inject_css():
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-    #MainMenu, footer, header { visibility: hidden; }
-    .stApp { background-color: #F5F7FA; }
 
-    .sf-header {
-        background: linear-gradient(135deg, #1B3B6F 0%, #2563EB 100%);
-        padding: 20px 28px; border-radius: 14px; margin-bottom: 20px;
+    /* Xoá hoàn toàn khoảng trắng trên cùng */
+    #MainMenu, footer, header { display: none !important; }
+    [data-testid="stHeader"]  { display: none !important; }
+    [data-testid="stToolbar"] { display: none !important; }
+    .main .block-container {
+        padding-top: 0.6rem !important;
+        padding-bottom: 1.5rem !important;
+        max-width: 1200px !important;
     }
-    .sf-header h1 { color: white; font-size: 1.7rem; font-weight: 700; margin: 0; }
-    .sf-header p  { color: #BFDBFE; font-size: 0.9rem; margin: 5px 0 0 0; }
+
+    .stApp { background-color: #F0F4F8; }
+
+    /* Ẩn hoàn toàn nút đóng sidebar — người dùng không thể đóng sidebar trên desktop */
+    @media (min-width: 769px) {
+        [data-testid="stSidebarCollapseButton"],
+        button[title="Close sidebar"],
+        button[aria-label="Close sidebar"],
+        [data-testid="stSidebar"] > div:first-child > div > button,
+        section[data-testid="stSidebar"] > div > div > div > button { display: none !important; }
+    }
+    /* Nút MỞ LẠI (nếu vẫn lỡ đóng trên mobile) — đỏ nổi bật */
+    [data-testid="collapsedControl"],
+    button[title="Open sidebar"],
+    button[aria-label="Open sidebar"] {
+        background: #DC2626 !important; border-radius: 0 14px 14px 0 !important;
+        display: flex !important; visibility: visible !important;
+        align-items: center !important; justify-content: center !important;
+        width: 44px !important; min-height: 100px !important;
+        opacity: 1 !important; z-index: 999999 !important;
+        position: fixed !important; left: 0 !important; top: calc(50% - 50px) !important;
+        box-shadow: 4px 0 20px rgba(220,38,38,0.5) !important;
+        cursor: pointer !important; border: none !important;
+    }
+    [data-testid="collapsedControl"] svg,
+    button[title="Open sidebar"] svg { fill: white !important; color: white !important; }
+
+    /* sf-header không còn dùng — đã thay bằng HTML inline trong main() */
+    .sf-header { display: none; }
 
     .sf-card {
         background: white; border-radius: 12px; padding: 18px 22px;
@@ -359,10 +389,8 @@ def inject_css():
 
     /* ── Mobile responsive ── */
     @media (max-width: 768px) {
-        /* Header nhỏ hơn trên mobile */
-        .sf-header h1 { font-size: 1.3rem !important; }
-        .sf-header p  { font-size: 0.78rem !important; }
-        .sf-header     { padding: 14px 16px !important; }
+        /* Header mới (inline HTML) — thu nhỏ trên mobile */
+        .main .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; }
 
         /* Card padding giảm */
         .sf-card { padding: 14px 14px !important; }
@@ -413,8 +441,7 @@ def inject_css():
     }
 
     @media (max-width: 480px) {
-        .sf-header h1 { font-size: 1.1rem !important; }
-        .metric-num   { font-size: 1.3rem !important; }
+        .metric-num { font-size: 1.2rem !important; }
     }
 
     /* ── Checklist segmented control animations (CSS-only, no JS needed) ── */
@@ -2735,10 +2762,82 @@ def main():
                        layout="wide", initial_sidebar_state="expanded")
     inject_css()
 
-    st.markdown("""<div class="sf-header">
-        <h1>🍱 SchoolFood AI</h1>
-        <p>Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường · Phiên bản 1.1</p>
-    </div>""", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #0F2651 0%, #1B3B6F 45%, #1D4ED8 100%);
+        border-radius: 16px; padding: 28px 32px 22px 32px;
+        margin-bottom: 14px; position: relative; overflow: hidden;
+        box-shadow: 0 8px 32px rgba(15,38,81,0.25);">
+
+        <!-- Vòng trang trí nền -->
+        <div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;
+                    border-radius:50%;background:rgba(255,255,255,0.05);pointer-events:none"></div>
+        <div style="position:absolute;bottom:-60px;right:80px;width:160px;height:160px;
+                    border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>
+        <div style="position:absolute;top:20px;right:200px;width:80px;height:80px;
+                    border-radius:50%;background:rgba(255,255,255,0.03);pointer-events:none"></div>
+
+        <!-- Hàng 1: Tên app + badges -->
+        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:200px">
+                <span style="font-size:2.6rem;line-height:1">🍱</span>
+                <div>
+                    <div style="color:white;font-size:1.9rem;font-weight:800;
+                                letter-spacing:-0.5px;line-height:1.1">SchoolFood AI</div>
+                    <div style="color:#93C5FD;font-size:0.78rem;margin-top:4px;font-weight:500">
+                        Phiên bản 2.0 &nbsp;·&nbsp; Cập nhật 06/2026
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">
+                <span style="background:rgba(255,255,255,0.15);color:white;
+                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
+                             border:1px solid rgba(255,255,255,0.2)">⚖️ NĐ 15/2018</span>
+                <span style="background:rgba(255,255,255,0.15);color:white;
+                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
+                             border:1px solid rgba(255,255,255,0.2)">🤖 AI Vision</span>
+                <span style="background:rgba(34,197,94,0.25);color:#86EFAC;
+                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
+                             border:1px solid rgba(134,239,172,0.3)">🟢 Live</span>
+            </div>
+        </div>
+
+        <!-- Hàng 2: Slogan -->
+        <p style="color:#DBEAFE;font-size:1.0rem;margin:14px 0 16px 0;line-height:1.65;font-weight:400">
+            Giám sát An toàn Thực phẩm bữa ăn học đường — dành cho
+            <b style="color:white">Phụ Huynh · Ban Giám Sát · Y Tế Học Đường · Ban Giám Hiệu</b>
+        </p>
+
+        <!-- Hàng 3: Stats -->
+        <div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.15);
+                    padding-top:14px;flex-wrap:wrap">
+            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
+                <div style="color:white;font-size:1.4rem;font-weight:800;line-height:1">20</div>
+                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Điểm kiểm tra</div>
+            </div>
+            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
+            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
+                <div style="color:#FCA5A5;font-size:1.4rem;font-weight:800;line-height:1">7</div>
+                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Mục bắt buộc</div>
+            </div>
+            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
+            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
+                <div style="color:#6EE7B7;font-size:1.4rem;font-weight:800;line-height:1">4</div>
+                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Cấp cảnh báo</div>
+            </div>
+            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
+            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
+                <div style="color:#FDE68A;font-size:1.4rem;font-weight:800;line-height:1">6</div>
+                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Văn bản pháp lý</div>
+            </div>
+            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
+            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
+                <div style="color:#C4B5FD;font-size:1.4rem;font-weight:800;line-height:1">🤖</div>
+                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">AI phân tích</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     with st.sidebar:
         st.markdown("### ⚙️ Cài đặt")
