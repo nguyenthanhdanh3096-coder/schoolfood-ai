@@ -333,6 +333,17 @@ def inject_css():
     .stTextInput > div > div > input { border-radius: 8px !important; }
     div[data-testid="stChatInput"] textarea { font-family:'Inter',sans-serif !important; }
 
+    /* Input disabled — override màu xám mặc định, giữ chữ đọc được */
+    input:disabled, input[disabled] {
+        -webkit-text-fill-color: #16A34A !important;
+        color: #16A34A !important;
+        opacity: 1 !important;
+        font-weight: 600 !important;
+        background-color: #F0FDF4 !important;
+        border-color: #86EFAC !important;
+        cursor: default !important;
+    }
+
     /* ── Ẩn nút đóng sidebar trên desktop (phòng người dùng vô tình đóng) ── */
     @media (min-width: 769px) {
         [data-testid="stSidebarCollapseButton"],
