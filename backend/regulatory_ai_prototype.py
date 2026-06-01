@@ -2762,82 +2762,58 @@ def main():
                        layout="wide", initial_sidebar_state="expanded")
     inject_css()
 
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #0F2651 0%, #1B3B6F 45%, #1D4ED8 100%);
-        border-radius: 16px; padding: 28px 32px 22px 32px;
-        margin-bottom: 14px; position: relative; overflow: hidden;
-        box-shadow: 0 8px 32px rgba(15,38,81,0.25);">
-
-        <!-- Vòng trang trí nền -->
-        <div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;
-                    border-radius:50%;background:rgba(255,255,255,0.05);pointer-events:none"></div>
-        <div style="position:absolute;bottom:-60px;right:80px;width:160px;height:160px;
-                    border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>
-        <div style="position:absolute;top:20px;right:200px;width:80px;height:80px;
-                    border-radius:50%;background:rgba(255,255,255,0.03);pointer-events:none"></div>
-
-        <!-- Hàng 1: Tên app + badges -->
-        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
-            <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:200px">
-                <span style="font-size:2.6rem;line-height:1">🍱</span>
-                <div>
-                    <div style="color:white;font-size:1.9rem;font-weight:800;
-                                letter-spacing:-0.5px;line-height:1.1">SchoolFood AI</div>
-                    <div style="color:#93C5FD;font-size:0.78rem;margin-top:4px;font-weight:500">
-                        Phiên bản 2.0 &nbsp;·&nbsp; Cập nhật 06/2026
-                    </div>
-                </div>
-            </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">
-                <span style="background:rgba(255,255,255,0.15);color:white;
-                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
-                             border:1px solid rgba(255,255,255,0.2)">⚖️ NĐ 15/2018</span>
-                <span style="background:rgba(255,255,255,0.15);color:white;
-                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
-                             border:1px solid rgba(255,255,255,0.2)">🤖 AI Vision</span>
-                <span style="background:rgba(34,197,94,0.25);color:#86EFAC;
-                             padding:4px 12px;border-radius:20px;font-size:0.75rem;font-weight:600;
-                             border:1px solid rgba(134,239,172,0.3)">🟢 Live</span>
-            </div>
-        </div>
-
-        <!-- Hàng 2: Slogan -->
-        <p style="color:#DBEAFE;font-size:1.0rem;margin:14px 0 16px 0;line-height:1.65;font-weight:400">
-            Giám sát An toàn Thực phẩm bữa ăn học đường — dành cho
-            <b style="color:white">Phụ Huynh · Ban Giám Sát · Y Tế Học Đường · Ban Giám Hiệu</b>
-        </p>
-
-        <!-- Hàng 3: Stats -->
-        <div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.15);
-                    padding-top:14px;flex-wrap:wrap">
-            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
-                <div style="color:white;font-size:1.4rem;font-weight:800;line-height:1">20</div>
-                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Điểm kiểm tra</div>
-            </div>
-            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
-            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
-                <div style="color:#FCA5A5;font-size:1.4rem;font-weight:800;line-height:1">7</div>
-                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Mục bắt buộc</div>
-            </div>
-            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
-            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
-                <div style="color:#6EE7B7;font-size:1.4rem;font-weight:800;line-height:1">4</div>
-                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Cấp cảnh báo</div>
-            </div>
-            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
-            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
-                <div style="color:#FDE68A;font-size:1.4rem;font-weight:800;line-height:1">6</div>
-                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">Văn bản pháp lý</div>
-            </div>
-            <div style="width:1px;background:rgba(255,255,255,0.15);margin:0 4px"></div>
-            <div style="flex:1;min-width:80px;text-align:center;padding:0 8px">
-                <div style="color:#C4B5FD;font-size:1.4rem;font-weight:800;line-height:1">🤖</div>
-                <div style="color:#93C5FD;font-size:0.72rem;margin-top:3px">AI phân tích</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Header chính — không dùng HTML comments để tránh Streamlit hiển thị raw text
+    _circles = (
+        '<div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;'
+        'border-radius:50%;background:rgba(255,255,255,0.05);pointer-events:none"></div>'
+        '<div style="position:absolute;bottom:-60px;right:80px;width:160px;height:160px;'
+        'border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>'
+    )
+    _badges = (
+        '<span style="background:rgba(255,255,255,0.15);color:white;padding:4px 12px;'
+        'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(255,255,255,0.2)">'
+        '⚖️ NĐ 15/2018</span>'
+        '<span style="background:rgba(255,255,255,0.15);color:white;padding:4px 12px;'
+        'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(255,255,255,0.2)">'
+        '🤖 AI Vision</span>'
+        '<span style="background:rgba(34,197,94,0.25);color:#86EFAC;padding:4px 12px;'
+        'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(134,239,172,0.3)">'
+        '🟢 Live</span>'
+    )
+    _stat = lambda val, lbl, clr: (
+        f'<div style="flex:1;min-width:72px;text-align:center;padding:0 6px">'
+        f'<div style="color:{clr};font-size:1.35rem;font-weight:800;line-height:1">{val}</div>'
+        f'<div style="color:#93C5FD;font-size:0.7rem;margin-top:3px">{lbl}</div></div>'
+    )
+    _sep = '<div style="width:1px;background:rgba(255,255,255,0.15);margin:0 2px"></div>'
+    _stats = (
+        _stat("20", "Điểm kiểm tra", "white") + _sep +
+        _stat("7",  "Mục bắt buộc",  "#FCA5A5") + _sep +
+        _stat("4",  "Cấp cảnh báo",  "#6EE7B7") + _sep +
+        _stat("6",  "Văn bản pháp lý","#FDE68A") + _sep +
+        _stat("🤖", "AI phân tích",   "#C4B5FD")
+    )
+    st.markdown(
+        f'<div style="background:linear-gradient(135deg,#0F2651 0%,#1B3B6F 45%,#1D4ED8 100%);'
+        f'border-radius:16px;padding:28px 32px 22px 32px;margin-bottom:14px;'
+        f'position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(15,38,81,0.25)">'
+        f'{_circles}'
+        f'<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">'
+        f'<div style="display:flex;align-items:center;gap:14px;flex:1;min-width:200px">'
+        f'<span style="font-size:2.6rem;line-height:1">🍱</span>'
+        f'<div><div style="color:white;font-size:1.9rem;font-weight:800;letter-spacing:-0.5px;line-height:1.1">'
+        f'SchoolFood AI</div>'
+        f'<div style="color:#93C5FD;font-size:0.78rem;margin-top:4px;font-weight:500">'
+        f'Phiên bản 2.0 &nbsp;·&nbsp; Cập nhật 06/2026</div></div></div>'
+        f'<div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">{_badges}</div></div>'
+        f'<p style="color:#DBEAFE;font-size:1.0rem;margin:14px 0 16px 0;line-height:1.65;font-weight:400">'
+        f'Giám sát An toàn Thực phẩm bữa ăn học đường — dành cho '
+        f'<b style="color:white">Phụ Huynh · Ban Giám Sát · Y Tế Học Đường · Ban Giám Hiệu</b></p>'
+        f'<div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.15);'
+        f'padding-top:14px;flex-wrap:wrap">{_stats}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.sidebar:
         st.markdown("### ⚙️ Cài đặt")
