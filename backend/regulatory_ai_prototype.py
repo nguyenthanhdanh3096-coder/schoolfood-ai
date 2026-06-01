@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""SchoolFood AI v1.1 — Enhanced checklist, alert levels, inspection schedule"""
+"""SchoolFood AI v2.0 — Phase 2A: Vision AI, Dynamic Checklist, Smart Reports"""
 
+import base64
+import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -665,6 +667,152 @@ def validate_checklist(results: dict, photos: dict) -> list[str]:
     return errors
 
 
+# ── AI #2: Phân tích ảnh rủi ro ATTP (Claude Vision) ─────────────────────────
+def analyze_photo_ai(photo_bytes: bytes, group_name: str, api_key: str) -> dict:
+    """Gọi Claude Vision phân tích ảnh ATTP, trả về dict risk assessment."""
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        b64 = base64.standard_b64encode(photo_bytes).decode()
+        resp = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=600,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image",
+                     "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+                    {"type": "text", "text": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
+Phân tích ảnh trong bối cảnh kiểm tra bữa ăn học đường.
+Nhóm kiểm tra: {group_name}
+
+Trả lời JSON (không thêm text khác bên ngoài JSON):
+{{
+  "risk_level": "OK" hoặc "WARNING" hoặc "CRITICAL",
+  "issues": ["mô tả vấn đề cụ thể nếu có"],
+  "positives": ["điểm nhìn thấy đạt chuẩn"],
+  "recommendation": "hành động cần làm (để trống nếu OK)",
+  "confidence": 0.85
+}}"""}
+                ]
+            }]
+        )
+        text = resp.content[0].text.strip()
+        s, e = text.find("{"), text.rfind("}") + 1
+        return json.loads(text[s:e]) if s != -1 and e > s else \
+               {"risk_level": "OK", "issues": [], "positives": [], "recommendation": "", "confidence": 0.5}
+    except Exception as ex:
+        return {"risk_level": "ERROR", "issues": [str(ex)], "positives": [],
+                "recommendation": "", "confidence": 0}
+
+
+# ── AI #1: Checklist động theo thực đơn ──────────────────────────────────────
+def generate_extra_checklist(menu: str, school_level: str, api_key: str) -> list:
+    """Tạo 3-5 điểm kiểm tra bổ sung đặc thù theo thực đơn hôm nay."""
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1000,
+            system=[{"type": "text", "text": build_system_prompt("Ban Giám Sát", school_level, "Việt Nam"),
+                     "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": f"""Thực đơn hôm nay ({school_level}): {menu}
+
+Tạo 3-5 điểm kiểm tra ATTP BỔ SUNG (ngoài 20 điểm chuẩn), đặc thù cho nguyên liệu này.
+Trả lời JSON array (không thêm text khác):
+[
+  {{
+    "code": "E01",
+    "ingredient": "Tên nguyên liệu cụ thể",
+    "desc": "Mô tả điểm kiểm tra (ngắn gọn, dưới 15 từ)",
+    "how": "Cách kiểm tra thực tế",
+    "pass": "Tiêu chí đạt",
+    "fail": "Tiêu chí không đạt",
+    "is_critical": false,
+    "why": "Lý do ATTP cần kiểm tra (1 câu, trích dẫn quy chuẩn nếu có)"
+  }}
+]"""}]
+        )
+        text = resp.content[0].text.strip()
+        s, e = text.find("["), text.rfind("]") + 1
+        items = json.loads(text[s:e]) if s != -1 and e > s else []
+        # Đánh lại code E01, E02... cho nhất quán
+        for i, item in enumerate(items):
+            item["code"] = f"E{i+1:02d}"
+        return items
+    except Exception:
+        return []
+
+
+# ── AI #3: Báo cáo ngôn ngữ tự nhiên ────────────────────────────────────────
+def generate_ai_narrative(results: dict, notes: dict, alert_level: str,
+                           school: str, date_str: str, menu: str,
+                           pass_count: int, total: int,
+                           level_key: str, api_key: str) -> str:
+    """Claude viết tóm tắt báo cáo kiểm tra bằng tiếng Việt tự nhiên."""
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        fail_list = [f"{c} ({notes.get(c,'').strip() or 'không có ghi chú'})"
+                     for c, v in results.items() if v == "❌ Không Đạt"]
+        context = (
+            f"Trường: {school or '(chưa nhập)'} | Cấp: {level_key} | Ngày: {date_str}\n"
+            f"Thực đơn: {menu or '(chưa nhập)'}\n"
+            f"Kết quả: {pass_count}/{total} đạt chuẩn | Cảnh báo: {alert_level}\n"
+            f"Mục không đạt: {', '.join(fail_list) if fail_list else 'Không có'}"
+        )
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=500,
+            messages=[{"role": "user", "content": f"""Viết đoạn tóm tắt báo cáo ATTP (120–160 từ) bằng tiếng Việt:
+{context}
+
+Yêu cầu:
+- Văn phong chuyên nghiệp, dễ hiểu với phụ huynh và ban giám hiệu
+- Nêu điểm tốt trước, điểm cần cải thiện sau
+- Có khuyến nghị cụ thể nếu có mục không đạt
+- Kết thúc bằng đánh giá tổng thể 1 câu
+- Không dùng markdown header hay bullet points, viết thành đoạn văn"""
+            }]
+        )
+        return resp.content[0].text.strip()
+    except Exception as ex:
+        return f"(Không tạo được tóm tắt AI: {ex})"
+
+
+# ── AI #7: Trợ lý ứng phó sự cố ngộ độc ─────────────────────────────────────
+def incident_ai_response(client: anthropic.Anthropic,
+                          history: list, user_msg: str) -> str:
+    """AI dẫn dắt xử lý sự cố ngộ độc từng bước, ghi nhận timeline."""
+    INCIDENT_SYSTEM = """Bạn là chuyên gia ATTP khẩn cấp đang hỗ trợ xử lý sự cố ngộ độc thực phẩm học đường.
+Nhiệm vụ: Dẫn dắt người dùng từng bước qua quy trình xử lý, hỏi thông tin còn thiếu, ghi nhận timeline.
+
+QUY TRÌNH CHUẨN (TTLT 13/2016):
+1. Dừng bữa ăn ngay
+2. Gọi 115 nếu triệu chứng nặng (khó thở, co giật)
+3. Giữ nguyên mẫu thức ăn (không vứt, không rửa)
+4. Báo Hiệu trưởng + Y tế học đường ngay
+5. Ghi chép số học sinh, triệu chứng, thời gian
+6. Báo Sở Y tế trong 24h (bắt buộc nếu ≥2 người)
+
+CÁCH PHẢN HỒI:
+- Luôn xác nhận bước đã làm
+- Hỏi thông tin cụ thể còn thiếu (số học sinh, triệu chứng, thời gian)
+- Đưa ra bước tiếp theo rõ ràng
+- Ghi nhận thông tin vào "SỔ GHI SỰ CỐ" format: [HH:MM] - nội dung
+- Nếu tình huống nghiêm trọng (khó thở, co giật) → ưu tiên gọi 115 NGAY"""
+
+    messages = history + [{"role": "user", "content": user_msg}]
+    try:
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            system=INCIDENT_SYSTEM,
+            messages=messages,
+        )
+        return resp.content[0].text
+    except Exception as ex:
+        return f"❌ Lỗi kết nối: {ex}"
+
+
 # ── TAB 1: Hỏi đáp AI ─────────────────────────────────────────────────────────
 def tab_chat(api_key, role, level, loc):
     st.markdown("""<div class="sf-card">
@@ -737,10 +885,14 @@ def tab_chat(api_key, role, level, loc):
 
 
 # ── TAB 2: Checklist ──────────────────────────────────────────────────────────
-def tab_checklist():
+def tab_checklist(api_key: str = ""):
+    ai_on = bool(api_key)   # AI features chỉ hoạt động khi có API key
+
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">✅ Checklist kiểm tra ATTP bữa ăn học đường</div>
-        <div class="sf-card-body">20 điểm kiểm tra chuẩn hoá · Mục có <span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:8px;font-weight:700;font-size:0.75rem">BẮT BUỘC</span> phải đạt tuyệt đối</div>
+        <div class="sf-card-body">20 điểm chuẩn hoá · Mục <span style="background:#FEE2E2;color:#991B1B;padding:1px 6px;border-radius:8px;font-weight:700;font-size:0.75rem">BẮT BUỘC</span> phải đạt tuyệt đối
+        """ + (" · <span style='color:#2563EB;font-weight:600'>🤖 AI đang hoạt động</span>" if ai_on else " · <i style='color:#94A3B8'>AI tắt — checklist vẫn dùng được đầy đủ</i>") + """
+        </div>
     </div>""", unsafe_allow_html=True)
 
     # Chọn cấp học — ảnh hưởng C12, C13
@@ -773,10 +925,31 @@ def tab_checklist():
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
-    if "cl_r" not in st.session_state: st.session_state.cl_r = {}
-    if "cl_n" not in st.session_state: st.session_state.cl_n = {}
-    if "cl_photos" not in st.session_state: st.session_state.cl_photos = {}
+    if "cl_r"       not in st.session_state: st.session_state.cl_r       = {}
+    if "cl_n"       not in st.session_state: st.session_state.cl_n       = {}
+    if "cl_photos"  not in st.session_state: st.session_state.cl_photos  = {}
+    if "cl_extra"   not in st.session_state: st.session_state.cl_extra   = []
+    if "photo_analysis" not in st.session_state: st.session_state.photo_analysis = {}
 
+    # ── AI #1: Tạo checklist bổ sung theo thực đơn ───────────────────────────
+    if ai_on and menu:
+        col_btn, col_status = st.columns([0.4, 0.6])
+        if col_btn.button("🤖 Tạo câu hỏi kiểm tra theo thực đơn",
+                          use_container_width=True, key="gen_extra"):
+            with st.spinner("AI đang phân tích thực đơn..."):
+                extras = generate_extra_checklist(menu, level_key, api_key)
+                st.session_state.cl_extra = extras
+                st.session_state.photo_analysis = {}  # reset khi đổi thực đơn
+        if st.session_state.cl_extra:
+            col_status.markdown(
+                f'<span style="color:#16A34A;font-size:0.85rem">✅ AI đã tạo '
+                f'<b>{len(st.session_state.cl_extra)}</b> câu hỏi bổ sung</span>',
+                unsafe_allow_html=True,
+            )
+    elif not ai_on and menu:
+        st.caption("💡 Kết nối AI để tạo câu hỏi kiểm tra riêng theo thực đơn hôm nay.")
+
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     cl = get_checklist(level_key)
 
     # ── FIX: Pre-initialize TRƯỚC KHI render để tránh reset state khi rerun ──
@@ -882,31 +1055,77 @@ def tab_checklist():
             elif result == "❌ Không Đạt":
                 fail_count += 1
 
-        # Ảnh minh chứng mỗi nhóm
-        with st.expander(f"📷 Ảnh minh chứng — {group_name}"):
+        # ── Ảnh minh chứng + AI phân tích ────────────────────────────────────
+        with st.expander(f"📷 Ảnh minh chứng — {group_name}"
+                         + (" · 🤖 AI phân tích" if ai_on else "")):
             photo_col1, photo_col2 = st.columns(2)
             with photo_col1:
-                st.caption("📱 Chụp ảnh (truy cập camera)")
-                cam = st.camera_input(
-                    "Chụp ảnh",
-                    key=f"cam_{g_idx}",
-                    label_visibility="collapsed",
-                )
+                st.caption("📱 Chụp ảnh (camera)")
+                cam = st.camera_input("Chụp ảnh", key=f"cam_{g_idx}",
+                                      label_visibility="collapsed")
                 if cam:
                     st.session_state.cl_photos[f"cam_{g_idx}"] = cam
                     st.success("✅ Đã lưu ảnh chụp")
             with photo_col2:
-                st.caption("💻 Hoặc tải ảnh lên từ máy")
+                st.caption("💻 Tải ảnh từ máy")
                 upl = st.file_uploader(
-                    "Tải ảnh lên",
-                    type=["jpg", "jpeg", "png", "heic"],
-                    key=f"upl_{g_idx}",
-                    label_visibility="collapsed",
+                    "Tải ảnh", type=["jpg", "jpeg", "png", "heic"],
+                    key=f"upl_{g_idx}", label_visibility="collapsed",
                     accept_multiple_files=True,
                 )
                 if upl:
                     st.session_state.cl_photos[f"upl_{g_idx}"] = upl
                     st.success(f"✅ Đã tải {len(upl)} ảnh")
+
+            # ── AI #2: Nút phân tích ảnh ──────────────────────────────────
+            active_photo = (
+                st.session_state.cl_photos.get(f"cam_{g_idx}") or
+                (st.session_state.cl_photos.get(f"upl_{g_idx}") or [None])[0]
+            )
+            if ai_on and active_photo:
+                if st.button(f"🔍 Phân tích ảnh với AI", key=f"analyze_{g_idx}",
+                             use_container_width=True):
+                    with st.spinner("AI đang phân tích ảnh..."):
+                        photo_bytes = (active_photo.read()
+                                       if hasattr(active_photo, "read")
+                                       else active_photo.getvalue())
+                        result = analyze_photo_ai(photo_bytes, group_name, api_key)
+                        st.session_state.photo_analysis[g_idx] = result
+
+                # Hiển thị kết quả phân tích
+                if g_idx in st.session_state.photo_analysis:
+                    r = st.session_state.photo_analysis[g_idx]
+                    lvl  = r.get("risk_level", "OK")
+                    clr  = {"OK": "#16A34A", "WARNING": "#D97706",
+                            "CRITICAL": "#DC2626", "ERROR": "#64748B"}.get(lvl, "#64748B")
+                    bg   = {"OK": "#F0FDF4", "WARNING": "#FFFBEB",
+                            "CRITICAL": "#FEF2F2", "ERROR": "#F8FAFC"}.get(lvl, "#F8FAFC")
+                    icon = {"OK": "✅", "WARNING": "⚠️",
+                            "CRITICAL": "🚨", "ERROR": "❓"}.get(lvl, "❓")
+                    conf = int(r.get("confidence", 0.8) * 100)
+
+                    issues_html = "".join(
+                        f"<li style='color:#DC2626'>{i}</li>" for i in r.get("issues", [])
+                    ) or ""
+                    pos_html = "".join(
+                        f"<li style='color:#16A34A'>{p}</li>" for p in r.get("positives", [])
+                    ) or ""
+
+                    st.markdown(f"""
+                    <div style="background:{bg};border-left:4px solid {clr};
+                                border-radius:8px;padding:12px 16px;margin-top:8px">
+                        <div style="font-weight:700;color:{clr};margin-bottom:6px">
+                            {icon} Kết quả AI: <b>{lvl}</b>
+                            <span style="font-weight:400;font-size:0.75rem;
+                                         color:#64748B;margin-left:8px">
+                                Độ tin cậy: {conf}%</span>
+                        </div>
+                        {"<ul style='margin:4px 0;padding-left:16px'>" + issues_html + "</ul>" if issues_html else ""}
+                        {"<ul style='margin:4px 0;padding-left:16px'>" + pos_html + "</ul>" if pos_html else ""}
+                        {"<div style='font-size:0.82rem;color:#475569;margin-top:6px'><b>Khuyến nghị:</b> " + r.get("recommendation","") + "</div>" if r.get("recommendation") else ""}
+                    </div>""", unsafe_allow_html=True)
+            elif not ai_on and active_photo:
+                st.caption("💡 Kết nối AI để phân tích ảnh tự động.")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1007,24 +1226,95 @@ def tab_checklist():
         """, unsafe_allow_html=True)
 
     can_submit = len(errors) == 0
+
+    # ── Hiển thị checklist bổ sung từ AI (nếu có) ────────────────────────────
+    if st.session_state.cl_extra:
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sec-hdr">🤖 Câu hỏi bổ sung AI ({len(st.session_state.cl_extra)} câu) — theo thực đơn hôm nay</div>',
+            unsafe_allow_html=True,
+        )
+        if "cl_extra_r" not in st.session_state:
+            st.session_state.cl_extra_r = {}
+        for item in st.session_state.cl_extra:
+            code = item.get("code", "?")
+            desc = item.get("desc", "")
+            ingr = item.get("ingredient", "")
+            why  = item.get("why", "")
+            col_d, col_c = st.columns([0.65, 0.35])
+            with col_d:
+                st.markdown(
+                    f'<div style="background:#EFF6FF;border-left:3px solid #2563EB;'
+                    f'border-radius:0 8px 8px 0;padding:8px 14px;margin:3px 0">'
+                    f'<span style="font-size:0.7rem;font-weight:800;color:#2563EB">'
+                    f'🤖 {code}</span>'
+                    f'<span style="font-size:0.72rem;color:#1D4ED8;margin-left:6px;'
+                    f'background:#DBEAFE;padding:1px 6px;border-radius:8px">{ingr}</span>'
+                    f'<div style="font-size:0.88rem;font-weight:500;color:#1E293B;'
+                    f'margin-top:4px">{desc}</div>'
+                    f'{"<div style=font-size:0.75rem;color:#64748B;margin-top:2px>" + why + "</div>" if why else ""}'
+                    f'</div>', unsafe_allow_html=True,
+                )
+                with st.expander("Hướng dẫn"):
+                    st.markdown(
+                        f"**Kiểm tra:** {item.get('how','')}  \n"
+                        f"**✅ Đạt:** {item.get('pass','')}  \n"
+                        f"**❌ Không đạt:** {item.get('fail','')}"
+                    )
+            with col_c:
+                seg_key = f"seg_extra_{code}"
+                if seg_key not in st.session_state:
+                    st.session_state[seg_key] = "Chưa chấm"
+                st.segmented_control(
+                    code, ["Chưa chấm", "✅ Đạt", "❌ Không Đạt"],
+                    key=seg_key, label_visibility="collapsed",
+                )
+                st.session_state.cl_extra_r[code] = \
+                    st.session_state.get(seg_key, "Chưa chấm")
+        if st.button("🗑️ Xoá câu hỏi AI", use_container_width=True):
+            st.session_state.cl_extra = []
+            st.rerun()
+
+    # ── Nút tạo báo cáo ──────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
     if st.button(
         "📄 Tạo báo cáo kiểm tra" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
         type="primary" if can_submit else "secondary",
         disabled=not can_submit,
         use_container_width=True,
     ):
-        alert_key  = determine_alert(st.session_state.cl_r, cl)
-        date_vn    = date.strftime("%d/%m/%Y")        # Định dạng dd/mm/yyyy
-        report     = _build_report(school, date_vn, insp, menu, level_key,
-                                   st.session_state.cl_r, st.session_state.cl_n,
-                                   pass_count, fail_count, alert_key, cl)
+        alert_key = determine_alert(st.session_state.cl_r, cl)
+        date_vn   = date.strftime("%d/%m/%Y")
+        report    = _build_report(school, date_vn, insp, menu, level_key,
+                                  st.session_state.cl_r, st.session_state.cl_n,
+                                  pass_count, fail_count, alert_key, cl)
         fname = f"BaoCao_ATTP_{(school or 'Truong').replace(' ','_')}_{date.strftime('%d-%m-%Y')}.txt"
         photo_count = sum(
             (len(v) if isinstance(v, list) else 1)
             for v in st.session_state.cl_photos.values() if v
         )
+
+        # ── AI #3: Tóm tắt ngôn ngữ tự nhiên ────────────────────────────────
+        if ai_on:
+            with st.spinner("🤖 AI đang viết tóm tắt báo cáo..."):
+                narrative = generate_ai_narrative(
+                    st.session_state.cl_r, st.session_state.cl_n,
+                    alert_key, school, date_vn, menu,
+                    pass_count, pass_count + fail_count, level_key, api_key,
+                )
+                a = ALERT_SYSTEM.get(alert_key, {})
+                st.markdown(f"""
+                <div style="background:#F8FAFC;border:1px solid #E2E8F0;
+                            border-radius:10px;padding:16px 20px;margin-bottom:12px">
+                    <div style="font-size:0.75rem;font-weight:700;color:#2563EB;
+                                margin-bottom:8px">🤖 TÓM TẮT BÁO CÁO — AI tạo tự động</div>
+                    <div style="font-size:0.9rem;color:#1E293B;line-height:1.7">{narrative}</div>
+                </div>""", unsafe_allow_html=True)
+                report = f"TÓM TẮT (AI):\n{narrative}\n\n{'='*64}\n\n" + report
+
         if photo_count:
-            st.info(f"📷 Kèm {photo_count} ảnh minh chứng đã lưu trong phiên này")
+            st.info(f"📷 Kèm {photo_count} ảnh minh chứng + "
+                    f"{len(st.session_state.photo_analysis)} kết quả phân tích AI")
         st.download_button("⬇️ Tải báo cáo (.txt)", data=report,
                            file_name=fname, mime="text/plain", use_container_width=True)
         with st.expander("Xem trước nội dung báo cáo"):
@@ -1170,9 +1460,94 @@ def tab_schedule():
 
 
 # ── TAB 4: Khẩn cấp ──────────────────────────────────────────────────────────
-def tab_emergency():
+def tab_emergency(api_key: str = ""):
     st.markdown('<div class="emergency-header">🚨 XỬ LÝ KHẨN CẤP KHI NGHI NGỜ NGỘ ĐỘC THỰC PHẨM</div>',
                 unsafe_allow_html=True)
+
+    # ── AI #7: Chế độ ứng phó sự cố trực tiếp ───────────────────────────────
+    if api_key:
+        st.markdown("""<div class="sf-card" style="border:2px solid #DC2626">
+            <div class="sf-card-title" style="color:#DC2626">
+                🤖 Chế độ ứng phó sự cố — AI hỗ trợ trực tiếp
+            </div>
+            <div class="sf-card-body">
+                AI sẽ hỏi từng bước, ghi nhận timeline và tạo biên bản sự cố tự động.
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        if "incident_active" not in st.session_state:
+            st.session_state.incident_active = False
+        if "incident_history" not in st.session_state:
+            st.session_state.incident_history = []
+        if "incident_log" not in st.session_state:
+            st.session_state.incident_log = []
+
+        col_start, col_end = st.columns(2)
+        if col_start.button("🚨 Bắt đầu xử lý sự cố", type="primary",
+                            use_container_width=True,
+                            disabled=st.session_state.incident_active):
+            st.session_state.incident_active = True
+            st.session_state.incident_history = []
+            st.session_state.incident_log = [
+                f"[{now_vn().strftime('%H:%M')}] — Bắt đầu ghi nhận sự cố"
+            ]
+            st.rerun()
+
+        if col_end.button("⏹ Kết thúc & Tạo biên bản", use_container_width=True,
+                          disabled=not st.session_state.incident_active):
+            st.session_state.incident_active = False
+            st.rerun()
+
+        if st.session_state.incident_active:
+            st.error("🔴 **ĐANG XỬ LÝ SỰ CỐ** — Trả lời AI từng bước")
+
+            for msg in st.session_state.incident_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Khởi động với câu hỏi đầu tiên
+            if not st.session_state.incident_history:
+                client  = anthropic.Anthropic(api_key=api_key)
+                opening = incident_ai_response(client, [],
+                    "Tôi nghi ngờ có học sinh bị ngộ độc thực phẩm sau bữa ăn. Tôi cần làm gì?")
+                st.session_state.incident_history.append(
+                    {"role": "assistant", "content": opening})
+                st.rerun()
+
+            user_msg = st.chat_input("Mô tả tình huống...", key="incident_input")
+            if user_msg:
+                st.session_state.incident_history.append(
+                    {"role": "user", "content": user_msg})
+                st.session_state.incident_log.append(
+                    f"[{now_vn().strftime('%H:%M')}] Người dùng: {user_msg}")
+                client = anthropic.Anthropic(api_key=api_key)
+                with st.spinner("AI đang phân tích..."):
+                    ai_reply = incident_ai_response(
+                        client,
+                        [{"role": m["role"], "content": m["content"]}
+                         for m in st.session_state.incident_history[:-1]],
+                        user_msg,
+                    )
+                st.session_state.incident_history.append(
+                    {"role": "assistant", "content": ai_reply})
+                st.session_state.incident_log.append(
+                    f"[{now_vn().strftime('%H:%M')}] AI: {ai_reply[:100]}...")
+                st.rerun()
+
+        elif st.session_state.incident_log:
+            # Hiển thị biên bản sau khi kết thúc
+            log_text = "\n".join(st.session_state.incident_log)
+            st.download_button(
+                "📄 Tải biên bản sự cố (.txt)",
+                data=f"BIÊN BẢN SỰ CỐ ATTP\n{'='*40}\n{log_text}",
+                file_name=f"SuCo_ATTP_{now_vn().strftime('%d-%m-%Y_%H%M')}.txt",
+                mime="text/plain", use_container_width=True,
+            )
+            with st.expander("Xem biên bản"):
+                st.text(log_text)
+
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown("**Hoặc dùng hướng dẫn tĩnh bên dưới:**")
     steps = [
         ("🛑", "Bước 1 — DỪNG BỮA ĂN NGAY",
          "Yêu cầu tất cả học sinh ngừng ăn. Không để thêm bất kỳ ai ăn thêm."),
@@ -1348,9 +1723,9 @@ def main():
         "ℹ️ Về ứng dụng",
     ])
     with t1: tab_chat(api_key, role, level, loc)
-    with t2: tab_checklist()
+    with t2: tab_checklist(api_key)
     with t3: tab_schedule()
-    with t4: tab_emergency()
+    with t4: tab_emergency(api_key)
     with t5: tab_about()
 
 
