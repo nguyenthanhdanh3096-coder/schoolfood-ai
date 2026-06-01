@@ -1306,23 +1306,40 @@ def tab_checklist(api_key: str = ""):
     if "cl_extra"   not in st.session_state: st.session_state.cl_extra   = []
     if "photo_analysis" not in st.session_state: st.session_state.photo_analysis = {}
 
+    # ── Giải thích cấu trúc checklist ────────────────────────────────────────
+    st.markdown(f"""
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;
+                padding:12px 16px;margin-bottom:12px;font-size:0.85rem">
+        <b>📋 Cấu trúc kiểm tra:</b>
+        <span style="color:#1E293B">
+          &nbsp;&nbsp;🔵 <b>20 câu chuẩn</b> — luôn có, không cần API
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          🤖 <b>Câu hỏi AI bổ sung</b> — tùy chọn, theo thực đơn hôm nay
+          {"&nbsp;&nbsp;|&nbsp;&nbsp;<span style='color:#2563EB'>💳 Mỗi lần tạo ≈ $0.004 credit</span>" if ai_on else ""}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
     # ── AI #1: Tạo checklist bổ sung theo thực đơn ───────────────────────────
     if ai_on and menu:
-        col_btn, col_status = st.columns([0.4, 0.6])
-        if col_btn.button("🤖 Tạo câu hỏi kiểm tra theo thực đơn",
+        col_btn, col_status = st.columns([0.5, 0.5])
+        if col_btn.button("🤖 Tạo câu hỏi bổ sung theo thực đơn (~$0.004)",
                           use_container_width=True, key="gen_extra"):
-            with st.spinner("AI đang phân tích thực đơn..."):
+            with st.spinner("AI đang phân tích thực đơn và tra cứu QCVN..."):
                 extras = generate_extra_checklist(menu, level_key, api_key)
                 st.session_state.cl_extra = extras
-                st.session_state.photo_analysis = {}  # reset khi đổi thực đơn
+                st.session_state.photo_analysis = {}
         if st.session_state.cl_extra:
             col_status.markdown(
-                f'<span style="color:#16A34A;font-size:0.85rem">✅ AI đã tạo '
-                f'<b>{len(st.session_state.cl_extra)}</b> câu hỏi bổ sung</span>',
+                f'<span style="color:#16A34A;font-size:0.85rem">✅ Đã tạo '
+                f'<b>{len(st.session_state.cl_extra)}</b> câu hỏi — '
+                f'<span style="color:#94A3B8">căn cứ QCVN + NĐ 15/2018</span></span>',
                 unsafe_allow_html=True,
             )
-    elif not ai_on and menu:
-        st.caption("💡 Kết nối AI để tạo câu hỏi kiểm tra riêng theo thực đơn hôm nay.")
+    elif ai_on and not menu:
+        st.caption("💡 Nhập thực đơn hôm nay bên trên để AI tạo câu hỏi kiểm tra riêng.")
+    else:
+        st.caption("🔌 Kết nối API key ở sidebar để dùng tính năng tạo câu hỏi theo thực đơn.")
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     cl = get_checklist(level_key)
@@ -1431,18 +1448,36 @@ def tab_checklist(api_key: str = ""):
                 fail_count += 1
 
         # ── Ảnh minh chứng + AI phân tích ────────────────────────────────────
-        with st.expander(f"📷 Ảnh minh chứng — {group_name}"
-                         + (" · 🤖 AI phân tích" if ai_on else "")):
+        with st.expander(
+            f"📷 Ảnh minh chứng — {group_name}"
+            + (" · 🤖 AI phân tích ảnh (~$0.015/ảnh)" if ai_on else "")
+        ):
+            # Hướng dẫn chụp ảnh đạt chuẩn
+            st.markdown("""
+            <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;
+                        padding:10px 14px;margin-bottom:10px;font-size:0.8rem;color:#78350F">
+                <b>📐 Chụp ảnh để AI phân tích chính xác:</b><br>
+                ✅ Đủ sáng, không ngược sáng &nbsp;|&nbsp;
+                ✅ Cách 20–50cm, chụp thẳng &nbsp;|&nbsp;
+                ✅ Ảnh nét, không bị mờ &nbsp;|&nbsp;
+                ✅ Chụp rõ vùng cần kiểm tra<br>
+                ❌ Tránh: tối, mờ nhòe, góc nghiêng >45°, che khuất vùng cần xem<br>
+                <span style="color:#92400E"><b>Lưu ý:</b> Claude Vision phân tích dấu hiệu
+                <b>nhìn thấy bằng mắt</b> — không thể phát hiện vi khuẩn vô hình
+                hay đo nhiệt độ thực tế.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
             photo_col1, photo_col2 = st.columns(2)
             with photo_col1:
-                st.caption("📱 Chụp ảnh (camera)")
+                st.caption("📱 Chụp ảnh (camera điện thoại/webcam)")
                 cam = st.camera_input("Chụp ảnh", key=f"cam_{g_idx}",
                                       label_visibility="collapsed")
                 if cam:
                     st.session_state.cl_photos[f"cam_{g_idx}"] = cam
                     st.success("✅ Đã lưu ảnh chụp")
             with photo_col2:
-                st.caption("💻 Tải ảnh từ máy")
+                st.caption("💻 Hoặc tải ảnh từ thư viện máy")
                 upl = st.file_uploader(
                     "Tải ảnh", type=["jpg", "jpeg", "png", "heic"],
                     key=f"upl_{g_idx}", label_visibility="collapsed",
