@@ -89,7 +89,7 @@ ALERT_SYSTEM = {
         "notify": [
             "🏫 Hiệu Trưởng — GỌI ĐIỆN NGAY",
             "🏥 Y Tế Học Đường — NGAY LẬP TỨC",
-            "👥 Ban Giám Sát — TRONG 5 PHÚT",
+            "👥 Ban Giám Sát (Đại Diện PHHS) — TRONG 5 PHÚT",
             "📞 Cấp cứu 115 — Nếu có học sinh bị ảnh hưởng",
             "🏛️ Sở Y Tế địa phương — TRONG 24 GIỜ (bắt buộc theo luật)",
         ],
@@ -154,7 +154,7 @@ SCHEDULE = [
         "color": "#2563EB",
     },
     {
-        "role": "👥 Ban Giám Sát (PHHS)",
+        "role": "👥 Ban Giám Sát (Đại Diện PHHS)",
         "freq": "2 lần / tuần tối thiểu",
         "when": "Thứ 2–3 (báo trước 1 ngày) + 1 lần đột xuất bất kỳ",
         "what": "Checklist 20 điểm đầy đủ + ảnh minh chứng",
@@ -302,6 +302,84 @@ def inject_css():
     .stButton > button { border-radius: 8px !important; font-family:'Inter',sans-serif !important; font-weight:500 !important; }
     .stTextInput > div > div > input { border-radius: 8px !important; }
     div[data-testid="stChatInput"] textarea { font-family:'Inter',sans-serif !important; }
+
+    /* ── Nút mở/đóng sidebar — luôn hiển thị rõ ── */
+    [data-testid="collapsedControl"] {
+        background: #1B3B6F !important;
+        border-radius: 0 10px 10px 0 !important;
+        display: flex !important; visibility: visible !important;
+        align-items: center !important; justify-content: center !important;
+        width: 32px !important; min-height: 72px !important;
+        opacity: 1 !important; z-index: 99999 !important;
+        box-shadow: 3px 0 10px rgba(0,0,0,0.2) !important;
+        cursor: pointer !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        fill: white !important; color: white !important; opacity: 1 !important;
+    }
+    [data-testid="collapsedControl"]:hover {
+        background: #2563EB !important; width: 36px !important;
+    }
+
+    /* ── Mobile responsive ── */
+    @media (max-width: 768px) {
+        /* Header nhỏ hơn trên mobile */
+        .sf-header h1 { font-size: 1.3rem !important; }
+        .sf-header p  { font-size: 0.78rem !important; }
+        .sf-header     { padding: 14px 16px !important; }
+
+        /* Card padding giảm */
+        .sf-card { padding: 14px 14px !important; }
+
+        /* Metric boxes nhỏ hơn, font nhỏ hơn */
+        .metric-box { min-height: 80px !important; padding: 10px 8px !important; }
+        .metric-num { font-size: 1.5rem !important; }
+        .metric-lbl { font-size: 0.7rem !important; }
+
+        /* Nút bấm full width trên mobile */
+        .stButton > button { min-height: 44px !important; font-size: 0.85rem !important; }
+
+        /* Columns stack dọc trên mobile */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+        }
+        [data-testid="column"] {
+            min-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+
+        /* Segmented control mobile */
+        [data-baseweb="button-group"] {
+            flex-direction: row !important;
+            gap: 3px !important;
+        }
+        [data-baseweb="button-group"] button {
+            font-size: 0.72rem !important;
+            padding: 5px 6px !important;
+        }
+
+        /* Tab labels ngắn hơn */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.75rem !important;
+            padding: 8px 8px !important;
+        }
+
+        /* Alert boxes padding */
+        .alert-critical, .alert-major, .alert-minor, .alert-ok {
+            padding: 12px 14px !important;
+        }
+
+        /* Group title font nhỏ hơn */
+        .group-title { font-size: 0.72rem !important; }
+
+        /* Schedule cards */
+        .schedule-card { padding: 12px 14px !important; }
+    }
+
+    @media (max-width: 480px) {
+        .sf-header h1 { font-size: 1.1rem !important; }
+        .metric-num   { font-size: 1.3rem !important; }
+    }
 
     /* ── Checklist segmented control animations (CSS-only, no JS needed) ── */
     /* Áp dụng cho cả direct children và div-wrapped children (tuỳ BaseWeb version) */
@@ -573,7 +651,7 @@ _REMINDER_TIMES = {
         "task": "Kiểm thực 3 bước bữa trưa (trước 10:45)",
         "tab":  "✅ Checklist kiểm tra",
     },
-    "Ban Giám Sát": {
+    "Ban Giám Sát (Đại Diện PHHS)": {
         "hour": 10, "min": 0,
         "days": [0, 2],                    # Thứ 2, Thứ 4 (định kỳ có báo trước)
         "task": "Checklist 20 điểm định kỳ (Thứ 2 & Thứ 4)",
@@ -1069,7 +1147,7 @@ def generate_word_report(school: str, date_str: str, insp: str, menu: str,
     sig_table.style = "Table Grid"
     sig_table.style = None  # Bỏ border cho bảng chữ ký
 
-    left_cells = ["Đại diện Ban Giám sát PHHS", "", "", ""]
+    left_cells = ["Đại diện Ban Giám Sát (Đại Diện PHHS)", "", "", ""]
     right_cells = [f"TP. Hồ Chí Minh, {date_str}", "Người kiểm tra", "", f"{insp or '(ký và ghi rõ họ tên)'}"]
     for i, (lc, rc) in enumerate(zip(left_cells, right_cells)):
         for cell, txt, bold in [(sig_table.rows[i].cells[0], lc, i==0),
@@ -1202,7 +1280,7 @@ def tab_chat(api_key, role, level, loc):
             "Làm sao biết suất ăn của con đủ dinh dưỡng không?",
             "Tôi có thể yêu cầu xem thực đơn trước không?",
         ],
-        "Ban Giám Sát": [
+        "Ban Giám Sát (Đại Diện PHHS)": [
             "Ban Giám Sát có quyền gì theo pháp luật?",
             "Phát hiện thực phẩm hết hạn — phải báo cáo ai?",
             "Nhà Cung Cấp cần có những giấy tờ gì?",
@@ -2001,6 +2079,128 @@ def tab_emergency(api_key: str = ""):
 
 
 # ── TAB 5: Về ứng dụng ───────────────────────────────────────────────────────
+# ── Tab riêng cho Phụ Huynh (chỉ xem, không thực hiện checklist) ─────────────
+def tab_parent_view(api_key: str = ""):
+    """View dành cho Phụ Huynh — xem thực đơn, kết quả kiểm tra, gửi phản hồi."""
+    st.markdown("""<div class="sf-card">
+        <div class="sf-card-title">👨‍👩‍👧 Góc Phụ Huynh</div>
+        <div class="sf-card-body">
+            Phụ Huynh có quyền xem thực đơn, đọc kết quả kiểm tra của Ban Giám Sát
+            và gửi phản hồi về bữa ăn. Việc thực hiện checklist thuộc thẩm quyền của
+            <b>Ban Giám Sát (Đại Diện PHHS)</b> được bầu chính thức.
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    # Phần 1 — Thực đơn hôm nay
+    st.markdown('<div class="sec-hdr">📋 Thực đơn hôm nay</div>', unsafe_allow_html=True)
+    st.markdown("""<div class="sf-card" style="border-left:4px solid #2563EB">
+        <div class="sf-card-body">
+            Thực đơn do Y Tế Học Đường cập nhật trước bữa ăn. Hiện chưa có
+            kết nối dữ liệu trực tiếp từ nhà trường — liên hệ Y Tế Học Đường
+            hoặc xem bảng thực đơn treo tại cổng trường để biết thực đơn hôm nay.
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    # Phần 2 — Kết quả kiểm tra mới nhất
+    st.markdown('<div class="sec-hdr">✅ Kết quả kiểm tra gần nhất</div>',
+                unsafe_allow_html=True)
+    if st.session_state.get("cl_r"):
+        pass_ct = sum(1 for v in st.session_state.cl_r.values() if v == "✅ Đạt")
+        fail_ct = sum(1 for v in st.session_state.cl_r.values() if v == "❌ Không Đạt")
+        total   = pass_ct + fail_ct
+        if total > 0:
+            pct = int(pass_ct / total * 100)
+            from datetime import date
+            c1, c2, c3 = st.columns(3)
+            c1.markdown(f"""<div class="metric-box">
+                <div class="metric-lbl">Điểm đạt</div>
+                <div class="metric-num c-green">{pass_ct}</div>
+                <div class="metric-lbl">/ {total} đã chấm</div>
+            </div>""", unsafe_allow_html=True)
+            c2.markdown(f"""<div class="metric-box">
+                <div class="metric-lbl">Tỷ lệ</div>
+                <div class="metric-num {'c-green' if pct>=90 else 'c-orange' if pct>=75 else 'c-red'}">{pct}%</div>
+                <div class="metric-lbl">đạt chuẩn</div>
+            </div>""", unsafe_allow_html=True)
+            c3.markdown(f"""<div class="metric-box">
+                <div class="metric-lbl">Điểm không đạt</div>
+                <div class="metric-num c-red">{fail_ct}</div>
+                <div class="metric-lbl">điểm</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.info("Ban Giám Sát chưa thực hiện checklist trong phiên này.")
+    else:
+        st.info("Chưa có kết quả kiểm tra. Ban Giám Sát thực hiện kiểm tra 2 lần/tuần.")
+
+    # Phần 3 — Quyền của Phụ Huynh
+    st.markdown('<div class="sec-hdr">⚖️ Quyền của Phụ Huynh theo pháp luật</div>',
+                unsafe_allow_html=True)
+    rights = [
+        ("Xem thực đơn",
+         "Nhà trường phải công khai thực đơn — yêu cầu Y Tế Học Đường hoặc xem bảng thông báo."),
+        ("Yêu cầu Ban Đại Diện PHHS giám sát",
+         "Phụ Huynh có quyền đề nghị Ban Đại Diện PHHS kiểm tra đột xuất bếp ăn."),
+        ("Phản ánh chất lượng",
+         "Gửi phản hồi qua form bên dưới hoặc liên hệ trực tiếp Hiệu Trưởng."),
+        ("Tiếp cận kết quả kiểm tra",
+         "Báo cáo kiểm tra ATTP là tài liệu có thể được chia sẻ với phụ huynh khi yêu cầu."),
+    ]
+    for title, desc in rights:
+        st.markdown(f"""<div class="sf-card" style="padding:12px 16px;margin:6px 0">
+            <span style="font-weight:600;color:#1E293B;font-size:0.88rem">{title}</span>
+            <div style="font-size:0.83rem;color:#475569;margin-top:3px">{desc}</div>
+        </div>""", unsafe_allow_html=True)
+
+    # Phần 4 — Gửi phản hồi
+    st.markdown('<div class="sec-hdr">📤 Gửi phản hồi về bữa ăn</div>',
+                unsafe_allow_html=True)
+    st.markdown("""<div class="sf-card">""", unsafe_allow_html=True)
+    loai = st.selectbox("Loại phản hồi", [
+        "Chọn loại phản hồi...",
+        "Chất lượng thức ăn (khẩu phần, hương vị)",
+        "Vệ sinh (nghi ngờ không sạch)",
+        "Ngộ độc hoặc dấu hiệu bất thường",
+        "Thiếu dinh dưỡng theo chuẩn",
+        "Thực đơn không như đã thông báo",
+        "Khác",
+    ])
+    noi_dung = st.text_area(
+        "Mô tả cụ thể (ngày, bữa ăn, triệu chứng nếu có...)",
+        height=120,
+        placeholder="Ví dụ: Hôm nay 01/06, con tôi kể thức ăn có mùi lạ ở bữa trưa..."
+    )
+    ten_ph = st.text_input("Họ tên Phụ Huynh (tuỳ chọn)")
+
+    if st.button("📤 Gửi phản hồi", type="primary", use_container_width=True):
+        if loai == "Chọn loại phản hồi..." or not noi_dung.strip():
+            st.warning("⚠️ Vui lòng chọn loại phản hồi và điền nội dung trước khi gửi.")
+        elif "Ngộ độc" in loai:
+            st.error(
+                "🚨 Nếu nghi ngờ ngộ độc: gọi ngay **115** và chuyển sang tab **🚨 Khẩn cấp** "
+                "để biết quy trình xử lý đúng."
+            )
+        else:
+            st.success(
+                f"✅ Đã ghi nhận phản hồi của bạn ({ten_ph or 'ẩn danh'}). "
+                f"Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
+            )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Hỏi đáp AI (nếu có)
+    if api_key:
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-hdr">💬 Hỏi AI về quyền Phụ Huynh</div>',
+                    unsafe_allow_html=True)
+        st.caption("Đặt câu hỏi tự do về ATTP, quyền phụ huynh, xử lý khi nghi ngờ ngộ độc...")
+        q = st.text_input("Câu hỏi của bạn", placeholder="VD: Con tôi đau bụng sau bữa trưa, tôi cần làm gì?")
+        if q:
+            from anthropic import Anthropic
+            with st.spinner("AI đang trả lời..."):
+                sys = build_system_prompt("Phụ Huynh", "tiểu học", "Việt Nam")
+                ans = ask_claude(Anthropic(api_key=api_key), sys, [], q)
+                st.info(ans)
+
+
 # ── Nội dung sổ tay — dùng chung cho tab_guide() và generate_user_manual_docx()
 MANUAL_CONTENT = {
     "title": "SỔ TAY HƯỚNG DẪN SỬ DỤNG SCHOOLFOOD AI",
@@ -2027,7 +2227,7 @@ MANUAL_CONTENT = {
                  "Y tế học đường ghi sổ giấy rồi cất vào tủ. SchoolFood AI lấp đầy khoảng trống này."),
                 ("Ai nên dùng app này",
                  "• Phụ Huynh — xem thực đơn, kết quả kiểm tra, phản hồi\n"
-                 "• Ban Giám Sát PHHS — thực hiện checklist 20 điểm và tạo báo cáo\n"
+                 "• Ban Giám Sát (Đại Diện PHHS) — thực hiện checklist 20 điểm và tạo báo cáo\n"
                  "• Y Tế Học Đường — số hoá kiểm thực 3 bước hàng ngày\n"
                  "• Ban Giám Hiệu — xem tổng quan và duyệt báo cáo"),
             ]
@@ -2043,8 +2243,8 @@ MANUAL_CONTENT = {
                  "3. Tab 📅 Lịch & thông báo: xem lịch kiểm tra của Ban Giám Sát\n"
                  "4. Tab 🚨 Khẩn cấp: xem quy trình xử lý khi con có triệu chứng ngộ độc\n\n"
                  "Phụ huynh KHÔNG tự vào bếp kiểm tra nếu chưa được đào tạo và uỷ quyền."),
-                ("👥 Ban Giám Sát PHHS — quy trình kiểm tra",
-                 "1. Chọn vai trò 'Ban Giám Sát' và cấp trường\n"
+                ("👥 Ban Giám Sát (Đại Diện PHHS) — quy trình kiểm tra",
+                 "1. Chọn vai trò 'Ban Giám Sát (Đại Diện PHHS)' và cấp trường\n"
                  "2. Tab ✅ Checklist: nhập thông tin buổi kiểm tra (trường, ngày, người kiểm tra)\n"
                  "3. Nhập thực đơn hôm nay → bấm 🤖 Tạo câu hỏi bổ sung (nếu có API)\n"
                  "4. Đánh giá lần lượt 20 điểm: chọn ✅ Đạt / ❌ Không Đạt / ghi chú\n"
@@ -2119,7 +2319,7 @@ MANUAL_CONTENT = {
                 ("🔴 CRITICAL — Xử lý trong 5 phút",
                  "Kích hoạt khi: bất kỳ mục BẮT BUỘC nào fail, hoặc phát hiện ngộ độc ≥ 2 học sinh\n"
                  "Hành động: DỪNG bữa ăn ngay · Giữ mẫu thức ăn · Báo Hiệu Trưởng + 115 nếu cần\n"
-                 "Thông báo: Hiệu Trưởng + Y Tế + Ban Giám Sát trong 5 phút"),
+                 "Thông báo: Hiệu Trưởng + Y Tế + Ban Giám Sát (Đại Diện PHHS) trong 5 phút"),
                 ("🟠 MAJOR — Xử lý trong ngày",
                  "Kích hoạt khi: tổng điểm < 15/20, hoặc ≥ 3 mục KHÔNG ĐẠT cùng nhóm\n"
                  "Hành động: yêu cầu Nhà Cung Cấp khắc phục trước bữa ăn tiếp theo\n"
@@ -2219,10 +2419,10 @@ MANUAL_CONTENT = {
                  "Lưu: thư mục hồ sơ ATTP của trường (lưu tối thiểu 2 năm theo quy định)."),
                 ("Phụ huynh có được vào bếp kiểm tra không?",
                  "Phụ huynh đơn lẻ KHÔNG có quyền tự vào bếp. "
-                 "Ban Đại Diện Cha Mẹ Học Sinh (PHHS) được bầu CHÍNH THỨC mới có quyền "
+                 "Ban Đại Diện Cha Mẹ Học Sinh (BĐDCMHS) được bầu chính thức mới có quyền "
                  "giám sát định kỳ theo quy chế dân chủ và TTLT 13/2016."),
                 ("Khoảng cách giữa hai lần kiểm tra là bao nhiêu?",
-                 "Ban Giám Sát PHHS: tối thiểu 2 lần/tuần (1 báo trước ≥24h, 1 đột xuất). "
+                 "Ban Giám Sát (Đại Diện PHHS): tối thiểu 2 lần/tuần (1 báo trước ≥24h, 1 đột xuất). "
                  "Y Tế Học Đường: mỗi ngày có bữa ăn, lúc 10:00. "
                  "Ban Giám Hiệu: 1 lần/tháng (tuần cuối tháng). "
                  "Sở GD&ĐT/Sở Y Tế: 1–2 lần/học kỳ (đột xuất)."),
@@ -2272,7 +2472,7 @@ MANUAL_CONTENT = {
                 ("ATTP", "An toàn thực phẩm"),
                 ("ATVSTP", "An toàn vệ sinh thực phẩm (cách gọi cũ, nay dùng ATTP)"),
                 ("PHHS", "Phụ huynh học sinh"),
-                ("BĐDCMHS / Ban PHHS", "Ban Đại Diện Cha Mẹ Học Sinh — đại diện phụ huynh chính thức"),
+                ("Ban Đại Diện PHHS (BĐDCMHS)", "Ban Đại Diện Cha Mẹ Học Sinh — tổ chức đại diện chính thức của phụ huynh"),
                 ("Kiểm thực 3 bước", "Quy trình kiểm tra thực phẩm trước/trong/sau chế biến theo luật"),
                 ("Lưu mẫu / Lưu nghiệm", "Giữ lại mẫu thức ăn 24h để xét nghiệm nếu cần"),
                 ("Vùng nhiệt độ nguy hiểm", "5°C – 60°C: vi khuẩn tăng gấp đôi mỗi 20 phút"),
@@ -2394,7 +2594,7 @@ def generate_manual_docx() -> bytes:
                space_before=10, space_after=6)
     _docx_para(doc, mc["subtitle"], bold=True, size=13, align="center", space_after=4)
     _docx_para(doc, mc["version"], size=12, align="center", space_after=30)
-    _docx_para(doc, "Dành cho: Phụ Huynh · Ban Giám Sát PHHS · Y Tế Học Đường · Ban Giám Hiệu",
+    _docx_para(doc, "Dành cho: Phụ Huynh · Ban Giám Sát (Đại Diện PHHS) · Y Tế Học Đường · Ban Giám Hiệu",
                size=12, align="center", space_after=4)
     _docx_para(doc, f"Cập nhật: {now_vn().strftime('%d/%m/%Y')}",
                size=11, align="center", space_after=4)
@@ -2535,14 +2735,14 @@ def main():
             if not api_key:
                 st.caption("💡 Không có key? Tab Checklist vẫn dùng được đầy đủ.")
         st.markdown('<div class="sec-hdr">Hồ sơ người dùng</div>', unsafe_allow_html=True)
-        role  = st.selectbox("Vai trò", ["Phụ Huynh", "Ban Giám Sát", "Y Tế Học Đường", "Ban Giám Hiệu"])
+        role  = st.selectbox("Vai trò", ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường", "Ban Giám Hiệu"])
         level = st.selectbox("Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"])
         loc   = st.text_input("Tỉnh/Thành phố", value="TP. Hồ Chí Minh")
         DESCS = {
-            "Phụ Huynh": "Xem thực đơn và kết quả kiểm tra, gửi phản hồi",
-            "Ban Giám Sát": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức",
-            "Y Tế Học Đường": "Ghi kiểm thực 3 bước hàng ngày, quản lý mẫu lưu",
-            "Ban Giám Hiệu": "Xem tổng quan, duyệt báo cáo, quản lý nhà cung cấp",
+            "Phụ Huynh": "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
+            "Ban Giám Sát (Đại Diện PHHS)": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức theo luật",
+            "Y Tế Học Đường": "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
+            "Ban Giám Hiệu": "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
         }
         st.info(f"**{role}:** {DESCS.get(role,'')}")
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
@@ -2607,16 +2807,23 @@ def main():
     # Nhắc nhở kiểm tra nếu trong 15 phút trước giờ thực hiện
     show_reminder_banner(role)
 
+    # Nhãn tab thay đổi theo vai trò
+    tab2_label = "👨‍👩‍👧 Góc Phụ Huynh" if role == "Phụ Huynh" else "✅ Checklist kiểm tra"
     t1, t2, t3, t4, t5, t6 = st.tabs([
         "💬 Hỏi đáp AI",
-        "✅ Checklist kiểm tra",
+        tab2_label,
         "📅 Lịch & thông báo",
         "🚨 Khẩn cấp",
         "📖 Hướng dẫn",
         "ℹ️ Về ứng dụng",
     ])
     with t1: tab_chat(api_key, role, level, loc)
-    with t2: tab_checklist(api_key)
+    # Phụ Huynh chỉ xem, không thực hiện checklist
+    with t2:
+        if role == "Phụ Huynh":
+            tab_parent_view(api_key)
+        else:
+            tab_checklist(api_key)
     with t3: tab_schedule()
     with t4: tab_emergency(api_key)
     with t5: tab_guide()
