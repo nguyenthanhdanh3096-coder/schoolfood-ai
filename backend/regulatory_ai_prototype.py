@@ -2001,6 +2001,473 @@ def tab_emergency(api_key: str = ""):
 
 
 # ── TAB 5: Về ứng dụng ───────────────────────────────────────────────────────
+# ── Nội dung sổ tay — dùng chung cho tab_guide() và generate_user_manual_docx()
+MANUAL_CONTENT = {
+    "title": "SỔ TAY HƯỚNG DẪN SỬ DỤNG SCHOOLFOOD AI",
+    "subtitle": "Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường",
+    "version": "v2.0 — Tháng 6/2026",
+    "sections": [
+        {
+            "id": "intro",
+            "icon": "🍱",
+            "title": "1. SchoolFood AI là gì?",
+            "content": (
+                "SchoolFood AI là nền tảng công nghệ giúp các bên liên quan tại trường học "
+                "giám sát An toàn Thực phẩm (ATTP) bữa ăn bán trú một cách hệ thống, có căn "
+                "cứ pháp luật và dễ thực hiện.\n\n"
+                "App KHÔNG thay thế xét nghiệm vi sinh học trong phòng thí nghiệm. "
+                "App hỗ trợ kiểm tra cảm quan, ghi nhận hồ sơ và cảnh báo sớm các "
+                "dấu hiệu rủi ro nhìn thấy bằng mắt thường."
+            ),
+            "subsections": [
+                ("Vấn đề đang giải quyết",
+                 "Mỗi ngày hơn 1 triệu học sinh Hà Nội và hàng triệu học sinh cả nước ăn "
+                 "bán trú tại trường. Phụ huynh lo lắng nhưng không có công cụ giám sát; "
+                 "Ban Giám sát muốn kiểm tra nhưng không biết kiểm tra gì đúng chuẩn; "
+                 "Y tế học đường ghi sổ giấy rồi cất vào tủ. SchoolFood AI lấp đầy khoảng trống này."),
+                ("Ai nên dùng app này",
+                 "• Phụ Huynh — xem thực đơn, kết quả kiểm tra, phản hồi\n"
+                 "• Ban Giám Sát PHHS — thực hiện checklist 20 điểm và tạo báo cáo\n"
+                 "• Y Tế Học Đường — số hoá kiểm thực 3 bước hàng ngày\n"
+                 "• Ban Giám Hiệu — xem tổng quan và duyệt báo cáo"),
+            ]
+        },
+        {
+            "id": "roles",
+            "icon": "👥",
+            "title": "2. Hướng dẫn theo vai trò",
+            "subsections": [
+                ("👨‍👩‍👧 Phụ Huynh — làm gì trong app",
+                 "1. Chọn vai trò 'Phụ Huynh' ở sidebar\n"
+                 "2. Tab 💬 Hỏi đáp AI: đặt câu hỏi bằng tiếng Việt thông thường về ATTP\n"
+                 "3. Tab 📅 Lịch & thông báo: xem lịch kiểm tra của Ban Giám Sát\n"
+                 "4. Tab 🚨 Khẩn cấp: xem quy trình xử lý khi con có triệu chứng ngộ độc\n\n"
+                 "Phụ huynh KHÔNG tự vào bếp kiểm tra nếu chưa được đào tạo và uỷ quyền."),
+                ("👥 Ban Giám Sát PHHS — quy trình kiểm tra",
+                 "1. Chọn vai trò 'Ban Giám Sát' và cấp trường\n"
+                 "2. Tab ✅ Checklist: nhập thông tin buổi kiểm tra (trường, ngày, người kiểm tra)\n"
+                 "3. Nhập thực đơn hôm nay → bấm 🤖 Tạo câu hỏi bổ sung (nếu có API)\n"
+                 "4. Đánh giá lần lượt 20 điểm: chọn ✅ Đạt / ❌ Không Đạt / ghi chú\n"
+                 "5. Chụp ảnh minh chứng ở mỗi nhóm (nếu có điểm KHÔNG ĐẠT bắt buộc cung cấp)\n"
+                 "6. Tạo báo cáo Word → gửi cho Hiệu Trưởng trong 24 giờ\n"
+                 "7. Tần suất: 2 lần/tuần (1 lần báo trước, 1 lần đột xuất)"),
+                ("🏥 Y Tế Học Đường — kiểm thực 3 bước",
+                 "Thực hiện mỗi ngày lúc 10:00 (30–45 phút trước bữa trưa):\n\n"
+                 "Bước 1 — TRƯỚC chế biến: kiểm tra nguyên liệu đầu vào (tem kiểm dịch, hạn dùng, hóa đơn)\n"
+                 "Bước 2 — TRONG chế biến: kiểm tra nhiệt độ nấu, vệ sinh dụng cụ, nhân viên\n"
+                 "Bước 3 — SAU chế biến: kiểm tra nhiệt độ chia, màu mùi, khẩu phần, mẫu lưu\n\n"
+                 "Ghi vào sổ kiểm thực (giấy bắt buộc theo TTLT 13/2016) + ghi vào app để lưu số."),
+                ("🏫 Ban Giám Hiệu — xem tổng quan",
+                 "1. Chọn vai trò 'Ban Giám Hiệu'\n"
+                 "2. Nhận thông báo khi có báo cáo mới từ Ban Giám Sát\n"
+                 "3. Xem mức cảnh báo: CRITICAL → xử lý ngay; MAJOR → trong ngày; MINOR → trong tuần\n"
+                 "4. Ký duyệt báo cáo Word nhận được từ Ban Giám Sát\n"
+                 "5. Tần suất xem: 1 lần/tuần tối thiểu"),
+            ]
+        },
+        {
+            "id": "checklist",
+            "icon": "✅",
+            "title": "3. Hướng dẫn Checklist 20 điểm",
+            "content": (
+                "Checklist 20 điểm được xây dựng theo NĐ 15/2018/NĐ-CP và TTLT 13/2016/TTLT-BYT-BGDĐT. "
+                "Chia làm 5 nhóm, mỗi nhóm kiểm tra một khía cạnh của chuỗi thực phẩm."
+            ),
+            "subsections": [
+                ("5 nhóm kiểm tra",
+                 "📦 Nhóm 1 — Nguồn gốc nguyên liệu (C01–C04): tem kiểm dịch, hóa đơn, hạn dùng\n"
+                 "🌡️ Nhóm 2 — Bảo quản & vận chuyển (C05–C08): nhiệt độ tủ lạnh, tách biệt sống/chín\n"
+                 "🍽️ Nhóm 3 — Thức ăn khi phục vụ (C09–C13): nhiệt độ chia, thời gian nấu, khẩu phần\n"
+                 "🧼 Nhóm 4 — Vệ sinh dụng cụ & nhân viên (C14–C17): dụng cụ sạch, bảo hộ\n"
+                 "📋 Nhóm 5 — Hồ sơ & giấy tờ (C18–C20): sổ kiểm thực, thực đơn, mẫu lưu"),
+                ("7 mục BẮT BUỘC — phải đạt tuyệt đối",
+                 "C03 — Hạn sử dụng nguyên liệu ≥ 3 ngày\n"
+                 "C07 — Nhiệt độ thức ăn khi nhận ≥ 60°C\n"
+                 "C09 — Nhiệt độ thức ăn khi chia: nóng ≥ 60°C, lạnh ≤ 5°C\n"
+                 "C10 — Thời gian nấu đến phục vụ < 2 giờ\n"
+                 "C11 — Màu sắc và mùi thức ăn bình thường\n"
+                 "C18 — Sổ kiểm thực 3 bước điền đầy đủ, có chữ ký\n"
+                 "C20 — Có mẫu lưu thức ăn 24h từng món\n\n"
+                 "⚠️ Nếu bất kỳ mục nào fail → mức cảnh báo tự động là CRITICAL bất kể điểm tổng."),
+                ("Ngưỡng điểm và đánh giá tổng thể",
+                 "18–20 điểm ĐẠT → ✅ Đạt chuẩn ATTP — lưu hồ sơ bình thường\n"
+                 "15–17 điểm ĐẠT → ⚠️ Cần cải thiện — yêu cầu khắc phục trong 24h\n"
+                 "< 15 điểm ĐẠT → ❌ Không đạt — báo ngay Ban Giám Hiệu"),
+                ("Câu hỏi AI bổ sung theo thực đơn",
+                 "Ngoài 20 câu chuẩn, khi nhập thực đơn và bấm 🤖 Tạo câu hỏi bổ sung, AI sẽ tạo "
+                 "thêm 3–5 điểm kiểm tra đặc thù cho từng nguyên liệu dựa trên QCVN 8-1/8-2/8-3.\n\n"
+                 "Ví dụ: thực đơn có cá → AI thêm check nhiệt độ bảo quản cá tươi theo QCVN 8-1.\n"
+                 "Tính năng này CẦN credit API (~$0.004/lần). Không bấm → vẫn đánh giá đủ 20 câu."),
+                ("Hướng dẫn chụp ảnh minh chứng",
+                 "Khi nào cần ảnh: bắt buộc nếu có mục KHÔNG ĐẠT; khuyến khích cho tất cả các lần kiểm tra.\n\n"
+                 "Chụp đạt chuẩn:\n"
+                 "✅ Đủ sáng, không bóng đổ che khuất\n"
+                 "✅ Cách 20–50cm, chụp thẳng góc\n"
+                 "✅ Ảnh nét, không bị mờ\n"
+                 "✅ Thấy rõ vùng cần kiểm tra\n"
+                 "❌ Tránh: tối, mờ, nghiêng >45°, ảnh quá xa\n\n"
+                 "AI phân tích ảnh (~$0.015/ảnh) phát hiện: màu bất thường, mốc, côn trùng, "
+                 "sổ kiểm thực thiếu ký, thực phẩm để sai vị trí.\n"
+                 "AI KHÔNG thể: phát hiện vi khuẩn vô hình, đo nhiệt độ thực, đảm bảo 100% chính xác."),
+            ]
+        },
+        {
+            "id": "alert",
+            "icon": "🔔",
+            "title": "4. Hệ thống cảnh báo 4 cấp",
+            "subsections": [
+                ("🔴 CRITICAL — Xử lý trong 5 phút",
+                 "Kích hoạt khi: bất kỳ mục BẮT BUỘC nào fail, hoặc phát hiện ngộ độc ≥ 2 học sinh\n"
+                 "Hành động: DỪNG bữa ăn ngay · Giữ mẫu thức ăn · Báo Hiệu Trưởng + 115 nếu cần\n"
+                 "Thông báo: Hiệu Trưởng + Y Tế + Ban Giám Sát trong 5 phút"),
+                ("🟠 MAJOR — Xử lý trong ngày",
+                 "Kích hoạt khi: tổng điểm < 15/20, hoặc ≥ 3 mục KHÔNG ĐẠT cùng nhóm\n"
+                 "Hành động: yêu cầu Nhà Cung Cấp khắc phục trước bữa ăn tiếp theo\n"
+                 "Thông báo: Hiệu Trưởng + Y Tế Học Đường trong 2–4 giờ"),
+                ("🟡 MINOR — Cải thiện trong tuần",
+                 "Kích hoạt khi: tổng điểm 15–17/20\n"
+                 "Hành động: ghi hồ sơ, yêu cầu cải thiện ở lần kiểm tra tiếp theo\n"
+                 "Thông báo: Y Tế Học Đường + Nhà Cung Cấp trong 24–48 giờ"),
+                ("✅ ĐẠT CHUẨN — Lưu hồ sơ",
+                 "Điều kiện: tất cả mục BẮT BUỘC đều đạt VÀ tổng ≥ 18/20\n"
+                 "Hành động: lưu báo cáo, báo cáo tổng hợp cuối tháng cho Hiệu Trưởng"),
+            ]
+        },
+        {
+            "id": "ai",
+            "icon": "🤖",
+            "title": "5. Tính năng AI — hướng dẫn và giới hạn",
+            "subsections": [
+                ("Cần credit API không?",
+                 "CẦN credit (~$5 = dùng 1–2 tháng pilot):\n"
+                 "• Hỏi đáp pháp luật: ~$0.003/câu\n"
+                 "• Tạo checklist theo thực đơn: ~$0.004/lần\n"
+                 "• Phân tích ảnh (Vision): ~$0.015/ảnh\n"
+                 "• Báo cáo ngôn ngữ tự nhiên: ~$0.004/lần\n\n"
+                 "KHÔNG cần credit (luôn dùng được):\n"
+                 "• Checklist 20 câu · Xuất báo cáo Word · Lịch nhắc nhở · Hướng dẫn khẩn cấp"),
+                ("AI phân tích ảnh hoạt động thế nào?",
+                 "Ảnh được gửi đến Claude Opus (model AI đa phương thức của Anthropic). "
+                 "AI đánh giá dựa trên tiêu chí cảm quan từ:\n"
+                 "• WHO Food Safety Visual Inspection Guide\n"
+                 "• QCVN 8-1:2011/BYT (dấu hiệu nhiễm vi sinh)\n"
+                 "• NĐ 15/2018/NĐ-CP (điều kiện vệ sinh bếp ăn)\n\n"
+                 "Kết quả trả về: mức rủi ro (OK/WARNING/CRITICAL), vấn đề phát hiện, "
+                 "khuyến nghị khắc phục, căn cứ pháp lý áp dụng, độ tin cậy (%)."),
+                ("Giới hạn quan trọng của AI",
+                 "AI KHÔNG THỂ thay thế:\n"
+                 "❌ Xét nghiệm vi sinh học (Salmonella, E.coli) — cần phòng thí nghiệm\n"
+                 "❌ Đo nhiệt độ thực tế của thức ăn — cần nhiệt kế vật lý\n"
+                 "❌ Ngửi mùi thực phẩm — cần người kiểm tra trực tiếp\n"
+                 "❌ Đảm bảo 100% không có mối nguy — không có hệ thống nào làm được\n\n"
+                 "AI phù hợp nhất cho: tạo hồ sơ, ghi nhận bằng chứng, hỗ trợ ra quyết định."),
+            ]
+        },
+        {
+            "id": "emergency",
+            "icon": "🚨",
+            "title": "6. Xử lý khẩn cấp ngộ độc thực phẩm",
+            "content": "Quy trình 6 bước theo TTLT 13/2016/TTLT-BYT-BGDĐT:",
+            "subsections": [
+                ("Bước 1 — DỪNG BỮA ĂN NGAY",
+                 "Yêu cầu toàn bộ học sinh ngừng ăn. Không để thêm bất kỳ ai ăn thêm."),
+                ("Bước 2 — GỌI 115 nếu có triệu chứng nặng",
+                 "Gọi 115 ngay khi học sinh có: co giật, khó thở, mất ý thức, nôn ra máu. "
+                 "Không chờ đợi — mỗi phút là quan trọng."),
+                ("Bước 3 — GIỮ NGUYÊN MẪU THỨC ĂN",
+                 "KHÔNG vứt, KHÔNG rửa, KHÔNG đổ bất kỳ thức ăn nào. "
+                 "Đây là bằng chứng duy nhất để xét nghiệm xác định nguyên nhân."),
+                ("Bước 4 — BÁO NGAY Hiệu Trưởng + Y Tế học đường",
+                 "Gọi điện trực tiếp, không nhắn tin. "
+                 "Cung cấp: số học sinh bị, triệu chứng, giờ ăn, các món đã ăn."),
+                ("Bước 5 — GHI CHÉP ĐẦY ĐỦ",
+                 "Ghi ngay vào app (tab 🚨 Khẩn cấp → Bắt đầu xử lý sự cố) hoặc giấy: "
+                 "số học sinh, triệu chứng, thời gian phát sinh, diễn biến."),
+                ("Bước 6 — BÁO SỞ Y TẾ trong 24 giờ",
+                 "Từ 2 người bị trở lên: bắt buộc báo Sở Y Tế địa phương trong 24h.\n"
+                 "Đường dây nóng Cục ATTP: 1800 6838 (miễn phí, giờ hành chính)"),
+            ]
+        },
+        {
+            "id": "faq",
+            "icon": "❓",
+            "title": "7. Câu hỏi thường gặp (FAQ)",
+            "faq": [
+                ("Checklist 20 câu dựa trên luật nào?",
+                 "NĐ 15/2018/NĐ-CP (điều kiện bếp ăn tập thể), TTLT 13/2016/TTLT-BYT-BGDĐT "
+                 "(y tế trường học), QĐ 3958/QĐ-BYT 2025 (dinh dưỡng học đường), "
+                 "QCVN 8-1/8-2/8-3 (giới hạn ô nhiễm vi sinh, kim loại nặng, thuốc trừ sâu)."),
+                ("Nhà cung cấp từ chối cho xem sổ kiểm thực, phải làm sao?",
+                 "Đây là vi phạm pháp luật. Sổ kiểm thực 3 bước là tài liệu bắt buộc theo TTLT 13/2016 "
+                 "và phải được cung cấp khi Ban Giám Sát yêu cầu. "
+                 "Ghi nhận vào báo cáo (C18 = KHÔNG ĐẠT) và báo Hiệu Trưởng + Sở Y Tế ngay."),
+                ("Không có API key có dùng được app không?",
+                 "Có. Checklist 20 câu, xuất báo cáo Word, lịch nhắc nhở, hướng dẫn khẩn cấp "
+                 "hoàn toàn dùng được mà không cần API key hay credit. "
+                 "Chỉ các tính năng AI (hỏi đáp pháp luật, phân tích ảnh, câu hỏi theo thực đơn) mới cần."),
+                ("20 câu chuẩn hay câu hỏi AI bổ sung quan trọng hơn?",
+                 "20 câu chuẩn là NỀN TẢNG — bắt buộc phải hoàn thành. "
+                 "Câu hỏi AI bổ sung là THÊM VÀO — giúp phát hiện rủi ro đặc thù theo thực đơn hôm nay. "
+                 "Không bấm tạo câu hỏi AI → vẫn đánh giá đầy đủ theo 20 câu."),
+                ("AI phân tích ảnh có chính xác 100% không?",
+                 "Không. AI phân tích dựa trên dấu hiệu nhìn thấy bằng mắt với độ tin cậy thường 75–90%. "
+                 "Kết quả là gợi ý để người kiểm tra quyết định — không tự động thay thế phán xét của con người. "
+                 "Với ảnh tốt (đủ sáng, nét, rõ), độ chính xác cao hơn."),
+                ("Báo cáo Word gửi cho ai và lưu ở đâu?",
+                 "Gửi cho: Hiệu Trưởng (trong 24h sau kiểm tra), Ban Giám Hiệu (để duyệt ký), "
+                 "Sở GD&ĐT (khi được yêu cầu theo Điều 9 TTLT 13/2016). "
+                 "Lưu: thư mục hồ sơ ATTP của trường (lưu tối thiểu 2 năm theo quy định)."),
+                ("Phụ huynh có được vào bếp kiểm tra không?",
+                 "Phụ huynh đơn lẻ KHÔNG có quyền tự vào bếp. "
+                 "Ban Đại Diện Cha Mẹ Học Sinh (PHHS) được bầu CHÍNH THỨC mới có quyền "
+                 "giám sát định kỳ theo quy chế dân chủ và TTLT 13/2016."),
+                ("Khoảng cách giữa hai lần kiểm tra là bao nhiêu?",
+                 "Ban Giám Sát PHHS: tối thiểu 2 lần/tuần (1 báo trước ≥24h, 1 đột xuất). "
+                 "Y Tế Học Đường: mỗi ngày có bữa ăn, lúc 10:00. "
+                 "Ban Giám Hiệu: 1 lần/tháng (tuần cuối tháng). "
+                 "Sở GD&ĐT/Sở Y Tế: 1–2 lần/học kỳ (đột xuất)."),
+                ("Vùng nhiệt độ nguy hiểm là gì?",
+                 "5°C – 60°C là vùng nhiệt độ vi khuẩn phát triển nhanh nhất "
+                 "(tăng gấp đôi mỗi 20 phút ở nhiệt độ phòng). "
+                 "Thức ăn nóng phải ≥60°C; thức ăn lạnh phải ≤5°C; "
+                 "thức ăn đã nấu không được để ở nhiệt độ phòng quá 2 giờ."),
+                ("Mẫu lưu thức ăn (lưu nghiệm) là gì và cần lưu bao lâu?",
+                 "Mỗi món ăn trong bữa cần lấy ≥100g làm mẫu, cho vào túi kín, ghi nhãn "
+                 "(tên món + giờ lấy + ngày), bảo quản trong tủ lạnh ≤5°C. "
+                 "Lưu tối thiểu 24 giờ sau bữa ăn. Dùng để xét nghiệm khi nghi ngờ ngộ độc."),
+            ]
+        },
+        {
+            "id": "legal",
+            "icon": "⚖️",
+            "title": "8. Căn cứ pháp lý tóm tắt",
+            "legal_refs": [
+                ("Luật ATTP số 55/2010/QH12",
+                 "Khung pháp lý tổng thể về an toàn thực phẩm tại Việt Nam. "
+                 "Điều quan trọng: Điều 53 — nghĩa vụ báo cáo ngộ độc thực phẩm."),
+                ("Nghị định 15/2018/NĐ-CP",
+                 "Điều kiện đảm bảo ATTP cho cơ sở sản xuất kinh doanh thực phẩm, bao gồm bếp ăn tập thể. "
+                 "Điều quan trọng: Điều 11–15 về điều kiện bếp ăn tập thể và nhà cung cấp suất ăn."),
+                ("TTLT 13/2016/TTLT-BYT-BGDĐT",
+                 "Công tác y tế trường học, bao gồm kiểm soát ATTP bữa ăn học đường. "
+                 "Điều quan trọng: Điều 9 về kiểm thực 3 bước và lưu mẫu thức ăn."),
+                ("Quyết định 3958/QĐ-BYT ngày 25/12/2025",
+                 "Hướng dẫn dinh dưỡng bữa ăn học đường (văn bản mới nhất). "
+                 "Quy định khẩu phần năng lượng, protein, rau theo từng cấp học."),
+                ("QCVN 8-1:2011/BYT",
+                 "Giới hạn ô nhiễm vi sinh vật (Salmonella, E.coli, Staphylococcus aureus, v.v.) "
+                 "trong từng loại thực phẩm."),
+                ("QCVN 8-2:2011/BYT",
+                 "Giới hạn ô nhiễm kim loại nặng (chì, cadimi, thuỷ ngân, asen) trong thực phẩm."),
+                ("Nghị định 115/2018/NĐ-CP",
+                 "Mức xử phạt vi phạm hành chính về ATTP. "
+                 "Phạt từ 10–100 triệu đồng; gây tử vong → xử lý hình sự."),
+            ]
+        },
+        {
+            "id": "glossary",
+            "icon": "📚",
+            "title": "9. Bảng thuật ngữ",
+            "terms": [
+                ("ATTP", "An toàn thực phẩm"),
+                ("ATVSTP", "An toàn vệ sinh thực phẩm (cách gọi cũ, nay dùng ATTP)"),
+                ("PHHS", "Phụ huynh học sinh"),
+                ("BĐDCMHS / Ban PHHS", "Ban Đại Diện Cha Mẹ Học Sinh — đại diện phụ huynh chính thức"),
+                ("Kiểm thực 3 bước", "Quy trình kiểm tra thực phẩm trước/trong/sau chế biến theo luật"),
+                ("Lưu mẫu / Lưu nghiệm", "Giữ lại mẫu thức ăn 24h để xét nghiệm nếu cần"),
+                ("Vùng nhiệt độ nguy hiểm", "5°C – 60°C: vi khuẩn tăng gấp đôi mỗi 20 phút"),
+                ("HACCP", "Phân tích mối nguy và kiểm soát điểm tới hạn — tiêu chuẩn quốc tế"),
+                ("Codex Alimentarius", "Bộ tiêu chuẩn thực phẩm quốc tế của FAO/WHO"),
+                ("Claude Vision", "Mô hình AI đa phương thức của Anthropic — phân tích hình ảnh"),
+                ("CRITICAL / MAJOR / MINOR", "Ba cấp độ cảnh báo trong app (tới hạn / nghiêm trọng / nhỏ)"),
+                ("API key", "Mật khẩu truy cập dịch vụ AI — lấy tại console.anthropic.com"),
+                ("Credit", "Tín dụng thanh toán API AI — $5 dùng được khoảng 1–2 tháng pilot"),
+            ]
+        },
+    ]
+}
+
+
+# ── Render nội dung sổ tay trong tab ─────────────────────────────────────────
+def tab_guide():
+    """Tab hướng dẫn sử dụng đầy đủ — sổ tay điện tử tích hợp trong app."""
+    mc = MANUAL_CONTENT
+    st.markdown(f"""<div class="sf-card">
+        <div class="sf-card-title">📖 {mc['title']}</div>
+        <div class="sf-card-body">{mc['subtitle']} · {mc['version']}</div>
+    </div>""", unsafe_allow_html=True)
+
+    # Nút tải sổ tay Word
+    if st.button("⬇️ Tải Sổ Tay PDF/Word (.docx) để in và đào tạo",
+                 type="primary", use_container_width=True):
+        with st.spinner("Đang tạo file Word..."):
+            docx_bytes = generate_manual_docx()
+        st.download_button(
+            "📥 Tải ngay — Sổ Tay SchoolFood AI.docx",
+            data=docx_bytes,
+            file_name="So_Tay_SchoolFood_AI_v2.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+
+    # Render từng section
+    for section in mc["sections"]:
+        with st.expander(f"{section['icon']} {section['title']}", expanded=False):
+            if "content" in section:
+                st.markdown(section["content"])
+
+            if "subsections" in section:
+                for sub_title, sub_content in section["subsections"]:
+                    st.markdown(
+                        f'<div style="background:#F8FAFC;border-left:3px solid #2563EB;'
+                        f'border-radius:0 8px 8px 0;padding:10px 14px;margin:8px 0">'
+                        f'<b style="color:#1E293B;font-size:0.9rem">{sub_title}</b>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+                    # Render nội dung với line breaks
+                    for line in sub_content.split("\n"):
+                        if line.strip():
+                            st.markdown(
+                                f'<div style="font-size:0.875rem;color:#334155;'
+                                f'padding:2px 14px;line-height:1.65">{line}</div>',
+                                unsafe_allow_html=True
+                            )
+                    st.markdown("")
+
+            # FAQ
+            if "faq" in section:
+                for q, a in section["faq"]:
+                    with st.expander(f"❓ {q}"):
+                        st.markdown(
+                            f'<div style="font-size:0.875rem;color:#334155;line-height:1.7">{a}</div>',
+                            unsafe_allow_html=True
+                        )
+
+            # Căn cứ pháp lý
+            if "legal_refs" in section:
+                for name, desc in section["legal_refs"]:
+                    st.markdown(
+                        f'<div class="sf-card" style="padding:12px 16px;margin:6px 0">'
+                        f'<span class="role-tag">{name}</span>'
+                        f'<div style="font-size:0.83rem;color:#475569;margin-top:6px">{desc}</div>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+
+            # Thuật ngữ
+            if "terms" in section:
+                for term, definition in section["terms"]:
+                    st.markdown(
+                        f'<div style="display:flex;gap:12px;padding:5px 0;'
+                        f'border-bottom:1px solid #F1F5F9;font-size:0.875rem">'
+                        f'<span style="min-width:180px;font-weight:700;color:#1E293B">{term}</span>'
+                        f'<span style="color:#475569">{definition}</span>'
+                        f'</div>', unsafe_allow_html=True
+                    )
+
+
+# ── Tạo sổ tay Word chuyên nghiệp ─────────────────────────────────────────────
+def generate_manual_docx() -> bytes:
+    """Tạo file Word sổ tay hướng dẫn chuẩn hành chính, font Times New Roman."""
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from io import BytesIO
+
+    mc  = MANUAL_CONTENT
+    doc = Document()
+
+    # Lề trang
+    sec = doc.sections[0]
+    sec.top_margin = sec.bottom_margin = Cm(2.5)
+    sec.left_margin = Cm(3.0); sec.right_margin = Cm(2.0)
+
+    # Bìa
+    _docx_para(doc, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM",
+               bold=True, size=13, align="center", space_after=2)
+    _docx_para(doc, "Độc lập – Tự do – Hạnh phúc",
+               bold=True, size=12, align="center", space_after=2)
+    _docx_para(doc, "────────────────────────────────",
+               size=11, align="center", space_after=20)
+    _docx_para(doc, mc["title"], bold=True, size=16, align="center",
+               space_before=10, space_after=6)
+    _docx_para(doc, mc["subtitle"], bold=True, size=13, align="center", space_after=4)
+    _docx_para(doc, mc["version"], size=12, align="center", space_after=30)
+    _docx_para(doc, "Dành cho: Phụ Huynh · Ban Giám Sát PHHS · Y Tế Học Đường · Ban Giám Hiệu",
+               size=12, align="center", space_after=4)
+    _docx_para(doc, f"Cập nhật: {now_vn().strftime('%d/%m/%Y')}",
+               size=11, align="center", space_after=4)
+    _docx_para(doc, "Đường dây nóng Cục ATTP: 1800 6838 (miễn phí) | Cấp cứu: 115",
+               bold=True, size=12, align="center", space_after=0)
+
+    doc.add_page_break()
+
+    # Mục lục
+    _docx_para(doc, "MỤC LỤC", bold=True, size=14, align="center",
+               space_before=0, space_after=10)
+    for section in mc["sections"]:
+        _docx_para(doc, f"  {section['title']}", size=12, space_after=4)
+    doc.add_page_break()
+
+    # Nội dung từng section
+    for section in mc["sections"]:
+        _docx_para(doc, f"{section['icon']}  {section['title']}",
+                   bold=True, size=14, space_before=12, space_after=6)
+
+        if "content" in section:
+            for para in section["content"].split("\n\n"):
+                if para.strip():
+                    _docx_para(doc, para.strip(), size=12, align="justify",
+                               space_after=4)
+
+        if "subsections" in section:
+            for sub_title, sub_content in section["subsections"]:
+                _docx_para(doc, sub_title, bold=True, size=12,
+                           space_before=6, space_after=3)
+                for line in sub_content.split("\n"):
+                    if line.strip():
+                        _docx_para(doc, line, size=11, align="justify",
+                                   space_after=2)
+
+        if "faq" in section:
+            for q, a in section["faq"]:
+                _docx_para(doc, f"Hỏi: {q}", bold=True, size=12,
+                           space_before=6, space_after=2)
+                _docx_para(doc, f"Đáp: {a}", size=11, align="justify",
+                           space_after=4)
+
+        if "legal_refs" in section:
+            for name, desc in section["legal_refs"]:
+                _docx_para(doc, name, bold=True, size=12, space_before=4, space_after=2)
+                _docx_para(doc, desc, size=11, align="justify", space_after=4)
+
+        if "terms" in section:
+            tbl = doc.add_table(rows=1 + len(section["terms"]), cols=2)
+            tbl.style = "Table Grid"
+            _docx_table_header(tbl, ["Thuật ngữ / Ký hiệu", "Giải thích"])
+            for i, (term, definition) in enumerate(section["terms"]):
+                r0 = tbl.rows[i+1].cells[0].paragraphs[0].add_run(term)
+                r1 = tbl.rows[i+1].cells[1].paragraphs[0].add_run(definition)
+                _docx_set_font(r0, bold=True, size_pt=11)
+                _docx_set_font(r1, size_pt=11)
+
+        doc.add_paragraph()
+
+    # Trang cuối
+    doc.add_page_break()
+    _docx_para(doc, "─" * 50, size=10, align="center", space_before=20, space_after=6)
+    _docx_para(doc, f"Sổ tay được tạo tự động bởi SchoolFood AI v2.0",
+               size=10, align="center", space_after=2)
+    _docx_para(doc, f"Ngày tạo: {now_vn().strftime('%d/%m/%Y %H:%M')} (GMT+7)",
+               size=10, align="center", space_after=2)
+    _docx_para(doc, "Thông tin tham khảo — vui lòng xác nhận với cơ quan có thẩm quyền khi cần thiết",
+               size=9, align="center", space_after=0)
+
+    buf = BytesIO(); doc.save(buf); buf.seek(0)
+    return buf.read()
+
+
 def tab_about():
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">Về SchoolFood AI</div>
@@ -2140,18 +2607,20 @@ def main():
     # Nhắc nhở kiểm tra nếu trong 15 phút trước giờ thực hiện
     show_reminder_banner(role)
 
-    t1, t2, t3, t4, t5 = st.tabs([
+    t1, t2, t3, t4, t5, t6 = st.tabs([
         "💬 Hỏi đáp AI",
         "✅ Checklist kiểm tra",
         "📅 Lịch & thông báo",
         "🚨 Khẩn cấp",
+        "📖 Hướng dẫn",
         "ℹ️ Về ứng dụng",
     ])
     with t1: tab_chat(api_key, role, level, loc)
     with t2: tab_checklist(api_key)
     with t3: tab_schedule()
     with t4: tab_emergency(api_key)
-    with t5: tab_about()
+    with t5: tab_guide()
+    with t6: tab_about()
 
 
 if __name__ == "__main__":
