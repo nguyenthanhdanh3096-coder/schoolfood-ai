@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """SchoolFood AI v1.1 — Enhanced checklist, alert levels, inspection schedule"""
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+# Múi giờ Việt Nam UTC+7 — dùng cho mọi tính toán thời gian
+VN_TZ = timezone(timedelta(hours=7))
+
+def now_vn() -> datetime:
+    """Trả về giờ hiện tại theo múi giờ Việt Nam (UTC+7)."""
+    return datetime.now(VN_TZ)
 
 import anthropic
 import streamlit as st
@@ -583,7 +590,7 @@ _REMINDER_TIMES = {
 def get_inspection_reminder(role: str) -> dict | None:
     """Trả về thông tin nhắc nhở nếu còn ≤ 15 phút đến giờ kiểm tra."""
     import calendar
-    now = datetime.now()
+    now = now_vn()
     if now.weekday() >= 5:          # Thứ 7, Chủ nhật — không có bữa bán trú
         return None
 
@@ -615,7 +622,7 @@ def show_reminder_banner(role: str):
     r = get_inspection_reminder(role)
     if not r:
         return
-    key = f"reminded_{role}_{datetime.now().strftime('%Y%m%d%H%M')[:12]}"
+    key = f"reminded_{role}_{now_vn().strftime('%Y%m%d%H%M')[:12]}"
     if not st.session_state.get(key):
         st.toast(f"⏰ Còn {r['mins_left']} phút đến giờ kiểm tra!", icon="🔔")
         st.session_state[key] = True
@@ -1036,7 +1043,7 @@ def _build_report(school, date, insp, menu, level_key, results, notes,
         f"   Ngày kiểm tra   : {date}",
         f"   Người kiểm tra  : {insp or '(chưa nhập)'}",
         f"   Thực đơn        : {menu or '(chưa nhập)'}",
-        f"   Thời gian tạo   : {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+        f"   Thời gian tạo   : {now_vn().strftime('%d/%m/%Y %H:%M')}",
         "",
         f"   KẾT QUẢ   : {pass_count} ĐẠT / {pass_count + fail_count} điểm đã kiểm tra",
         f"   MỨC CẢNH BÁO: {a.get('icon','')} {a.get('label','—')}",
@@ -1276,7 +1283,7 @@ def main():
         # ── Trạng thái nhắc nhở ──────────────────────────────────────────────
         st.markdown('<div class="sec-hdr">🔔 Nhắc Nhở Kiểm Tra</div>',
                     unsafe_allow_html=True)
-        now = datetime.now()
+        now = now_vn()
         _t = _REMINDER_TIMES.get(role)
         if _t and now.weekday() < 5:
             insp_h, insp_m = _t["hour"], _t["min"]
