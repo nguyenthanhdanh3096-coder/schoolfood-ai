@@ -2759,7 +2759,7 @@ def tab_about():
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     st.set_page_config(page_title="SchoolFood AI", page_icon="🍱",
-                       layout="wide", initial_sidebar_state="expanded")
+                       layout="wide", initial_sidebar_state="collapsed")
     inject_css()
 
     # Header chính — không dùng HTML comments để tránh Streamlit hiển thị raw text
@@ -2815,118 +2815,80 @@ def main():
         unsafe_allow_html=True,
     )
 
-    with st.sidebar:
-        st.markdown("### ⚙️ Cài đặt")
+    # ── Đọc API key (Secrets → ENV → trống) ─────────────────────────────────
+    import os
+    api_key = (
+        (st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, "secrets") else "")
+        or os.environ.get("ANTHROPIC_API_KEY", "")
+    )
 
-        # ── Tự động đọc API key theo thứ tự ưu tiên ──────────────────────────
-        # 1. Streamlit Cloud Secrets  (khi deploy — người dùng không cần nhập)
-        # 2. Biến môi trường          (local .env)
-        # 3. Nhập thủ công sidebar    (fallback cho developer)
-        import os
-        _secret_key = (
-            st.secrets.get("ANTHROPIC_API_KEY", "")
-            if hasattr(st, "secrets") else ""
-        ) or os.environ.get("ANTHROPIC_API_KEY", "")
+    # ── Thanh điều khiển ngang — thay thế sidebar, luôn hiển thị ─────────────
+    st.markdown("""
+    <div style="background:white;border:1px solid #E2E8F0;border-radius:12px;
+                padding:12px 20px;margin-bottom:10px;
+                box-shadow:0 1px 4px rgba(0,0,0,0.07)">
+        <div style="font-size:0.72rem;font-weight:700;color:#94A3B8;
+                    text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
+            ⚙️ Cài đặt người dùng
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        if _secret_key:
-            api_key = _secret_key
+    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([2, 2, 1.5, 2.5])
+    with ctrl1:
+        role = st.selectbox(
+            "Vai trò",
+            ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)",
+             "Y Tế Học Đường", "Ban Giám Hiệu"],
+            label_visibility="visible",
+        )
+    with ctrl2:
+        level = st.selectbox(
+            "Cấp trường",
+            ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+            label_visibility="visible",
+        )
+    with ctrl3:
+        loc = st.text_input("Tỉnh/TP", value="TP.HCM")
+    with ctrl4:
+        if api_key:
             st.markdown(
-                '<div style="background:#F0FDF4;border:1px solid #86EFAC;'
-                'border-radius:8px;padding:8px 12px;font-size:0.8rem;color:#166534">'
-                '✅ <b>AI đã kết nối</b> — Hỏi đáp sẵn sàng</div>',
+                '<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+                'padding:8px 12px;font-size:0.82rem;color:#166534;margin-top:20px">'
+                '✅ <b>AI đã kết nối</b></div>',
                 unsafe_allow_html=True,
             )
         else:
-            api_key = st.text_input(
-                "Claude API Key",
+            manual_key = st.text_input(
+                "Claude API Key (tuỳ chọn)",
                 type="password",
-                help="Lấy tại console.anthropic.com → API Keys",
-                placeholder="sk-ant-api03-...",
+                placeholder="sk-ant-...",
+                help="Để trống nếu chưa có — Checklist vẫn dùng được",
             )
-            if not api_key:
-                st.caption("💡 Không có key? Tab Checklist vẫn dùng được đầy đủ.")
-        st.markdown('<div class="sec-hdr">Hồ sơ người dùng</div>', unsafe_allow_html=True)
-        role  = st.selectbox("Vai trò", ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường", "Ban Giám Hiệu"])
-        level = st.selectbox("Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"])
-        loc   = st.text_input("Tỉnh/Thành phố", value="TP. Hồ Chí Minh")
-        DESCS = {
-            "Phụ Huynh": "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
-            "Ban Giám Sát (Đại Diện PHHS)": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức theo luật",
-            "Y Tế Học Đường": "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
-            "Ban Giám Hiệu": "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
-        }
-        st.info(f"**{role}:** {DESCS.get(role,'')}")
-        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+            if manual_key:
+                api_key = manual_key
 
-        # ── Trạng thái nhắc nhở ──────────────────────────────────────────────
-        st.markdown('<div class="sec-hdr">🔔 Nhắc nhở kiểm tra</div>',
-                    unsafe_allow_html=True)
-        now = now_vn()
-        _t = _REMINDER_TIMES.get(role)
-        if _t and now.weekday() < 5:
-            insp_h, insp_m = _t["hour"], _t["min"]
-            insp_total    = insp_h * 60 + insp_m
-            current_total = now.hour * 60 + now.minute
-            mins_left     = insp_total - current_total
-            today_name    = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","CN"][now.weekday()]
-            is_today      = now.weekday() in _t["days"]
-
-            # Tính giờ nhắc nhở (15 phút trước) — tính ngoài f-string tránh lỗi
-            remind_total = insp_total - 15
-            remind_h     = remind_total // 60
-            remind_m     = remind_total % 60
-            remind_str   = f"{remind_h:02d}:{remind_m:02d}"
-            insp_str     = f"{insp_h:02d}:{insp_m:02d}"
-
-            if not is_today:
-                next_day_idx = next(
-                    (d for d in sorted(_t["days"]) if d > now.weekday()),
-                    min(_t["days"])
-                )
-                next_name = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6"][next_day_idx]
-                st.info(
-                    f"Hôm nay ({today_name}) không có lịch kiểm tra.\n\n"
-                    f"📅 Lịch tiếp theo: **{next_name} {insp_str}**\n\n"
-                    f"Nhắc nhở sẽ hiện lúc **{remind_str}**"
-                )
-            elif 0 <= mins_left <= 15:
-                st.success(f"🔔 **Đang nhắc nhở!** Còn {mins_left} phút đến {insp_str}")
-            elif mins_left > 0:
-                st.info(
-                    f"⏰ Hôm nay ({today_name}) lúc **{insp_str}**\n\n"
-                    f"Nhắc nhở sẽ hiện lúc **{remind_str}**\n\n"
-                    f"Còn {mins_left} phút nữa."
-                )
-            else:
-                st.warning(f"Đã qua giờ kiểm tra hôm nay ({insp_h:02d}:{insp_m:02d})")
-            # Nút test
-            if st.button("▶ Xem trước nhắc nhở", use_container_width=True):
-                st.toast(f"⏰ Còn 15 phút đến giờ kiểm tra {insp_h:02d}:{insp_m:02d}!", icon="🔔")
-        elif not _t:
-            st.caption("Vai trò Phụ Huynh không có lịch kiểm tra cố định.")
-        else:
-            st.caption("Cuối tuần — không có bữa ăn bán trú.")
-
-        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        st.markdown(
-            "<div style='font-size:0.78rem;color:#94A3B8;text-align:center'>"
-            "🔴 Khẩn cấp: <b>115</b> · Cục ATTP: <b>1800 6838</b>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+    # Hiển thị mô tả vai trò + hotline nhỏ
+    DESCS = {
+        "Phụ Huynh": "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
+        "Ban Giám Sát (Đại Diện PHHS)": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức theo luật",
+        "Y Tế Học Đường": "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
+        "Ban Giám Hiệu": "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
+    }
+    role_desc  = DESCS.get(role, "")
+    role_color = {"Phụ Huynh": "#2563EB", "Ban Giám Sát (Đại Diện PHHS)": "#7C3AED",
+                  "Y Tế Học Đường": "#0D9488", "Ban Giám Hiệu": "#B45309"}.get(role, "#64748B")
+    st.markdown(
+        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+        f'font-size:0.8rem;color:#475569;margin-bottom:4px;flex-wrap:wrap;gap:4px">'
+        f'<span><b style="color:{role_color}">{role}:</b> {role_desc}</span>'
+        f'<span style="color:#94A3B8">🔴 Khẩn cấp: <b>115</b> &nbsp;·&nbsp; Cục ATTP: <b>1800 6838</b></span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # Nhắc nhở kiểm tra nếu trong 15 phút trước giờ thực hiện
     show_reminder_banner(role)
-
-    # Gợi ý mở lại sidebar nếu bị đóng — hiển thị nhẹ, không chiếm quá nhiều diện tích
-    st.markdown(
-        '<div style="font-size:0.75rem;color:#94A3B8;text-align:right;margin-bottom:4px">'
-        '📌 Sidebar ẩn? Bấm phím <kbd style="background:#E2E8F0;padding:1px 5px;'
-        'border-radius:3px;font-family:monospace;color:#334155">[</kbd> để mở lại '
-        '— hoặc tìm nút <b style="color:#DC2626">☰ màu đỏ</b> ở mép trái màn hình'
-        '</div>',
-        unsafe_allow_html=True,
-    )
 
     # Nhãn tab thay đổi theo vai trò
     tab2_label = "👨‍👩‍👧 Góc Phụ Huynh" if role == "Phụ Huynh" else "✅ Checklist kiểm tra"
