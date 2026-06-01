@@ -1280,11 +1280,19 @@ def main():
         _t = _REMINDER_TIMES.get(role)
         if _t and now.weekday() < 5:
             insp_h, insp_m = _t["hour"], _t["min"]
-            insp_total   = insp_h * 60 + insp_m
+            insp_total    = insp_h * 60 + insp_m
             current_total = now.hour * 60 + now.minute
-            mins_left = insp_total - current_total
-            today_name = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","CN"][now.weekday()]
-            is_today = now.weekday() in _t["days"]
+            mins_left     = insp_total - current_total
+            today_name    = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6","Thứ 7","CN"][now.weekday()]
+            is_today      = now.weekday() in _t["days"]
+
+            # Tính giờ nhắc nhở (15 phút trước) — tính ngoài f-string tránh lỗi
+            remind_total = insp_total - 15
+            remind_h     = remind_total // 60
+            remind_m     = remind_total % 60
+            remind_str   = f"{remind_h:02d}:{remind_m:02d}"
+            insp_str     = f"{insp_h:02d}:{insp_m:02d}"
+
             if not is_today:
                 next_day_idx = next(
                     (d for d in sorted(_t["days"]) if d > now.weekday()),
@@ -1293,15 +1301,15 @@ def main():
                 next_name = ["Thứ 2","Thứ 3","Thứ 4","Thứ 5","Thứ 6"][next_day_idx]
                 st.info(
                     f"Hôm nay ({today_name}) không có lịch kiểm tra.\n\n"
-                    f"📅 Lịch tiếp theo: **{next_name} {insp_h:02d}:{insp_m:02d}**\n\n"
-                    f"Nhắc nhở sẽ hiện lúc **{insp_h:02d}:{insp_m-15 if insp_m>=15 else insp_m}:{'00' if insp_m>=15 else '45'}**"
+                    f"📅 Lịch tiếp theo: **{next_name} {insp_str}**\n\n"
+                    f"Nhắc nhở sẽ hiện lúc **{remind_str}**"
                 )
             elif 0 <= mins_left <= 15:
-                st.success(f"🔔 **Đang nhắc nhở!** Còn {mins_left} phút đến {insp_h:02d}:{insp_m:02d}")
+                st.success(f"🔔 **Đang nhắc nhở!** Còn {mins_left} phút đến {insp_str}")
             elif mins_left > 0:
                 st.info(
-                    f"⏰ Hôm nay ({today_name}) lúc **{insp_h:02d}:{insp_m:02d}**\n\n"
-                    f"Nhắc nhở sẽ hiện lúc **{insp_h:02d}:{insp_m:02d-15 if insp_m>=15 else (insp_h-1):02d}:{'%02d'%(insp_m-15) if insp_m>=15 else '45'}**\n\n"
+                    f"⏰ Hôm nay ({today_name}) lúc **{insp_str}**\n\n"
+                    f"Nhắc nhở sẽ hiện lúc **{remind_str}**\n\n"
                     f"Còn {mins_left} phút nữa."
                 )
             else:
