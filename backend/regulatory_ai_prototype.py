@@ -1437,7 +1437,8 @@ def tab_checklist(api_key: str = ""):
     date   = c2.date_input("Ngày kiểm tra", value=datetime.today(), format="DD/MM/YYYY")
     insp   = c3.text_input("Người kiểm tra", placeholder="Họ và tên")
     menu   = st.text_input("Thực đơn hôm nay",
-                            placeholder="VD: Cơm, thịt kho trứng, rau muống xào tỏi, canh chua cá")
+                            placeholder="VD: Cơm, thịt kho trứng, rau muống xào tỏi, canh chua cá",
+                            key="shared_menu")
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
@@ -2154,15 +2155,26 @@ def tab_parent_view(api_key: str = ""):
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # Phần 1 — Thực đơn hôm nay
+    # Phần 1 — Thực đơn hôm nay (đọc từ session_state nếu Y Tế đã nhập)
     st.markdown('<div class="sec-hdr">📋 Thực đơn hôm nay</div>', unsafe_allow_html=True)
-    st.markdown("""<div class="sf-card" style="border-left:4px solid #2563EB">
-        <div class="sf-card-body">
-            Thực đơn do Y Tế Học Đường cập nhật trước bữa ăn. Hiện chưa có
-            kết nối dữ liệu trực tiếp từ nhà trường — liên hệ Y Tế Học Đường
-            hoặc xem bảng thực đơn treo tại cổng trường để biết thực đơn hôm nay.
-        </div>
-    </div>""", unsafe_allow_html=True)
+    menu_today = st.session_state.get("shared_menu", "").strip()
+    if menu_today:
+        st.markdown(
+            f'<div class="sf-card" style="border-left:4px solid #16A34A">'
+            f'<div style="font-size:0.78rem;color:#16A34A;font-weight:700;margin-bottom:4px">'
+            f'✅ Thực đơn đã được cập nhật</div>'
+            f'<div style="font-size:0.95rem;color:#1E293B;font-weight:500">{menu_today}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="sf-card" style="border-left:4px solid #2563EB">'
+            '<div class="sf-card-body">Thực đơn chưa được cập nhật. '
+            'Y Tế Học Đường sẽ nhập thực đơn trước bữa ăn vào tab ✅ Checklist kiểm tra. '
+            'Hoặc xem bảng thực đơn treo tại cổng trường.</div></div>',
+            unsafe_allow_html=True,
+        )
 
     # Phần 2 — Kết quả kiểm tra mới nhất
     st.markdown('<div class="sec-hdr">✅ Kết quả kiểm tra gần nhất</div>',
@@ -2214,10 +2226,10 @@ def tab_parent_view(api_key: str = ""):
             <div style="font-size:0.83rem;color:#475569;margin-top:3px">{desc}</div>
         </div>""", unsafe_allow_html=True)
 
-    # Phần 4 — Gửi phản hồi
+    # Phần 4 — Gửi phản hồi (không dùng div wrapper — gây thanh trắng rỗng)
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-hdr">📤 Gửi phản hồi về bữa ăn</div>',
                 unsafe_allow_html=True)
-    st.markdown("""<div class="sf-card">""", unsafe_allow_html=True)
     loai = st.selectbox("Loại phản hồi", [
         "Chọn loại phản hồi...",
         "Chất lượng thức ăn (khẩu phần, hương vị)",
@@ -2230,9 +2242,8 @@ def tab_parent_view(api_key: str = ""):
     noi_dung = st.text_area(
         "Mô tả cụ thể (ngày, bữa ăn, triệu chứng nếu có...)",
         height=120,
-        placeholder="Ví dụ: Hôm nay 01/06, con tôi kể thức ăn có mùi lạ ở bữa trưa..."
+        placeholder="Ví dụ: Hôm nay 01/06, con tôi kể thức ăn có mùi lạ ở bữa trưa...",
     )
-    ten_ph = st.text_input("Họ tên Phụ Huynh (tuỳ chọn)")
 
     if st.button("📤 Gửi phản hồi", type="primary", use_container_width=True):
         if loai == "Chọn loại phản hồi..." or not noi_dung.strip():
@@ -2244,10 +2255,9 @@ def tab_parent_view(api_key: str = ""):
             )
         else:
             st.success(
-                f"✅ Đã ghi nhận phản hồi của bạn ({ten_ph or 'ẩn danh'}). "
-                f"Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
+                "✅ Đã ghi nhận phản hồi của bạn. "
+                "Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
             )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     # Hỏi đáp AI (nếu có)
     if api_key:
@@ -2851,14 +2861,12 @@ def main():
         loc = st.text_input("Tỉnh/TP", value="TP.HCM")
     with ctrl4:
         if api_key:
-            # Dùng label ẩn để căn thẳng hàng với các input khác
-            st.markdown(
-                '<div style="font-size:0.875rem;font-weight:600;color:#374151;'
-                'margin-bottom:8px">Trạng thái AI</div>'
-                '<div style="background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:8px;'
-                'padding:10px 14px;font-size:0.85rem;color:#166534;font-weight:600">'
-                '✅ AI đã kết nối — sẵn sàng</div>',
-                unsafe_allow_html=True,
+            # Dùng disabled input — tự động căn thẳng hàng với các Streamlit input khác
+            st.text_input(
+                "Trạng thái AI",
+                value="✅ AI đã kết nối — sẵn sàng",
+                disabled=True,
+                label_visibility="visible",
             )
         else:
             manual_key = st.text_input(
