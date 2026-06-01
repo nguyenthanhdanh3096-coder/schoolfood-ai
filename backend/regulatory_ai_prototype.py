@@ -303,22 +303,58 @@ def inject_css():
     .stTextInput > div > div > input { border-radius: 8px !important; }
     div[data-testid="stChatInput"] textarea { font-family:'Inter',sans-serif !important; }
 
-    /* ── Nút mở/đóng sidebar — luôn hiển thị rõ ── */
-    [data-testid="collapsedControl"] {
-        background: #1B3B6F !important;
-        border-radius: 0 10px 10px 0 !important;
-        display: flex !important; visibility: visible !important;
-        align-items: center !important; justify-content: center !important;
-        width: 32px !important; min-height: 72px !important;
-        opacity: 1 !important; z-index: 99999 !important;
-        box-shadow: 3px 0 10px rgba(0,0,0,0.2) !important;
+    /* ── Ẩn nút đóng sidebar trên desktop (phòng người dùng vô tình đóng) ── */
+    @media (min-width: 769px) {
+        [data-testid="stSidebarCollapseButton"],
+        button[title="Close sidebar"],
+        button[aria-label="Close sidebar"],
+        [data-testid="stSidebar"] > div:first-child > div > button {
+            display: none !important;
+        }
+    }
+
+    /* ── Nút MỞ LẠI sidebar khi lỡ đóng — đỏ nổi bật, không thể bỏ qua ── */
+    [data-testid="collapsedControl"],
+    button[title="Open sidebar"],
+    button[aria-label="Open sidebar"] {
+        background: #DC2626 !important;
+        border-radius: 0 14px 14px 0 !important;
+        display: flex !important;
+        visibility: visible !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 44px !important;
+        min-height: 100px !important;
+        opacity: 1 !important;
+        z-index: 999999 !important;
+        position: fixed !important;
+        left: 0 !important;
+        top: calc(50% - 50px) !important;
+        box-shadow: 4px 0 16px rgba(220,38,38,0.4) !important;
         cursor: pointer !important;
+        border: none !important;
+        transition: width 0.2s ease !important;
     }
-    [data-testid="collapsedControl"] svg {
-        fill: white !important; color: white !important; opacity: 1 !important;
+    [data-testid="collapsedControl"]::after,
+    button[title="Open sidebar"]::after,
+    button[aria-label="Open sidebar"]::after {
+        content: "☰" !important;
+        color: white !important;
+        font-size: 1.3rem !important;
+        font-weight: bold !important;
     }
-    [data-testid="collapsedControl"]:hover {
-        background: #2563EB !important; width: 36px !important;
+    [data-testid="collapsedControl"] svg,
+    button[title="Open sidebar"] svg,
+    button[aria-label="Open sidebar"] svg {
+        fill: white !important;
+        color: white !important;
+        opacity: 1 !important;
+    }
+    [data-testid="collapsedControl"]:hover,
+    button[title="Open sidebar"]:hover,
+    button[aria-label="Open sidebar"]:hover {
+        background: #B91C1C !important;
+        width: 52px !important;
     }
 
     /* ── Mobile responsive ── */
@@ -2806,6 +2842,16 @@ def main():
 
     # Nhắc nhở kiểm tra nếu trong 15 phút trước giờ thực hiện
     show_reminder_banner(role)
+
+    # Gợi ý mở lại sidebar nếu bị đóng — hiển thị nhẹ, không chiếm quá nhiều diện tích
+    st.markdown(
+        '<div style="font-size:0.75rem;color:#94A3B8;text-align:right;margin-bottom:4px">'
+        '📌 Sidebar ẩn? Bấm phím <kbd style="background:#E2E8F0;padding:1px 5px;'
+        'border-radius:3px;font-family:monospace;color:#334155">[</kbd> để mở lại '
+        '— hoặc tìm nút <b style="color:#DC2626">☰ màu đỏ</b> ở mép trái màn hình'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     # Nhãn tab thay đổi theo vai trò
     tab2_label = "👨‍👩‍👧 Góc Phụ Huynh" if role == "Phụ Huynh" else "✅ Checklist kiểm tra"
