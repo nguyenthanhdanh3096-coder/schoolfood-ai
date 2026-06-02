@@ -2213,6 +2213,7 @@ def tab_checklist(api_key: str = ""):
     ):
         alert_key = determine_alert(st.session_state.cl_r, cl)
         date_vn   = date.strftime("%d/%m/%Y")
+        date_iso  = date.strftime("%Y-%m-%d")
         report    = _build_report(school, date_vn, insp, menu, level_key,
                                   st.session_state.cl_r, st.session_state.cl_n,
                                   pass_count, fail_count, alert_key, cl)
@@ -2248,7 +2249,7 @@ def tab_checklist(api_key: str = ""):
         if not _already_saved:
             extra_r    = st.session_state.get("cl_extra_r", {})
             session_id = db_save_checklist(
-                school, date_vn, insp, menu, level_key,
+                school, date_iso, insp, menu, level_key,
                 st.session_state.cl_r, st.session_state.cl_n,
                 alert_key, pass_count, fail_count,
                 ai_narrative=narrative,
@@ -3099,10 +3100,11 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     if can_export:
         # G1: Auto-save kiểm thực — guard chống duplicate
         date_vn_kt    = kt_date.strftime("%d/%m/%Y")
+        date_iso_kt   = kt_date.strftime("%Y-%m-%d")
         _kt_guard_key = f"kt_saved_{kt_school}_{date_vn_kt}_{kt_name}"
         if not st.session_state.get(_kt_guard_key, False):
             sid_kt = db_save_kiem_thuc(
-                kt_school, date_vn_kt, kt_name, kt_menu,
+                kt_school, date_iso_kt, kt_name, kt_menu,
                 all_results, all_notes, timestamps,
                 total_pass, total_fail,
             )
@@ -3997,7 +3999,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                 **{**_CHART_LAYOUT, "margin": dict(l=16, r=130, t=40, b=16)},
                 height=320,
                 title="📊 Số lần kiểm tra theo tuần",
-                xaxis=dict(title="Tuần (dd/mm – dd/mm)", tickangle=-20, showgrid=False,
+                xaxis=dict(title="Tuần", tickangle=-20, showgrid=False,
                            tickfont=dict(size=11)),
                 yaxis=dict(title="Số lần kiểm tra", showgrid=True, gridcolor="#E2E8F0"),
                 legend=dict(
@@ -4053,26 +4055,48 @@ def tab_history(role: str = "", school_filter: str = ""):
             else:
                 df_it = pd.DataFrame(items_raw)
 
-                # Build mapping code → mô tả ngắn
-                _desc_map: dict = {}
-                try:
-                    for _, grp_items in get_checklist("Tiểu Học (6–11 tuổi)"):
-                        for code, _, desc, *_ in grp_items:
-                            short = desc[:45] + ("..." if len(desc) > 45 else "")
-                            _desc_map[code] = f"{code} — {short}"
-                except Exception:
-                    pass
-                for step in KIEM_THUC:
-                    for code, desc, *_ in step["items"]:
-                        short = desc[:45] + ("..." if len(desc) > 45 else "")
-                        _desc_map[code] = f"{code} — {short}"
+                # Từ khoá ngắn gọn theo mã tiêu chí
+                _KEYWORD_MAP = {
+                    "C01": "Tem kiểm dịch thịt/cá",
+                    "C02": "Hóa đơn nguồn gốc rau củ",
+                    "C03": "Hạn sử dụng nguyên liệu",
+                    "C04": "Hóa đơn mua hàng ngày",
+                    "C05": "Nhiệt độ tủ lạnh < 5°C",
+                    "C06": "Tách biệt thực phẩm sống/chín",
+                    "C07": "Nhiệt độ nhận hàng ≥ 60°C",
+                    "C08": "Thùng vận chuyển kín, sạch",
+                    "C09": "Nhiệt độ chia ăn đúng chuẩn",
+                    "C10": "Thời gian nấu → phục vụ < 2h",
+                    "C11": "Màu sắc & mùi vị thức ăn",
+                    "C12": "Khẩu phần thịt/cá đủ định mức",
+                    "C13": "Khẩu phần rau xanh đủ định mức",
+                    "C14": "Dụng cụ ăn sạch, khô ráo",
+                    "C15": "Đeo khẩu trang & găng tay",
+                    "C16": "Không ho/hắt hơi vào thức ăn",
+                    "C17": "Khu vực chia cơm sạch, không côn trùng",
+                    "C18": "Sổ kiểm thực 3 bước đủ chữ ký",
+                    "C19": "Thực đơn khớp đăng ký",
+                    "C20": "Mẫu lưu thức ăn 24h đủ nhãn",
+                    "B1_01": "Tem kiểm dịch thịt/cá (B1)",
+                    "B1_02": "Hóa đơn rau củ nguồn gốc (B1)",
+                    "B1_03": "Hạn sử dụng nguyên liệu (B1)",
+                    "B1_04": "Nhiệt độ tủ lạnh < 5°C (B1)",
+                    "B1_05": "Tách biệt sống/chín (B1)",
+                    "B2_01": "Nấu chín ≥ 70°C (B2)",
+                    "B2_02": "Bảo hộ lao động bếp (B2)",
+                    "B2_03": "Dao thớt riêng sống/chín (B2)",
+                    "B2_04": "Dụng cụ nấu sạch, nguyên vẹn (B2)",
+                    "B2_05": "Bếp sạch, không côn trùng (B2)",
+                    "B3_01": "Nhiệt độ chia đúng chuẩn (B3)",
+                    "B3_02": "Thời gian nấu → chia < 2h (B3)",
+                    "B3_03": "Màu sắc & mùi vị ổn (B3)",
+                    "B3_04": "Khẩu phần đủ định mức (B3)",
+                    "B3_05": "Mẫu lưu 24h đủ nhãn (B3)",
+                }
 
                 def _get_label(row):
-                    desc_val = row.get("item_desc") or ""
-                    if desc_val.strip():
-                        s = str(desc_val).strip()[:50]
-                        return f"{row.get('item_code','')} — {s}"
-                    return _desc_map.get(row.get("item_code",""), row.get("item_code","?"))
+                    code = row.get("item_code", "?")
+                    return _KEYWORD_MAP.get(code, code)
 
                 df_it["Tên điểm"] = df_it.apply(_get_label, axis=1)
                 top_fail = (
