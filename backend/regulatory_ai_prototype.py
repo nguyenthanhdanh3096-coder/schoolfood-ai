@@ -826,6 +826,21 @@ def inject_css():
         width: 52px !important;
     }
 
+    /* ── Tabs spacing — giãn cách giữa các tab ── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 18px !important;
+        border-radius: 8px 8px 0 0 !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.01em !important;
+    }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        font-weight: 700 !important;
+    }
+
     /* ── Mobile responsive ── */
     @media (max-width: 768px) {
         /* ── FIX MOBILE KEYBOARD: iOS tự zoom khi font < 16px → mất khoảng cách ── */
@@ -4610,32 +4625,42 @@ def tab_supplier(api_key: str = ""):
         unsafe_allow_html=True,
     )
 
-    # ── Hướng dẫn tần suất đánh giá ──────────────────────────────────────────
-    st.markdown(
-        '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
-        # Kiểm tra giao hàng
-        '<div style="flex:1;min-width:240px;background:#EFF6FF;border:1px solid #BFDBFE;'
-        'border-radius:9px;padding:10px 14px">'
-        '<div style="font-size:0.85rem;font-weight:700;color:#1D4ED8;margin-bottom:4px">'
-        '🚚 Kiểm tra khi nhận hàng (S03–S12)</div>'
-        '<div style="font-size:0.78rem;color:#1E40AF;line-height:1.7">'
-        '<b>Y Tế Học Đường:</b> Mỗi lần NCC giao hàng<br>'
-        '<b>Ban Giám Sát:</b> Khi có mặt tại thời điểm giao hàng<br>'
-        'Tập trung: Xe, nhiệt độ, hóa đơn, nhãn mác, khẩu phần, mẫu lưu'
-        '</div></div>'
-        # Kiểm tra toàn diện
-        '<div style="flex:1;min-width:240px;background:#F5F3FF;border:1px solid #DDD6FE;'
-        'border-radius:9px;padding:10px 14px">'
-        '<div style="font-size:0.85rem;font-weight:700;color:#6D28D9;margin-bottom:4px">'
-        '📋 Kiểm tra toàn diện 12 điểm (S01–S12)</div>'
-        '<div style="font-size:0.78rem;color:#5B21B6;line-height:1.7">'
-        '<b>Ban Giám Sát:</b> 1 lần/tháng · Cuối tháng hoặc trước gia hạn HĐ<br>'
-        '<b>Y Tế Học Đường:</b> Khi nhận thấy dấu hiệu vi phạm bất thường<br>'
-        'Bổ sung thêm: Giấy phép (S01), Chứng nhận ATTP (S02)'
-        '</div></div>'
-        '</div>',
-        unsafe_allow_html=True,
+    # ── Chọn chế độ kiểm tra ──────────────────────────────────────────────────
+    check_mode = st.radio(
+        "Chế độ kiểm tra",
+        ["🚚 Kiểm tra khi nhận hàng (S03–S12 · 10 mục)", "📋 Kiểm tra toàn diện (S01–S12 · 12 mục)"],
+        horizontal=True, key="sup_mode",
     )
+    _delivery_mode = check_mode.startswith("🚚")
+
+    if _delivery_mode:
+        st.markdown(
+            '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:9px;'
+            'padding:10px 16px;margin-bottom:10px;font-size:0.8rem;color:#1E40AF">'
+            '🚚 <b>Kiểm tra khi nhận hàng</b> — Dành cho mỗi lần NCC giao hàng · '
+            'Tập trung vào chất lượng chuyến hàng hôm nay: xe vận chuyển, nhiệt độ, hóa đơn, '
+            'nhãn mác, khẩu phần, mẫu lưu · <b>Bỏ qua S01–S02</b> (giấy phép & chứng nhận '
+            'ATTP — kiểm tra riêng 1 lần/tháng khi làm kiểm tra toàn diện)</div>',
+            unsafe_allow_html=True,
+        )
+        # Chỉ hiện S03-S12
+        _active_items = [it for it in SUPPLIER_ITEMS if it["code"] not in ("S01", "S02")]
+        _active_critical = {c for c in SUPPLIER_CRITICAL if c not in ("S01", "S02")}
+    else:
+        st.markdown(
+            '<div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:9px;'
+            'padding:10px 16px;margin-bottom:10px;font-size:0.8rem;color:#5B21B6">'
+            '📋 <b>Kiểm tra toàn diện</b> — Thực hiện 1 lần/tháng hoặc trước gia hạn hợp đồng · '
+            'Kiểm tra đầy đủ 12 điểm bao gồm giấy phép (S01) và chứng nhận ATTP (S02)</div>',
+            unsafe_allow_html=True,
+        )
+        _active_items = SUPPLIER_ITEMS
+        _active_critical = SUPPLIER_CRITICAL
+
+    # Ngưỡng điểm tỷ lệ theo số mục đang kiểm tra
+    _n_active = len(_active_items)
+    _score_pass = round(_n_active * SUPPLIER_SCORE_PASS / len(SUPPLIER_ITEMS))  # tỷ lệ với 12 mục
+    _score_warn = round(_n_active * SUPPLIER_SCORE_WARN / len(SUPPLIER_ITEMS))
 
     # ── Thông tin chung ────────────────────────────────────────────────────────
     c1, c2 = st.columns(2)
@@ -4666,7 +4691,7 @@ def tab_supplier(api_key: str = ""):
 
     pass_count = fail_count = 0
 
-    for item in SUPPLIER_ITEMS:
+    for item in _active_items:
         code     = item["code"]
         is_crit  = item["critical"]
 
@@ -4833,14 +4858,14 @@ def tab_supplier(api_key: str = ""):
     m1, m2, m3, m4 = st.columns(4)
     pct = round(pass_count / max(_checked, 1) * 100) if _checked else 0
     crit_fails = [c for c, v in st.session_state.sup_r.items()
-                  if v == "❌ Không Đạt" and c in SUPPLIER_CRITICAL]
-    if _checked < len(SUPPLIER_ITEMS):
+                  if v == "❌ Không Đạt" and c in _active_critical]
+    if _checked < _n_active:
         alert_key, rating = "OK", "—"   # chưa chấm xong → chưa xếp loại
     elif crit_fails:
         alert_key, rating = "CRITICAL", "C"
-    elif pass_count < SUPPLIER_SCORE_WARN:
+    elif pass_count < _score_warn:
         alert_key, rating = "MAJOR", "C"
-    elif pass_count < SUPPLIER_SCORE_PASS:
+    elif pass_count < _score_pass:
         alert_key, rating = "MINOR", "B"
     else:
         alert_key, rating = "OK", "A"
@@ -4849,7 +4874,7 @@ def tab_supplier(api_key: str = ""):
 
     m1.markdown(f'<div class="metric-box"><div class="metric-lbl">Đã kiểm tra</div>'
                 f'<div class="metric-num c-blue">{_checked}</div>'
-                f'<div class="metric-lbl">/ {len(SUPPLIER_ITEMS)} mục</div></div>',
+                f'<div class="metric-lbl">/ {_n_active} mục</div></div>',
                 unsafe_allow_html=True)
     m2.markdown(f'<div class="metric-box"><div class="metric-lbl">✅ Đạt</div>'
                 f'<div class="metric-num c-green">{pass_count}</div>'
@@ -4868,7 +4893,7 @@ def tab_supplier(api_key: str = ""):
 
     # Banner cảnh báo
     if crit_fails:
-        fail_descs = ['[' + c + '] ' + next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
+        fail_descs = ['[' + c + '] ' + next(x["desc"] for x in _active_items if x["code"] == c)
                       for c in crit_fails]
         st.markdown(
             '<div class="alert-critical">'
@@ -4920,7 +4945,7 @@ def tab_supplier(api_key: str = ""):
     if st.button(f"🤖 Chạy phân tích AI ({_ai_hint})",
                  disabled=_ai_disabled, use_container_width=False):
         _fails = []
-        for _it in SUPPLIER_ITEMS:
+        for _it in _active_items:
             _c = _it["code"]
             if st.session_state.sup_r.get(_c) == "❌ Không Đạt":
                 _note_txt = st.session_state.sup_notes.get(_c, "").strip()
@@ -4935,7 +4960,7 @@ def tab_supplier(api_key: str = ""):
         _prompt = (
             f"Đây là kết quả kiểm tra nhà cung cấp suất ăn học đường '{sup_name}' "
             f"tại trường '{sup_school}' ngày {sup_date.strftime('%d/%m/%Y')}. "
-            f"Xếp loại: {rating} ({pct}% đạt — {pass_count}/{len(SUPPLIER_ITEMS)} điểm). "
+            f"Xếp loại: {rating} ({pct}% đạt — {pass_count}/{_n_active} điểm). "
             f"Các vi phạm phát hiện:\n" + "\n".join(f"  {x}" for x in _fails) + "\n\n"
             "Hãy viết phân tích ngắn gọn (khoảng 200 từ) bằng tiếng Việt bao gồm:\n"
             "1. Đánh giá mức độ rủi ro ngộ độc thực phẩm theo HACCP (CCP nào bị vi phạm)\n"
@@ -4967,11 +4992,11 @@ def tab_supplier(api_key: str = ""):
 
     # ── Validate ─────────────────────────────────────────────────────────────
     # Mục chưa chọn (None = chưa chấm)
-    _unselected = [item["code"] for item in SUPPLIER_ITEMS
+    _unselected = [item["code"] for item in _active_items
                    if st.session_state.sup_r.get(item["code"]) is None]
     # Mục Không Đạt thiếu bằng chứng
     _missing_evid = [
-        item["code"] for item in SUPPLIER_ITEMS
+        item["code"] for item in _active_items
         if st.session_state.sup_r.get(item["code"]) == "❌ Không Đạt"
         and item["code"] not in st.session_state.sup_imgs
         and len(st.session_state.sup_notes.get(item["code"], "").strip()) < 10
@@ -5008,7 +5033,7 @@ def tab_supplier(api_key: str = ""):
         # Lưu DB (chỉ 1 lần)
         if not already_saved and db_ok():
             _res_dict = {}
-            for _it in SUPPLIER_ITEMS:
+            for _it in _active_items:
                 _c = _it["code"]
                 _v = st.session_state.sup_r.get(_c, "")
                 _res_dict[_c] = "Đạt" if _v == "✅ Đạt" else "Không Đạt"
@@ -5070,14 +5095,15 @@ def tab_supplier(api_key: str = ""):
                 ("Tên trường", sup_school), ("Nhà cung cấp", sup_name),
                 ("Người kiểm tra", sup_inspector), ("Ngày kiểm tra", sup_date.strftime("%d/%m/%Y")),
                 ("Số hợp đồng", sup_contract or "—"),
-                ("Kết quả tổng hợp", f"Loại {rating} — {pct}% đạt ({pass_count}/{len(SUPPLIER_ITEMS)} điểm)"),
+                ("Kết quả tổng hợp", f"Loại {rating} — {pct}% đạt ({pass_count}/{_n_active} điểm · {'Giao hàng' if _delivery_mode else 'Toàn diện'})"),
             ]:
                 _p = doc.add_paragraph()
                 _wr(_p, f"{_lbl}: ", bold=True)
                 _wr(_p, _val)
 
             doc.add_paragraph("")
-            _p = doc.add_paragraph(); _wr(_p, "KẾT QUẢ KIỂM TRA CHI TIẾT (12 ĐIỂM)", bold=True)
+            _mode_txt = "KIỂM TRA GIAO HÀNG (10 ĐIỂM · S03–S12)" if _delivery_mode else "KIỂM TRA TOÀN DIỆN (12 ĐIỂM · S01–S12)"
+            _p = doc.add_paragraph(); _wr(_p, f"KẾT QUẢ {_mode_txt}", bold=True)
 
             # Bảng 5 cột
             _tbl = doc.add_table(rows=1, cols=5)
@@ -5090,7 +5116,7 @@ def tab_supplier(api_key: str = ""):
                         _rr.bold = True
                         _rr.font.name = "Times New Roman"; _rr.font.size = Pt(11)
 
-            for _it in SUPPLIER_ITEMS:
+            for _it in _active_items:
                 _c = _it["code"]
                 _row = _tbl.add_row().cells
                 _row[0].text = f"{_c}{'(*)' if _it['critical'] else ''}"
@@ -5114,7 +5140,7 @@ def tab_supplier(api_key: str = ""):
             if _img_count > 0:
                 doc.add_paragraph("")
                 _p = doc.add_paragraph(); _wr(_p, "ẢNH MINH CHỨNG CÁC MỤC KHÔNG ĐẠT", bold=True)
-                for _it2 in SUPPLIER_ITEMS:
+                for _it2 in _active_items:
                     _c2 = _it2["code"]
                     if (_c2 in st.session_state.sup_imgs and
                             st.session_state.sup_r.get(_c2) == "❌ Không Đạt"):
