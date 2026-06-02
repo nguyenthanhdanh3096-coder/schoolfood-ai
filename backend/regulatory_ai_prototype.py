@@ -498,6 +498,27 @@ def inject_css():
 
     /* ── Mobile responsive ── */
     @media (max-width: 768px) {
+        /* ── FIX MOBILE KEYBOARD: iOS tự zoom khi font < 16px → mất khoảng cách ── */
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        textarea,
+        select {
+            font-size: 16px !important;          /* Ngăn iOS Safari auto-zoom */
+            -webkit-text-size-adjust: 100% !important;
+        }
+        /* Streamlit specific inputs */
+        .stTextInput input,
+        .stTextArea textarea,
+        .stSelectbox select,
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea {
+            font-size: 16px !important;
+            touch-action: manipulation !important; /* Ngăn double-tap delay */
+        }
+
         /* Header mới (inline HTML) — thu nhỏ trên mobile */
         .main .block-container { padding-left: 0.8rem !important; padding-right: 0.8rem !important; }
 
@@ -1729,15 +1750,18 @@ def tab_checklist(api_key: str = ""):
                     st.session_state.cl_photos[f"cam_{g_idx}"] = cam
                     st.success("✅ Đã lưu ảnh chụp")
             with photo_col2:
-                st.caption("💻 Hoặc tải ảnh từ thư viện máy")
+                st.caption("💻 Tải ảnh từ thư viện máy (tối đa 3 ảnh/mục)")
                 upl = st.file_uploader(
                     "Tải ảnh", type=["jpg", "jpeg", "png", "heic"],
                     key=f"upl_{g_idx}", label_visibility="collapsed",
                     accept_multiple_files=True,
                 )
                 if upl:
+                    if len(upl) > 3:
+                        st.warning("⚠️ Chỉ lưu 3 ảnh đầu tiên (giới hạn 3 ảnh/mục)")
+                        upl = upl[:3]
                     st.session_state.cl_photos[f"upl_{g_idx}"] = upl
-                    st.success(f"✅ Đã tải {len(upl)} ảnh")
+                    st.success(f"✅ Đã tải {len(upl)}/3 ảnh")
 
             # ── AI #2: Nút phân tích ảnh ──────────────────────────────────
             active_photo = (
@@ -2385,8 +2409,9 @@ def tab_parent_view(api_key: str = ""):
 
 
 # ── Kiểm thực 3 bước — Tab dành riêng Y Tế Học Đường ────────────────────────
-def tab_kiem_thuc():
+def tab_kiem_thuc(api_key: str = ""):
     """Kiểm thực 3 bước theo TTLT 13/2016 — dành riêng cho Y Tế Học Đường."""
+    ai_on = bool(api_key)
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">🏥 Kiểm thực 3 bước — Y Tế Học Đường</div>
         <div class="sf-card-body">
@@ -2407,6 +2432,35 @@ def tab_kiem_thuc():
     kt_menu   = kc4.text_input("Thực đơn hôm nay",
                                 placeholder="Cơm, thịt kho, rau...",
                                 key="kt_menu_yte")
+
+    # ── AI: Tạo câu hỏi bổ sung theo thực đơn ───────────────────────────────
+    if "kt_extra" not in st.session_state: st.session_state.kt_extra = []
+    if "kt_photo_analysis" not in st.session_state: st.session_state.kt_photo_analysis = {}
+
+    st.markdown(
+        f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;'
+        f'padding:10px 16px;margin-bottom:10px;font-size:0.82rem">'
+        f'📋 <b>15 câu kiểm thực chuẩn</b> (luôn có) &nbsp;|&nbsp; '
+        f'{"🤖 <b>AI bổ sung</b> theo thực đơn (~$0.004) &nbsp;|&nbsp; 📷 <b>AI phân tích ảnh</b> (~$0.015/ảnh)" if ai_on else "<i style=color:#94A3B8>Kết nối API key để dùng AI phân tích ảnh và tạo câu hỏi theo thực đơn</i>"}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    if ai_on and kt_menu:
+        cb1, cb2 = st.columns([0.5, 0.5])
+        if cb1.button("🤖 Tạo câu hỏi bổ sung theo thực đơn (~$0.004)",
+                      use_container_width=True, key="kt_gen_extra"):
+            with st.spinner("AI đang phân tích thực đơn..."):
+                extras = generate_extra_checklist(kt_menu, "Y Tế Học Đường", api_key)
+                st.session_state.kt_extra = extras
+        if st.session_state.kt_extra:
+            cb2.markdown(
+                f'<span style="color:#16A34A;font-size:0.85rem;line-height:3">'
+                f'✅ Đã tạo {len(st.session_state.kt_extra)} câu bổ sung</span>',
+                unsafe_allow_html=True,
+            )
+    elif ai_on and not kt_menu:
+        st.caption("💡 Nhập thực đơn để AI tạo câu hỏi kiểm tra riêng theo nguyên liệu hôm nay.")
 
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
@@ -2504,22 +2558,69 @@ def tab_kiem_thuc():
                 )
                 st.session_state[f"kt_b{b}_n"][code] = note
 
-        # Ảnh + nút hoàn thành bước
-        with st.expander(f"📷 Ảnh minh chứng Bước {b}"):
+        # ── Ảnh minh chứng + AI Vision ───────────────────────────────────────
+        exp_label = (
+            f"📷 Ảnh minh chứng Bước {b} (tối đa 4 ảnh/bước)"
+            + (" · 🤖 AI phân tích (~$0.015/ảnh)" if ai_on else "")
+        )
+        with st.expander(exp_label):
+            st.caption("📐 Ảnh nét, đủ sáng, chụp thẳng cách 20–50cm. Camera: 1 ảnh · Tải lên: tối đa 3 ảnh")
             pc1, pc2 = st.columns(2)
             with pc1:
+                st.caption("📱 Chụp ảnh (1 ảnh)")
                 cam = st.camera_input("Chụp ảnh", key=f"kt_cam_{b}",
                                       label_visibility="collapsed")
                 if cam:
                     st.session_state[f"kt_b{b}_photos"]["cam"] = cam
-                    st.success("✅ Đã lưu ảnh")
+                    st.success("✅ Đã lưu ảnh chụp")
             with pc2:
-                upl = st.file_uploader("Tải ảnh", type=["jpg","jpeg","png"],
+                st.caption("💻 Tải ảnh từ máy (tối đa 3 ảnh)")
+                upl = st.file_uploader("Tải ảnh", type=["jpg","jpeg","png","heic"],
                                        key=f"kt_upl_{b}", label_visibility="collapsed",
                                        accept_multiple_files=True)
                 if upl:
+                    if len(upl) > 3:
+                        st.warning("⚠️ Chỉ lưu 3 ảnh đầu tiên")
+                        upl = upl[:3]
                     st.session_state[f"kt_b{b}_photos"]["upl"] = upl
-                    st.success(f"✅ Đã tải {len(upl)} ảnh")
+                    st.success(f"✅ Đã tải {len(upl)}/3 ảnh")
+
+            # ── AI Vision phân tích ảnh ───────────────────────────────────
+            active_photo = (
+                st.session_state[f"kt_b{b}_photos"].get("cam") or
+                (st.session_state[f"kt_b{b}_photos"].get("upl") or [None])[0]
+            )
+            if ai_on and active_photo:
+                if st.button(f"🔍 Phân tích ảnh Bước {b} với AI",
+                             key=f"kt_analyze_{b}", use_container_width=True):
+                    with st.spinner("AI đang phân tích ảnh..."):
+                        photo_bytes = (active_photo.read()
+                                       if hasattr(active_photo, "read")
+                                       else active_photo.getvalue())
+                        result = analyze_photo_ai(photo_bytes, step["label"], api_key)
+                        st.session_state.kt_photo_analysis[b] = result
+
+                if b in st.session_state.kt_photo_analysis:
+                    r = st.session_state.kt_photo_analysis[b]
+                    lvl  = r.get("risk_level", "OK")
+                    clr  = {"OK":"#16A34A","WARNING":"#D97706","CRITICAL":"#DC2626"}.get(lvl,"#64748B")
+                    bg   = {"OK":"#F0FDF4","WARNING":"#FFFBEB","CRITICAL":"#FEF2F2"}.get(lvl,"#F8FAFC")
+                    icon = {"OK":"✅","WARNING":"⚠️","CRITICAL":"🚨"}.get(lvl,"❓")
+                    conf = int(r.get("confidence",0.8)*100)
+                    issues_html = "".join(f"<li style='color:#DC2626'>{i}</li>" for i in r.get("issues",[]))
+                    pos_html    = "".join(f"<li style='color:#16A34A'>{p}</li>" for p in r.get("positives",[]))
+                    st.markdown(
+                        f'<div style="background:{bg};border-left:4px solid {clr};'
+                        f'border-radius:8px;padding:10px 14px;margin-top:8px">'
+                        f'<div style="font-weight:700;color:{clr};margin-bottom:4px">'
+                        f'{icon} {lvl} — Độ tin cậy: {conf}%</div>'
+                        f'{"<ul style=margin:2px 0;padding-left:14px>"+issues_html+"</ul>" if issues_html else ""}'
+                        f'{"<ul style=margin:2px 0;padding-left:14px>"+pos_html+"</ul>" if pos_html else ""}'
+                        f'{"<div style=font-size:0.8rem;color:#475569;margin-top:4px><b>Khuyến nghị:</b> "+r.get("recommendation","")+"</div>" if r.get("recommendation") else ""}'
+                        f'</div>', unsafe_allow_html=True
+                    )
+            elif not ai_on and active_photo:
+                st.caption("💡 Kết nối API key để AI phân tích ảnh tự động.")
 
         # Nút xác nhận hoàn thành bước
         b_results = st.session_state.get(f"kt_b{b}_r", {})
@@ -2589,6 +2690,47 @@ def tab_kiem_thuc():
             )
 
         st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Câu hỏi AI bổ sung (nếu có) ──────────────────────────────────────────
+    if st.session_state.kt_extra:
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sec-hdr">🤖 Câu hỏi bổ sung AI ({len(st.session_state.kt_extra)} câu) — theo thực đơn hôm nay</div>',
+            unsafe_allow_html=True,
+        )
+        if "kt_extra_r" not in st.session_state: st.session_state.kt_extra_r = {}
+        for item in st.session_state.kt_extra:
+            code = item.get("code","?"); desc = item.get("desc","")
+            ingr = item.get("ingredient",""); legal_ref = item.get("legal_ref","")
+            col_d, col_c = st.columns([0.65, 0.35])
+            with col_d:
+                st.markdown(
+                    f'<div style="background:#EFF6FF;border-left:3px solid #2563EB;'
+                    f'border-radius:0 8px 8px 0;padding:8px 14px;margin:3px 0">'
+                    f'<span style="font-size:0.7rem;font-weight:800;color:#2563EB">🤖 {code}</span>'
+                    f'<span style="font-size:0.72rem;color:#1D4ED8;margin-left:6px;'
+                    f'background:#DBEAFE;padding:1px 6px;border-radius:8px">{ingr}</span>'
+                    f'<div style="font-size:0.86rem;font-weight:500;color:#1E293B;margin-top:3px">{desc}</div>'
+                    f'{"<div style=font-size:0.72rem;color:#64748B;margin-top:2px>"+legal_ref+"</div>" if legal_ref else ""}'
+                    f'</div>', unsafe_allow_html=True,
+                )
+                if item.get("how") or item.get("pass"):
+                    with st.expander("Hướng dẫn"):
+                        st.markdown(
+                            f"**Kiểm tra:** {item.get('how','')}  \n"
+                            f"**✅ Đạt:** {item.get('pass','')}  \n"
+                            f"**❌ Không đạt:** {item.get('fail','')}"
+                        )
+            with col_c:
+                seg_key = f"kt_seg_extra_{code}"
+                if seg_key not in st.session_state: st.session_state[seg_key] = "Chưa kiểm tra"
+                st.segmented_control(
+                    code, ["Chưa kiểm tra", "✅ Đạt", "❌ Không Đạt"],
+                    key=seg_key, label_visibility="collapsed",
+                )
+                st.session_state.kt_extra_r[code] = st.session_state.get(seg_key, "Chưa kiểm tra")
+        if st.button("🗑️ Xoá câu hỏi AI", use_container_width=True, key="kt_del_extra"):
+            st.session_state.kt_extra = []; st.rerun()
 
     # ── Tổng kết 3 bước ───────────────────────────────────────────────────────
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
@@ -3508,7 +3650,7 @@ def main():
         if role == "Phụ Huynh":
             tab_parent_view(api_key)
         elif role == "Y Tế Học Đường":
-            tab_kiem_thuc()          # Module kiểm thực 3 bước riêng
+            tab_kiem_thuc(api_key)   # Module kiểm thực 3 bước + AI
         else:
             tab_checklist(api_key)   # Ban Giám Sát + Ban Giám Hiệu dùng 20 câu
     with t3: tab_schedule()
