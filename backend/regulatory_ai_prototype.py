@@ -3448,22 +3448,19 @@ MANUAL_CONTENT = {
             "id": "alert",
             "icon": "🔔",
             "title": "4. Hệ thống cảnh báo 4 cấp",
+            "content": (
+                "Bảng cảnh báo đầy đủ (kích hoạt, thời hạn, người nhận thông báo) xem trong "
+                "tab **📅 Lịch & Chuẩn mực**. Tóm tắt nhanh để tra cứu:"
+            ),
             "subsections": [
-                ("🔴 CRITICAL — Xử lý trong 5 phút",
-                 "Kích hoạt khi: bất kỳ mục BẮT BUỘC nào fail, hoặc phát hiện ngộ độc ≥ 2 học sinh\n"
-                 "Hành động: DỪNG bữa ăn ngay · Giữ mẫu thức ăn · Báo Hiệu Trưởng + 115 nếu cần\n"
-                 "Thông báo: Hiệu Trưởng + Y Tế + Ban Giám Sát (Đại Diện PHHS) trong 5 phút"),
-                ("🟠 MAJOR — Xử lý trong ngày",
-                 "Kích hoạt khi: tổng điểm < 15/20, hoặc ≥ 3 mục KHÔNG ĐẠT cùng nhóm\n"
-                 "Hành động: yêu cầu Nhà Cung Cấp khắc phục trước bữa ăn tiếp theo\n"
-                 "Thông báo: Hiệu Trưởng + Y Tế Học Đường trong 2–4 giờ"),
-                ("🟡 MINOR — Cải thiện trong tuần",
-                 "Kích hoạt khi: tổng điểm 15–17/20\n"
-                 "Hành động: ghi hồ sơ, yêu cầu cải thiện ở lần kiểm tra tiếp theo\n"
-                 "Thông báo: Y Tế Học Đường + Nhà Cung Cấp trong 24–48 giờ"),
-                ("✅ ĐẠT CHUẨN — Lưu hồ sơ",
-                 "Điều kiện: tất cả mục BẮT BUỘC đều đạt VÀ tổng ≥ 18/20\n"
-                 "Hành động: lưu báo cáo, báo cáo tổng hợp cuối tháng cho Hiệu Trưởng"),
+                ("🔴 CRITICAL — trong 5 phút",
+                 "Bất kỳ mục BẮT BUỘC nào KHÔNG ĐẠT → DỪNG bữa ăn · Giữ mẫu · Gọi Hiệu Trưởng + 115"),
+                ("🟠 MAJOR — trong 2–4 giờ",
+                 "Tổng điểm < 15/20 → Yêu cầu nhà cung cấp khắc phục trước bữa ăn tiếp theo"),
+                ("🟡 MINOR — trong 24 giờ",
+                 "Tổng điểm 15–17/20 → Ghi hồ sơ, thông báo cải thiện"),
+                ("✅ ĐẠT CHUẨN",
+                 "Tất cả BẮT BUỘC đạt + Tổng ≥ 18/20 → Lưu hồ sơ bình thường"),
             ]
         },
         {
@@ -3698,6 +3695,39 @@ def tab_guide():
                         f'<span style="color:#475569">{definition}</span>'
                         f'</div>', unsafe_allow_html=True
                     )
+
+    # ── Tài liệu pháp luật đã tải vào hệ thống ───────────────────────────────
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">📋 Tài liệu pháp luật tích hợp trong app</div>',
+                unsafe_allow_html=True)
+    pdfs = sorted(LEGAL_DIR.glob("*.pdf"))
+    if pdfs:
+        for p in pdfs:
+            st.success(f"✅ {p.name} ({p.stat().st_size // 1024} KB)")
+    else:
+        st.info("Chưa có file PDF trong thư mục 07_Legal_Regulations/ — AI vẫn tư vấn dựa trên kiến thức đào tạo.")
+    try:
+        import pypdf  # noqa: F401
+        st.caption("✅ pypdf đã cài — AI đọc được nội dung các văn bản pháp luật thực tế")
+    except ImportError:
+        st.caption("pypdf chưa cài — AI dùng kiến thức đào tạo, không đọc file PDF trực tiếp")
+
+    # ── Về ứng dụng ───────────────────────────────────────────────────────────
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sf-card" style="border-left:3px solid #94A3B8">'
+        '<div class="sf-card-title">ℹ️ Về SchoolFood AI v2.0</div>'
+        '<div class="sf-card-body">'
+        'Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường — giúp mỗi bên thực hiện '
+        'đúng vai trò, đúng thời điểm, có bằng chứng rõ ràng.<br>'
+        'Xây dựng theo: Luật ATTP 55/2010 · NĐ 15/2018 · TTLT 13/2016 · QĐ 3958/QĐ-BYT 2025 · '
+        'Hỗ trợ AI: Claude Sonnet 4.6 (Anthropic)<br>'
+        '<b>Cập nhật:</b> 06/2026 &nbsp;·&nbsp; '
+        '<b>Đường dây nóng Cục ATTP:</b> 1800 6838 (miễn phí) &nbsp;·&nbsp; '
+        '<b>Cấp cứu:</b> 115'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Tạo sổ tay Word chuyên nghiệp ─────────────────────────────────────────────
@@ -5097,56 +5127,71 @@ def main():
     # Hiển thị banner nhắc nhở nổi bật nếu trong 15 phút
     show_reminder_banner(role)
 
-    # Nhãn tab thay đổi theo vai trò
-    _tab2_labels = {
-        "Phụ Huynh":                    "👨‍👩‍👧 Góc Phụ Huynh",
-        "Y Tế Học Đường":               "🏥 Kiểm thực 3 bước",
-        "Ban Giám Sát (Đại Diện PHHS)": "✅ Checklist kiểm tra",
-        "Ban Giám Hiệu":                "✅ Checklist kiểm tra",
-    }
-    tab2_label = _tab2_labels.get(role, "✅ Checklist kiểm tra")
-
-    # Hiện tab Lịch sử khi có DB (hoặc luôn hiện để hướng dẫn setup)
+    # Lịch sử — gắn cờ đỏ nếu có CRITICAL gần đây
     _hist_label = "📊 Lịch sử" + (" 🔴" if db_ok() and
-        any(s.get("alert_level")=="CRITICAL"
+        any(s.get("alert_level") == "CRITICAL"
             for s in db_get_sessions(limit=5)) else "")
 
-    # Tab Nhà Cung Cấp chỉ dành cho Ban Giám Sát và Ban Giám Hiệu
-    _show_supplier = role in ("Ban Giám Sát (Đại Diện PHHS)", "Ban Giám Hiệu")
-    _tab_labels = [
-        "💬 Hỏi đáp AI",
-        tab2_label,
-        _hist_label,
-        "📅 Lịch & thông báo",
-        "🚨 Khẩn cấp",
-        "📖 Hướng dẫn",
-        "ℹ️ Về ứng dụng",
-    ]
-    if _show_supplier:
-        _tab_labels.insert(3, "🏭 Nhà Cung Cấp")
+    # ── Tabs theo từng vai trò — mỗi vai trò thấy đúng chức năng mình cần ─────
+    if role == "Phụ Huynh":
+        # Phụ Huynh: xem kết quả đơn giản + phản hồi, không cần dashboard kỹ thuật
+        _tabs = st.tabs([
+            "💬 Hỏi đáp AI",
+            "🍱 Góc Phụ Huynh",
+            "🚨 Khẩn cấp",
+            "📖 Hướng dẫn",
+        ])
+        with _tabs[0]: tab_chat(api_key, role, level, loc)
+        with _tabs[1]: tab_parent_view(api_key)
+        with _tabs[2]: tab_emergency(api_key)
+        with _tabs[3]: tab_guide()
 
-    _tabs = st.tabs(_tab_labels)
-    t1, t2, t3 = _tabs[0], _tabs[1], _tabs[2]
-    if _show_supplier:
-        t_sup, t4, t5, t6, t7 = _tabs[3], _tabs[4], _tabs[5], _tabs[6], _tabs[7]
-    else:
-        t4, t5, t6, t7 = _tabs[3], _tabs[4], _tabs[5], _tabs[6]
+    elif role == "Y Tế Học Đường":
+        # Y Tế: nhiệm vụ chính là kiểm thực 3 bước mỗi ngày + xem lịch sử
+        _tabs = st.tabs([
+            "💬 Hỏi đáp AI",
+            "🏥 Kiểm thực 3 bước",
+            _hist_label,
+            "🚨 Khẩn cấp",
+            "📖 Hướng dẫn",
+        ])
+        with _tabs[0]: tab_chat(api_key, role, level, loc)
+        with _tabs[1]: tab_kiem_thuc(api_key, level)
+        with _tabs[2]: tab_history(role=role)
+        with _tabs[3]: tab_emergency(api_key)
+        with _tabs[4]: tab_guide()
 
-    with t1: tab_chat(api_key, role, level, loc)
-    with t2:
-        if role == "Phụ Huynh":
-            tab_parent_view(api_key)
-        elif role == "Y Tế Học Đường":
-            tab_kiem_thuc(api_key, level)
-        else:
-            tab_checklist(api_key)
-    with t3: tab_history(role=role)
-    if _show_supplier:
-        with t_sup: tab_supplier(api_key)
-    with t4: tab_schedule()
-    with t5: tab_emergency(api_key)
-    with t6: tab_guide()
-    with t7: tab_about()
+    elif role == "Ban Giám Sát (Đại Diện PHHS)":
+        # BGS: checklist + kiểm tra NCC + lịch sử + lịch kiểm tra
+        _tabs = st.tabs([
+            "💬 Hỏi đáp AI",
+            "✅ Checklist kiểm tra",
+            "🏭 Nhà Cung Cấp",
+            _hist_label,
+            "📅 Lịch & Chuẩn mực",
+            "🚨 Khẩn cấp",
+        ])
+        with _tabs[0]: tab_chat(api_key, role, level, loc)
+        with _tabs[1]: tab_checklist(api_key)
+        with _tabs[2]: tab_supplier(api_key)
+        with _tabs[3]: tab_history(role=role)
+        with _tabs[4]: tab_schedule()
+        with _tabs[5]: tab_emergency(api_key)
+
+    else:  # Ban Giám Hiệu
+        # BGH: duyệt tổng quan + lịch chuẩn mực, không cần form checklist hàng ngày
+        _tabs = st.tabs([
+            "💬 Hỏi đáp AI",
+            _hist_label,
+            "📅 Lịch & Chuẩn mực",
+            "🚨 Khẩn cấp",
+            "📖 Hướng dẫn",
+        ])
+        with _tabs[0]: tab_chat(api_key, role, level, loc)
+        with _tabs[1]: tab_history(role=role)
+        with _tabs[2]: tab_schedule()
+        with _tabs[3]: tab_emergency(api_key)
+        with _tabs[4]: tab_guide()
 
 
 if __name__ == "__main__":
