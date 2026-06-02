@@ -76,9 +76,11 @@ def db_save_checklist(school: str, date_str: str, inspector: str, menu: str,
                       level: str, results: dict, notes: dict,
                       alert_level: str, pass_count: int, fail_count: int,
                       ai_narrative: str = "",
-                      extra_results: dict | None = None) -> str | None:
+                      extra_results: dict | None = None,
+                      check_type: str = "ban_giam_sat") -> str | None:
     """
-    Lưu kết quả checklist Ban Giám Sát vào Supabase.
+    Lưu kết quả checklist vào Supabase.
+    check_type: 'ban_giam_sat' | 'nha_cung_cap'
     Trả về session_id hoặc None nếu lỗi/không có DB.
     """
     sb = _get_sb()
@@ -91,7 +93,7 @@ def db_save_checklist(school: str, date_str: str, inspector: str, menu: str,
             "check_date":     date_str,
             "menu_today":     menu or "",
             "school_level":   level,
-            "check_type":     "ban_giam_sat",
+            "check_type":     check_type,
             "alert_level":    alert_level,
             "total_items":    pass_count + fail_count,
             "pass_count":     pass_count,
@@ -221,6 +223,25 @@ def db_get_sessions(school: str = "", limit: int = 30) -> list:
         if school:
             q = q.eq("school_name", school)
         return q.execute().data or []
+    except Exception:
+        return []
+
+
+@st.cache_data(ttl=120)
+def db_get_schools() -> list[str]:
+    """Lấy danh sách tên trường distinct từ DB — cache 2 phút."""
+    sb = _get_sb()
+    if not sb:
+        return []
+    try:
+        rows = sb.table("checklist_sessions").select("school_name").execute().data or []
+        seen, result = set(), []
+        for r in rows:
+            n = r.get("school_name", "").strip()
+            if n and n not in seen:
+                seen.add(n)
+                result.append(n)
+        return sorted(result)
     except Exception:
         return []
 
@@ -3879,16 +3900,25 @@ def tab_history(role: str = "", school_filter: str = ""):
         return
 
     # ── Bộ lọc ────────────────────────────────────────────────────────────────
+    _schools_db = db_get_schools()  # danh sách trường từ DB (cache 2 phút)
+    _school_opts = ["Tất cả trường"] + _schools_db
+
     col_f, col_r = st.columns([3, 1])
-    school_input = col_f.text_input(
-        "Lọc theo tên trường (để trống = tất cả)",
-        value=school_filter, placeholder="VD: TH Nguyễn Du"
-    )
+    with col_f:
+        _default_idx = (_school_opts.index(school_filter)
+                        if school_filter and school_filter in _school_opts else 0)
+        _school_sel = st.selectbox(
+            "Lọc theo tên trường",
+            options=_school_opts,
+            index=_default_idx,
+            help="Gõ tên trường để tìm nhanh — danh sách lấy từ database",
+        )
     view_mode = col_r.selectbox(
         "Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"]
     )
 
-    sessions = db_get_sessions(school=school_input.strip(), limit=200)
+    school_input = "" if _school_sel == "Tất cả trường" else _school_sel
+    sessions = db_get_sessions(school=school_input, limit=200)
     if not sessions:
         st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu.")
         return
@@ -4823,6 +4853,7 @@ def tab_supplier(api_key: str = ""):
                 alert_level=alert_key, pass_count=pass_count, fail_count=fail_count,
                 ai_narrative=ai_narrative[:500],
                 extra_results={"contract": sup_contract, "supplier": sup_name},
+                check_type="nha_cung_cap",
             )
             if _sid:
                 st.session_state[guard_key] = True
