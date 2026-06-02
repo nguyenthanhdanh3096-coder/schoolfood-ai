@@ -3994,7 +3994,8 @@ def tab_history(role: str = "", school_filter: str = ""):
             )
             fig_bar.update_traces(textposition="inside", textfont_size=12)
             fig_bar.update_layout(
-                **_CHART_LAYOUT, height=320,
+                **{**_CHART_LAYOUT, "margin": dict(l=16, r=130, t=40, b=16)},
+                height=320,
                 title="📊 Số lần kiểm tra theo tuần",
                 xaxis=dict(title="Tuần (dd/mm – dd/mm)", tickangle=-20, showgrid=False,
                            tickfont=dict(size=11)),
@@ -4006,7 +4007,6 @@ def tab_history(role: str = "", school_filter: str = ""):
                     bgcolor="rgba(255,255,255,0.8)",
                     bordercolor="#E2E8F0", borderwidth=1,
                 ),
-                margin=dict(l=16, r=120, t=40, b=16),
             )
             st.plotly_chart(fig_bar, use_container_width=True)
         except Exception as _e:
@@ -4098,14 +4098,13 @@ def tab_history(role: str = "", school_filter: str = ""):
                     hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
                 ))
                 fig_hbar.update_layout(
-                    **_CHART_LAYOUT,
+                    **{**_CHART_LAYOUT, "margin": dict(l=10, r=60, t=20, b=16)},
                     height=max(300, n * 52),
                     title="",
                     xaxis=dict(title="Số lần không đạt", showgrid=True,
                                gridcolor="#E2E8F0", dtick=1),
                     yaxis=dict(title="", showgrid=False,
                                tickfont=dict(size=11), automargin=True),
-                    margin=dict(l=10, r=60, t=20, b=16),
                 )
                 st.plotly_chart(fig_hbar, use_container_width=True)
     except Exception as _top_err:
@@ -4115,10 +4114,8 @@ def tab_history(role: str = "", school_filter: str = ""):
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-hdr">📋 Bảng chi tiết</div>', unsafe_allow_html=True)
     df_display = df.drop(columns=["Cấp cảnh báo"], errors="ignore").copy()
-    try:
-        df_display["Ngày"] = pd.to_datetime(df_display["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y")
-    except Exception:
-        pass
+    _parsed = pd.to_datetime(df_display["Ngày"], errors="coerce", dayfirst=False)
+    df_display["Ngày"] = _parsed.dt.strftime("%d/%m/%Y").where(_parsed.notna(), df_display["Ngày"])
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo</div>', unsafe_allow_html=True)
@@ -4203,7 +4200,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
-            "⬇️ Tải báo cáo Excel (.xlsx) — Times New Roman 13, định dạng chuyên nghiệp",
+            "⬇️ Tải báo cáo Excel (.xlsx)",
             data=buf.getvalue(),
             file_name=f"BaoCao_LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
