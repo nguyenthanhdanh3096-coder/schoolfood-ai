@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SchoolFood AI v2.0 — Phase 2A: Vision AI, Dynamic Checklist, Smart Reports"""
+"""SchoolFood AI v2.1 — Phase 2B: Database (Supabase), History, Feedback Backend"""
 
 import base64
 import json
@@ -15,6 +15,205 @@ def now_vn() -> datetime:
 
 import anthropic
 import streamlit as st
+
+# ── G1: Database Layer — Supabase ────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def _get_sb():
+    """Kết nối Supabase. Trả về None nếu chưa cấu hình — app vẫn chạy bình thường."""
+    try:
+        from supabase import create_client
+        url = st.secrets.get("SUPABASE_URL", "")
+        key = st.secrets.get("SUPABASE_ANON_KEY", "")
+        if url and key and url.startswith("https://"):
+            return create_client(url, key)
+    except Exception:
+        pass
+    return None
+
+def db_ok() -> bool:
+    """Kiểm tra database có sẵn sàng không."""
+    return _get_sb() is not None
+
+def db_save_checklist(school: str, date_str: str, inspector: str, menu: str,
+                      level: str, results: dict, notes: dict,
+                      alert_level: str, pass_count: int, fail_count: int,
+                      ai_narrative: str = "",
+                      extra_results: dict | None = None) -> str | None:
+    """
+    Lưu kết quả checklist Ban Giám Sát vào Supabase.
+    Trả về session_id hoặc None nếu lỗi/không có DB.
+    """
+    sb = _get_sb()
+    if not sb:
+        return None
+    try:
+        sess = sb.table("checklist_sessions").insert({
+            "school_name":    school or "Chưa nhập",
+            "inspector_name": inspector or "",
+            "check_date":     date_str,
+            "menu_today":     menu or "",
+            "school_level":   level,
+            "check_type":     "ban_giam_sat",
+            "alert_level":    alert_level,
+            "total_items":    pass_count + fail_count,
+            "pass_count":     pass_count,
+            "fail_count":     fail_count,
+            "ai_narrative":   ai_narrative[:2000] if ai_narrative else "",
+        }).execute()
+        if not sess.data:
+            return None
+        sid = sess.data[0]["id"]
+
+        # Lưu từng điểm kiểm tra
+        items = [
+            {"session_id": sid, "item_code": k,
+             "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
+             "note": notes.get(k, ""),
+             "is_critical": k in CRITICAL_ITEMS}
+            for k, v in results.items() if v != "Chưa chấm"
+        ]
+        if extra_results:
+            items += [
+                {"session_id": sid, "item_code": k,
+                 "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
+                 "note": "", "is_critical": False}
+                for k, v in extra_results.items() if v != "Chưa kiểm tra"
+            ]
+        if items:
+            sb.table("checklist_results").insert(items).execute()
+        return sid
+    except Exception as e:
+        st.warning(f"⚠️ Không lưu được vào database: {e}", icon="💾")
+        return None
+
+
+def db_save_kiem_thuc(school: str, date_str: str, yte_name: str, menu: str,
+                      all_results: dict, all_notes: dict, timestamps: dict,
+                      pass_count: int, fail_count: int) -> str | None:
+    """Lưu kết quả Kiểm thực 3 bước của Y Tế Học Đường."""
+    sb = _get_sb()
+    if not sb:
+        return None
+    try:
+        sess = sb.table("checklist_sessions").insert({
+            "school_name":    school or "Chưa nhập",
+            "inspector_name": yte_name or "",
+            "check_date":     date_str,
+            "menu_today":     menu or "",
+            "school_level":   "Y Tế Học Đường",
+            "check_type":     "kiem_thuc_3_buoc",
+            "alert_level":    "OK" if fail_count == 0 else "MAJOR",
+            "total_items":    pass_count + fail_count,
+            "pass_count":     pass_count,
+            "fail_count":     fail_count,
+        }).execute()
+        if not sess.data:
+            return None
+        sid = sess.data[0]["id"]
+
+        # Lưu từng điểm
+        items = [
+            {"session_id": sid, "item_code": k,
+             "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
+             "note": all_notes.get(k, ""),
+             "is_critical": k in {"B3_05"}}
+            for k, v in all_results.items() if v != "Chưa kiểm tra"
+        ]
+        if items:
+            sb.table("checklist_results").insert(items).execute()
+
+        # Lưu timestamp từng bước
+        for step in KIEM_THUC:
+            b = step["buoc"]
+            ts = timestamps.get(b, "")
+            step_results = {k: v for k, v in all_results.items()
+                           if k.startswith(f"B{b}_")}
+            sp = sum(1 for v in step_results.values() if v == "✅ Đạt")
+            sf = sum(1 for v in step_results.values() if v == "❌ Không Đạt")
+            # on_time: check if timestamp in window
+            on_time = None
+            if ts:
+                try:
+                    parts = step["time_window"].replace("–","-").split("-")
+                    ws = sum(int(x)*m for x,m in zip(parts[0].strip().split(":"), [60,1]))
+                    we = sum(int(x)*m for x,m in zip(parts[1].strip().split(":"), [60,1]))
+                    tm = sum(int(x)*m for x,m in zip(ts.split(":")[:2], [60,1]))
+                    on_time = ws <= tm <= we
+                except Exception:
+                    on_time = None
+            sb.table("kiem_thuc_steps").insert({
+                "session_id":  sid,
+                "step_no":     b,
+                "time_window": step["time_window"],
+                "confirmed_at": ts,
+                "on_time":     on_time,
+                "pass_count":  sp,
+                "fail_count":  sf,
+            }).execute()
+        return sid
+    except Exception as e:
+        st.warning(f"⚠️ Không lưu được vào database: {e}", icon="💾")
+        return None
+
+
+def db_save_feedback(school: str, category: str, content: str) -> bool:
+    """Lưu feedback Phụ Huynh vào Supabase."""
+    sb = _get_sb()
+    if not sb:
+        return False
+    try:
+        sb.table("parent_feedback").insert({
+            "school_name": school or "Không rõ",
+            "category":    category,
+            "content":     content[:2000],
+            "status":      "pending",
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def db_get_sessions(school: str = "", limit: int = 30) -> list:
+    """Lấy lịch sử phiên kiểm tra."""
+    sb = _get_sb()
+    if not sb:
+        return []
+    try:
+        q = sb.table("checklist_sessions").select("*").order("created_at", desc=True).limit(limit)
+        if school:
+            q = q.eq("school_name", school)
+        return q.execute().data or []
+    except Exception:
+        return []
+
+
+def db_get_feedback(school: str = "", status: str = "pending") -> list:
+    """Lấy feedback Phụ Huynh."""
+    sb = _get_sb()
+    if not sb:
+        return []
+    try:
+        q = sb.table("parent_feedback").select("*").eq("status", status) \
+            .order("created_at", desc=True).limit(50)
+        if school:
+            q = q.eq("school_name", school)
+        return q.execute().data or []
+    except Exception:
+        return []
+
+
+def db_update_feedback_status(feedback_id: str, new_status: str):
+    """Ban Giám Hiệu đánh dấu feedback đã xử lý."""
+    sb = _get_sb()
+    if not sb:
+        return
+    try:
+        sb.table("parent_feedback").update({
+            "status": new_status,
+            "reviewed_at": now_vn().isoformat(),
+        }).eq("id", feedback_id).execute()
+    except Exception:
+        pass
 
 # Thư mục gốc của repo deploy (04_Development/)
 ROOT        = Path(__file__).parent.parent
@@ -1979,7 +2178,9 @@ def tab_checklist(api_key: str = ""):
             for v in st.session_state.cl_photos.values() if v
         )
 
+        # ── G1: Auto-save vào Supabase ────────────────────────────────────────
         # ── AI #3: Tóm tắt ngôn ngữ tự nhiên ────────────────────────────────
+        narrative = ""
         if ai_on:
             with st.spinner("🤖 AI đang viết tóm tắt báo cáo..."):
                 narrative = generate_ai_narrative(
@@ -1987,7 +2188,6 @@ def tab_checklist(api_key: str = ""):
                     alert_key, school, date_vn, menu,
                     pass_count, pass_count + fail_count, level_key, api_key,
                 )
-                a = ALERT_SYSTEM.get(alert_key, {})
                 st.markdown(f"""
                 <div style="background:#F8FAFC;border:1px solid #E2E8F0;
                             border-radius:10px;padding:16px 20px;margin-bottom:12px">
@@ -2001,13 +2201,27 @@ def tab_checklist(api_key: str = ""):
             st.info(f"📷 Kèm {photo_count} ảnh + "
                     f"{len(st.session_state.photo_analysis)} kết quả phân tích AI")
 
+        # ── G1: Auto-save vào Supabase ────────────────────────────────────────
+        extra_r = st.session_state.get("cl_extra_r", {})
+        session_id = db_save_checklist(
+            school, date_vn, insp, menu, level_key,
+            st.session_state.cl_r, st.session_state.cl_n,
+            alert_key, pass_count, fail_count,
+            ai_narrative=narrative,
+            extra_results=extra_r or None,
+        )
+        if session_id:
+            st.success(f"💾 Đã lưu vào database (ID: `{session_id[:8]}...`)")
+        elif db_ok():
+            st.warning("⚠️ Lưu database thất bại — báo cáo vẫn tải được bình thường")
+
         # ── Tải báo cáo Word (.docx) ─────────────────────────────────────────
         with st.spinner("⚙️ Đang tạo file Word..."):
             docx_bytes = generate_word_report(
                 school, date_vn, insp, menu, level_key,
                 st.session_state.cl_r, st.session_state.cl_n,
                 pass_count, fail_count, alert_key, cl,
-                narrative if ai_on else "",
+                narrative,
                 st.session_state.photo_analysis,
             )
         fname_docx = f"BaoCao_ATTP_{(school or 'Truong').replace(' ','_')}_{date.strftime('%d-%m-%Y')}.docx"
@@ -2388,10 +2602,19 @@ def tab_parent_view(api_key: str = ""):
                 "để biết quy trình xử lý đúng."
             )
         else:
-            st.success(
-                "✅ Đã ghi nhận phản hồi của bạn. "
-                "Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
-            )
+            # G2: Lưu feedback vào Supabase
+            school_name = st.session_state.get("kt_school", "") or "Chưa nhập"
+            saved = db_save_feedback(school_name, loai, noi_dung)
+            if saved:
+                st.success(
+                    "✅ Đã ghi nhận phản hồi và lưu vào hệ thống. "
+                    "Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
+                )
+            else:
+                st.success(
+                    "✅ Đã ghi nhận phản hồi. "
+                    "*(Lưu ý: chưa kết nối database — phản hồi chưa được lưu vĩnh viễn)*"
+                )
 
     # Hỏi đáp AI (nếu có)
     if api_key:
@@ -2827,9 +3050,19 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     )
 
     if can_export:
+        # G1: Auto-save kiểm thực vào Supabase
+        date_vn_kt = kt_date.strftime("%d/%m/%Y")
+        sid_kt = db_save_kiem_thuc(
+            kt_school, date_vn_kt, kt_name, kt_menu,
+            all_results, all_notes, timestamps,
+            total_pass, total_fail,
+        )
+        if sid_kt:
+            st.success(f"💾 Đã lưu vào database (ID: `{sid_kt[:8]}...`)")
+
         with st.spinner("Đang tạo sổ kiểm thực..."):
             docx_bytes = generate_so_kiem_thuc_docx(
-                kt_school, kt_date.strftime("%d/%m/%Y"),
+                kt_school, date_vn_kt,
                 kt_name, kt_menu, all_results, all_notes, timestamps,
             )
         fname = f"SoKiemThuc_{(kt_school or 'Truong').replace(' ','_')}_{kt_date.strftime('%d-%m-%Y')}.docx"
@@ -3448,6 +3681,148 @@ def generate_manual_docx() -> bytes:
     return buf.read()
 
 
+def tab_history(role: str = "", school_filter: str = ""):
+    """Tab lịch sử & dashboard — hiển thị kết quả các lần kiểm tra đã lưu."""
+    import pandas as pd
+
+    st.markdown("""<div class="sf-card">
+        <div class="sf-card-title">📊 Lịch sử & Dashboard</div>
+        <div class="sf-card-body">
+            Toàn bộ kết quả kiểm tra đã được lưu vào database. Dùng để phân tích
+            xu hướng, phát hiện điểm yếu lặp lại và báo cáo định kỳ.
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    if not db_ok():
+        st.markdown("""
+        <div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;
+                    padding:20px 24px;text-align:center">
+            <div style="font-size:1.1rem;font-weight:700;color:#9A3412;margin-bottom:8px">
+                📦 Database chưa được kết nối
+            </div>
+            <div style="font-size:0.9rem;color:#7C2D12;line-height:1.7">
+                Để bật tính năng lưu lịch sử, thêm 2 dòng vào <b>Streamlit Secrets</b>:<br>
+                <code style="background:#FED7AA;padding:2px 8px;border-radius:4px">
+                SUPABASE_URL = "https://xxx.supabase.co"</code><br>
+                <code style="background:#FED7AA;padding:2px 8px;border-radius:4px">
+                SUPABASE_ANON_KEY = "eyJ..."</code><br><br>
+                Xem hướng dẫn chi tiết: <b>04_Development/HUONG_DAN_DEPLOY.md</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # Lọc theo trường
+    col_f, col_r = st.columns([3, 1])
+    school_input = col_f.text_input(
+        "Lọc theo tên trường (để trống = tất cả)",
+        value=school_filter, placeholder="VD: TH Nguyễn Du"
+    )
+    check_type = col_r.selectbox("Loại kiểm tra", [
+        "Tất cả", "ban_giam_sat", "kiem_thuc_3_buoc"
+    ])
+
+    sessions = db_get_sessions(school=school_input.strip(), limit=50)
+    if check_type != "Tất cả":
+        sessions = [s for s in sessions if s.get("check_type") == check_type]
+
+    if not sessions:
+        st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu để bắt đầu tích lũy.")
+        return
+
+    # ── Stats tổng quan ───────────────────────────────────────────────────────
+    total   = len(sessions)
+    crit_ct = sum(1 for s in sessions if s.get("alert_level") == "CRITICAL")
+    avg_pct = sum(
+        s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
+        for s in sessions
+    ) / total if total else 0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">Tổng lần kiểm tra</div>
+        <div class="metric-num c-blue">{total}</div>
+    </div>""", unsafe_allow_html=True)
+    m2.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">Trung bình đạt</div>
+        <div class="metric-num {'c-green' if avg_pct>=90 else 'c-orange' if avg_pct>=75 else 'c-red'}">{avg_pct:.0f}%</div>
+    </div>""", unsafe_allow_html=True)
+    m3.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">🔴 CRITICAL</div>
+        <div class="metric-num {'c-red' if crit_ct>0 else 'c-green'}">{crit_ct}</div>
+        <div class="metric-lbl">lần</div>
+    </div>""", unsafe_allow_html=True)
+    m4.markdown(f"""<div class="metric-box">
+        <div class="metric-lbl">Lần kiểm tra gần nhất</div>
+        <div class="metric-num" style="font-size:1.1rem;color:#1E293B">
+            {sessions[0].get("check_date","—")}
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Biểu đồ xu hướng ─────────────────────────────────────────────────────
+    if len(sessions) >= 3:
+        st.markdown('<div class="sec-hdr" style="margin-top:16px">Xu hướng tỷ lệ đạt (%)</div>',
+                    unsafe_allow_html=True)
+        chart_data = []
+        for s in reversed(sessions[-20:]):  # 20 lần gần nhất, sắp xếp theo thời gian
+            pct = s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
+            chart_data.append({"Ngày": s.get("check_date",""), "Tỷ lệ đạt (%)": round(pct, 1)})
+        df_chart = pd.DataFrame(chart_data).set_index("Ngày")
+        st.line_chart(df_chart)
+
+    # ── Bảng lịch sử ─────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">Chi tiết các lần kiểm tra</div>', unsafe_allow_html=True)
+    ALERT_VN = {
+        "OK":       "✅ Đạt chuẩn",
+        "MINOR":    "🟡 Cần cải thiện",
+        "MAJOR":    "🟠 Không đạt",
+        "CRITICAL": "🔴 Nguy hiểm",
+    }
+    TYPE_VN = {
+        "ban_giam_sat":    "Ban Giám Sát",
+        "kiem_thuc_3_buoc": "Y Tế (3 bước)",
+        "nha_cung_cap":    "Nhà cung cấp",
+    }
+    rows = []
+    for s in sessions:
+        pct = s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
+        rows.append({
+            "Ngày":          s.get("check_date", ""),
+            "Trường":        s.get("school_name", ""),
+            "Người kiểm tra": s.get("inspector_name", ""),
+            "Loại":          TYPE_VN.get(s.get("check_type",""), s.get("check_type","")),
+            "Tỷ lệ đạt":    f"{pct:.0f}%",
+            "Đánh giá":     ALERT_VN.get(s.get("alert_level",""), s.get("alert_level","")),
+        })
+
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # ── Feedback Phụ Huynh (nếu là Ban Giám Hiệu) ───────────────────────────
+    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)"):
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="sec-hdr">📬 Feedback Phụ Huynh chưa xử lý</div>',
+                    unsafe_allow_html=True)
+        feedbacks = db_get_feedback(school=school_input.strip())
+        if not feedbacks:
+            st.info("Không có feedback mới.")
+        else:
+            for fb in feedbacks:
+                col_fb, col_btn = st.columns([5, 1])
+                col_fb.markdown(
+                    f'<div class="sf-card" style="padding:10px 16px;margin:4px 0">'
+                    f'<span style="font-size:0.75rem;color:#64748B">'
+                    f'{fb.get("created_at","")[:10]} · {fb.get("category","")}</span><br>'
+                    f'<span style="font-size:0.9rem;color:#1E293B">{fb.get("content","")}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                if col_btn.button("✅ Đã xử lý", key=f"fb_{fb['id']}",
+                                  use_container_width=True):
+                    db_update_feedback_status(fb["id"], "resolved")
+                    st.rerun()
+
+
 def tab_about():
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">Về SchoolFood AI</div>
@@ -3653,9 +4028,15 @@ def main():
     }
     tab2_label = _tab2_labels.get(role, "✅ Checklist kiểm tra")
 
-    t1, t2, t3, t4, t5, t6 = st.tabs([
+    # Hiện tab Lịch sử khi có DB (hoặc luôn hiện để hướng dẫn setup)
+    _hist_label = "📊 Lịch sử" + (" 🔴" if db_ok() and
+        any(s.get("alert_level")=="CRITICAL"
+            for s in db_get_sessions(limit=5)) else "")
+
+    t1, t2, t3, t4, t5, t6, t7 = st.tabs([
         "💬 Hỏi đáp AI",
         tab2_label,
+        _hist_label,
         "📅 Lịch & thông báo",
         "🚨 Khẩn cấp",
         "📖 Hướng dẫn",
@@ -3666,13 +4047,14 @@ def main():
         if role == "Phụ Huynh":
             tab_parent_view(api_key)
         elif role == "Y Tế Học Đường":
-            tab_kiem_thuc(api_key, level)   # Module kiểm thực 3 bước + AI
+            tab_kiem_thuc(api_key, level)
         else:
-            tab_checklist(api_key)   # Ban Giám Sát + Ban Giám Hiệu dùng 20 câu
-    with t3: tab_schedule()
-    with t4: tab_emergency(api_key)
-    with t5: tab_guide()
-    with t6: tab_about()
+            tab_checklist(api_key)
+    with t3: tab_history(role=role)     # G1: Lịch sử database
+    with t4: tab_schedule()
+    with t5: tab_emergency(api_key)
+    with t6: tab_guide()
+    with t7: tab_about()
 
 
 if __name__ == "__main__":
