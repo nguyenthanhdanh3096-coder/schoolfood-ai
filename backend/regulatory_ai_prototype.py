@@ -3862,11 +3862,10 @@ def tab_history(role: str = "", school_filter: str = ""):
     # Metric xu hướng — trực quan, không số
     k5.markdown(
         f'<div class="metric-box" style="text-align:center;background:{trend_bg};'
-        f'border:2px solid {trend_tc}">'
+        f'border:1px solid {trend_tc}">'
         f'<div class="metric-lbl">Xu hướng</div>'
-        f'<div style="font-size:2rem;text-align:center;margin:4px 0">{trend_icon}</div>'
-        f'<div style="font-size:0.85rem;font-weight:700;color:{trend_tc};text-align:center">'
-        f'{trend_text}</div>'
+        f'<div class="metric-num" style="font-size:1.8rem;color:{trend_tc}">{trend_icon}</div>'
+        f'<div style="font-size:0.78rem;font-weight:700;color:{trend_tc}">{trend_text}</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -3963,27 +3962,55 @@ def tab_history(role: str = "", school_filter: str = ""):
     with ch3:
         try:
             df_wk = df.copy()
-            df_wk["Tuần"] = pd.to_datetime(df_wk["Ngày"], errors="coerce").dt.to_period("W").astype(str)
+            _wk_dt = pd.to_datetime(df_wk["Ngày"], errors="coerce")
+            _wk_periods = _wk_dt.dt.to_period("W")
+            df_wk["Tuần"] = _wk_periods.apply(
+                lambda p: f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
+                if pd.notna(p) else "?"
+            )
+            # Giữ thứ tự tuần tăng dần
+            _week_order = (
+                _wk_periods.dropna()
+                .sort_values()
+                .unique()
+            )
+            _week_labels = [
+                f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
+                for p in _week_order
+            ]
             wk_cnt = df_wk.groupby(["Tuần","Đánh giá"]).size().reset_index(name="Số lần")
+            # Màu: xanh = đạt chuẩn, vàng = cần cải thiện, cam = không đạt, đỏ = nguy hiểm
+            _COLOR_MAP = {
+                "Đạt chuẩn":    "#16A34A",
+                "Cần cải thiện":"#F59E0B",
+                "Không đạt":    "#F97316",
+                "Nguy hiểm":    "#DC2626",
+            }
             fig_bar = px.bar(
                 wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
-                color_discrete_map={
-                    "Đạt chuẩn":"#16A34A","Cần cải thiện":"#F59E0B",
-                    "Không đạt":"#D97706","Nguy hiểm":"#DC2626",
-                },
+                color_discrete_map=_COLOR_MAP,
                 barmode="stack", text="Số lần",
+                category_orders={"Tuần": _week_labels},
             )
             fig_bar.update_traces(textposition="inside", textfont_size=12)
             fig_bar.update_layout(
                 **_CHART_LAYOUT, height=320,
                 title="📊 Số lần kiểm tra theo tuần",
-                xaxis=dict(title="Tuần", tickangle=-30, showgrid=False),
+                xaxis=dict(title="Tuần (dd/mm – dd/mm)", tickangle=-20, showgrid=False,
+                           tickfont=dict(size=11)),
                 yaxis=dict(title="Số lần kiểm tra", showgrid=True, gridcolor="#E2E8F0"),
-                legend=dict(orientation="h", y=-0.25, title_text=""),
+                legend=dict(
+                    orientation="v", x=1.02, y=0.5,
+                    xanchor="left", yanchor="middle",
+                    title_text="Đánh giá",
+                    bgcolor="rgba(255,255,255,0.8)",
+                    bordercolor="#E2E8F0", borderwidth=1,
+                ),
+                margin=dict(l=16, r=120, t=40, b=16),
             )
             st.plotly_chart(fig_bar, use_container_width=True)
-        except Exception:
-            st.info("Cần thêm dữ liệu để hiển thị biểu đồ theo tuần.")
+        except Exception as _e:
+            st.info(f"Cần thêm dữ liệu để hiển thị biểu đồ theo tuần. ({_e})")
 
     with ch4:
         fig_hist = go.Figure(go.Histogram(
@@ -4007,40 +4034,47 @@ def tab_history(role: str = "", school_filter: str = ""):
         st.plotly_chart(fig_hist, use_container_width=True)
 
     # ── Hàng 3: Điểm FAIL nhiều nhất ─────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">🔴 Top 10 điểm không đạt nhiều nhất</div>',
+                unsafe_allow_html=True)
     try:
         sb = _get_sb()
-        if sb:
-            items_raw = sb.table("checklist_results")\
+        if not sb:
+            st.warning("Không kết nối được database để tải dữ liệu top fail.")
+        else:
+            # Thử cả 2 dạng lưu: có emoji và không emoji
+            _resp = sb.table("checklist_results")\
                 .select("item_code,result,item_desc")\
-                .eq("result","Không Đạt").limit(500).execute().data or []
-            if items_raw:
+                .in_("result", ["Không Đạt", "❌ Không Đạt"])\
+                .limit(500).execute()
+            items_raw = _resp.data or []
+
+            if not items_raw:
+                st.info("Chưa có dữ liệu điểm không đạt. Thực hiện kiểm tra để thống kê.")
+            else:
                 df_it = pd.DataFrame(items_raw)
 
-                # Build mapping code → mô tả ngắn (chuẩn hoá từ ngữ)
+                # Build mapping code → mô tả ngắn
                 _desc_map: dict = {}
-                # Từ checklist Ban Giám Sát
                 try:
                     for _, grp_items in get_checklist("Tiểu Học (6–11 tuổi)"):
                         for code, _, desc, *_ in grp_items:
-                            # Rút ngắn còn 45 ký tự, viết thường phần sau
-                            short = desc[:45] + ("..." if len(desc)>45 else "")
+                            short = desc[:45] + ("..." if len(desc) > 45 else "")
                             _desc_map[code] = f"{code} — {short}"
                 except Exception:
                     pass
-                # Từ kiểm thực 3 bước
                 for step in KIEM_THUC:
                     for code, desc, *_ in step["items"]:
-                        short = desc[:45] + ("..." if len(desc)>45 else "")
+                        short = desc[:45] + ("..." if len(desc) > 45 else "")
                         _desc_map[code] = f"{code} — {short}"
 
-                # Nếu DB đã lưu item_desc thì dùng, nếu không thì tra bảng
-                def get_label(row):
-                    if row.get("item_desc"):
-                        s = str(row["item_desc"])[:50]
-                        return f"{row['item_code']} — {s}"
-                    return _desc_map.get(row["item_code"], row["item_code"])
+                def _get_label(row):
+                    desc_val = row.get("item_desc") or ""
+                    if desc_val.strip():
+                        s = str(desc_val).strip()[:50]
+                        return f"{row.get('item_code','')} — {s}"
+                    return _desc_map.get(row.get("item_code",""), row.get("item_code","?"))
 
-                df_it["Tên điểm"] = df_it.apply(get_label, axis=1)
+                df_it["Tên điểm"] = df_it.apply(_get_label, axis=1)
                 top_fail = (
                     df_it.groupby("Tên điểm")
                     .size()
@@ -4048,9 +4082,10 @@ def tab_history(role: str = "", school_filter: str = ""):
                     .sort_values("Số lần không đạt")
                     .tail(10)
                 )
+                n = len(top_fail)
                 colors = [
-                    f"rgba(220,38,38,{0.3 + 0.7*i/max(len(top_fail)-1,1)})"
-                    for i in range(len(top_fail))
+                    f"rgba(220,38,38,{0.25 + 0.75*i/max(n-1,1)})"
+                    for i in range(n)
                 ]
                 fig_hbar = go.Figure(go.Bar(
                     x=top_fail["Số lần không đạt"],
@@ -4064,23 +4099,26 @@ def tab_history(role: str = "", school_filter: str = ""):
                 ))
                 fig_hbar.update_layout(
                     **_CHART_LAYOUT,
-                    height=max(300, len(top_fail)*52),
-                    title="🔴 Điểm kiểm tra thường xuyên không đạt nhất",
+                    height=max(300, n * 52),
+                    title="",
                     xaxis=dict(title="Số lần không đạt", showgrid=True,
                                gridcolor="#E2E8F0", dtick=1),
                     yaxis=dict(title="", showgrid=False,
-                               tickfont=dict(size=11),
-                               automargin=True),
-                    margin=dict(l=10, r=60, t=45, b=16),
+                               tickfont=dict(size=11), automargin=True),
+                    margin=dict(l=10, r=60, t=20, b=16),
                 )
                 st.plotly_chart(fig_hbar, use_container_width=True)
-    except Exception:
-        pass
+    except Exception as _top_err:
+        st.warning(f"Không thể tải biểu đồ top fail: {_top_err}")
 
     # ── Bảng chi tiết + Xuất Excel chuẩn (Times New Roman, cỡ 13) ────────────
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-hdr">📋 Bảng chi tiết</div>', unsafe_allow_html=True)
-    df_display = df.drop(columns=["Cấp cảnh báo"], errors="ignore")
+    df_display = df.drop(columns=["Cấp cảnh báo"], errors="ignore").copy()
+    try:
+        df_display["Ngày"] = pd.to_datetime(df_display["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y")
+    except Exception:
+        pass
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo</div>', unsafe_allow_html=True)
