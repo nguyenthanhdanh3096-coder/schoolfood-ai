@@ -4612,7 +4612,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                     st.rerun()
 
 
-def tab_supplier(api_key: str = ""):
+def tab_supplier(api_key: str = "", role: str = ""):
     """G4: Checklist kiểm tra nhà cung cấp suất ăn 12 điểm."""
     st.markdown(
         '<div class="sf-card">'
@@ -4633,59 +4633,56 @@ def tab_supplier(api_key: str = ""):
     )
     _delivery_mode = check_mode.startswith("🚚")
 
+    _is_yte = (role == "Y Tế Học Đường")
+
     if _delivery_mode:
         _active_items    = [it for it in SUPPLIER_ITEMS if it["code"] not in ("S01", "S02")]
         _active_critical = {c for c in SUPPLIER_CRITICAL if c not in ("S01", "S02")}
-        # Card giải thích — 2 cột rõ vai trò
-        st.markdown(
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-            # Y Tế Học Đường
-            '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:9px;padding:10px 14px">'
-            '<div style="font-size:0.82rem;font-weight:700;color:#1D4ED8;margin-bottom:5px">'
-            '🏥 Y Tế Học Đường</div>'
-            '<div style="font-size:0.77rem;color:#1E40AF;line-height:1.7">'
-            '📅 <b>Tần suất:</b> Mỗi ngày có bữa ăn, khi NCC giao hàng vào bếp<br>'
-            '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12 ngay tại điểm giao<br>'
-            '⚡ <b>Căn cứ:</b> TTLT 13/2016 Điều 9 khoản a — kiểm tra nguyên liệu đầu vào'
-            '</div></div>'
-            # Ban Giám Sát
-            '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:9px;padding:10px 14px">'
-            '<div style="font-size:0.82rem;font-weight:700;color:#15803D;margin-bottom:5px">'
-            '👥 Ban Giám Sát (Đại Diện PHHS)</div>'
-            '<div style="font-size:0.77rem;color:#166534;line-height:1.7">'
-            '📅 <b>Tần suất:</b> Khi có mặt lúc NCC giao hàng trong lịch kiểm tra<br>'
-            '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12, ảnh minh chứng khi cần<br>'
-            '💡 <b>Lưu ý:</b> S01–S02 bỏ qua — đã kiểm tra trong đợt toàn diện hàng tháng'
-            '</div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+        if _is_yte:
+            _bg, _bd, _tc = "#EFF6FF", "#BFDBFE", "#1E40AF"
+            _role_icon = "🏥 Y Tế Học Đường"
+            _info = (
+                '📅 <b>Tần suất:</b> Mỗi ngày có bữa ăn, khi NCC giao hàng vào bếp<br>'
+                '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12 ngay tại điểm giao<br>'
+                '⚡ <b>Căn cứ:</b> TTLT 13/2016 Điều 9 khoản a — kiểm tra nguyên liệu đầu vào'
+            )
+        else:
+            _bg, _bd, _tc = "#F0FDF4", "#BBF7D0", "#166534"
+            _role_icon = "👥 Ban Giám Sát (Đại Diện PHHS)"
+            _info = (
+                '📅 <b>Tần suất:</b> Khi có mặt lúc NCC giao hàng trong lịch kiểm tra thường kỳ<br>'
+                '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12, ảnh minh chứng khi có mục Không Đạt<br>'
+                '💡 <b>Lưu ý:</b> S01–S02 bỏ qua — được kiểm tra riêng trong đợt toàn diện hàng tháng'
+            )
     else:
         _active_items    = SUPPLIER_ITEMS
         _active_critical = SUPPLIER_CRITICAL
-        st.markdown(
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-            # Y Tế Học Đường
-            '<div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:9px;padding:10px 14px">'
-            '<div style="font-size:0.82rem;font-weight:700;color:#6D28D9;margin-bottom:5px">'
-            '🏥 Y Tế Học Đường</div>'
-            '<div style="font-size:0.77rem;color:#5B21B6;line-height:1.7">'
-            '📅 <b>Tần suất:</b> Khi phát hiện vi phạm liên tục hoặc theo yêu cầu Ban Giám Hiệu<br>'
-            '📋 <b>Nội dung:</b> Đủ 12 mục, bổ sung check giấy phép (S01) và chứng nhận ATTP (S02)<br>'
-            '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu trong 24 giờ'
-            '</div></div>'
-            # Ban Giám Sát
-            '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:9px;padding:10px 14px">'
-            '<div style="font-size:0.82rem;font-weight:700;color:#C2410C;margin-bottom:5px">'
-            '👥 Ban Giám Sát (Đại Diện PHHS)</div>'
-            '<div style="font-size:0.77rem;color:#9A3412;line-height:1.7">'
-            '📅 <b>Tần suất:</b> <b>1 lần/tháng</b> — cuối tháng hoặc trước gia hạn hợp đồng<br>'
-            '📋 <b>Nội dung:</b> Đủ 12 mục, đặc biệt xác minh S01 (giấy phép) và S02 (chứng nhận)<br>'
-            '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu · Lưu hồ sơ xét duyệt hợp đồng'
-            '</div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+        if _is_yte:
+            _bg, _bd, _tc = "#F5F3FF", "#DDD6FE", "#5B21B6"
+            _role_icon = "🏥 Y Tế Học Đường"
+            _info = (
+                '📅 <b>Tần suất:</b> Khi phát hiện vi phạm liên tục hoặc theo yêu cầu Ban Giám Hiệu<br>'
+                '📋 <b>Nội dung:</b> Đủ 12 mục — bổ sung kiểm tra giấy phép (S01) và chứng nhận ATTP (S02)<br>'
+                '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu trong 24 giờ sau kiểm tra'
+            )
+        else:
+            _bg, _bd, _tc = "#FFF7ED", "#FED7AA", "#9A3412"
+            _role_icon = "👥 Ban Giám Sát (Đại Diện PHHS)"
+            _info = (
+                '📅 <b>Tần suất:</b> <b>1 lần/tháng</b> — cuối tháng hoặc trước khi gia hạn hợp đồng<br>'
+                '📋 <b>Nội dung:</b> Đủ 12 mục — đặc biệt xác minh S01 (giấy phép) và S02 (chứng nhận ATTP)<br>'
+                '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu · Lưu hồ sơ phục vụ xét duyệt hợp đồng'
+            )
+
+    st.markdown(
+        f'<div style="background:{_bg};border:1px solid {_bd};border-radius:9px;'
+        f'padding:11px 16px;margin-bottom:12px">'
+        f'<div style="font-size:0.83rem;font-weight:700;color:{_tc};margin-bottom:5px">'
+        f'{_role_icon}</div>'
+        f'<div style="font-size:0.78rem;color:{_tc};line-height:1.75">{_info}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # Ngưỡng điểm tỷ lệ theo số mục đang kiểm tra
     _n_active = len(_active_items)
@@ -5468,7 +5465,7 @@ def main():
         ])
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_kiem_thuc(api_key, level)
-        with _tabs[2]: tab_supplier(api_key)
+        with _tabs[2]: tab_supplier(api_key, role=role)
         with _tabs[3]: tab_history(role=role)
         with _tabs[4]: tab_emergency(api_key)
         with _tabs[5]: tab_guide()
@@ -5486,7 +5483,7 @@ def main():
         ])
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_checklist(api_key)
-        with _tabs[2]: tab_supplier(api_key)
+        with _tabs[2]: tab_supplier(api_key, role=role)
         with _tabs[3]: tab_history(role=role)
         with _tabs[4]: tab_schedule()
         with _tabs[5]: tab_emergency(api_key)
