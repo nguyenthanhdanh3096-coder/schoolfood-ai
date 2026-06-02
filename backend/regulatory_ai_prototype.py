@@ -4353,20 +4353,24 @@ def tab_history(role: str = "", school_filter: str = ""):
 
 def tab_supplier(api_key: str = ""):
     """G4: Checklist kiểm tra nhà cung cấp suất ăn 12 điểm."""
-    st.markdown("""<div class="sf-card">
-        <div class="sf-card-title">🏭 Kiểm tra Nhà Cung Cấp Suất Ăn</div>
-        <div class="sf-card-body">
-            Checklist 12 điểm theo Luật ATTP 55/2010, NĐ 15/2018 và QĐ 3958/QĐ-BYT 2025 ·
-            6 mục bắt buộc (*) — vi phạm bất kỳ mục nào → báo cáo ngay Ban Giám Hiệu
-        </div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sf-card">'
+        '<div class="sf-card-title">🏭 Kiểm tra Nhà Cung Cấp Suất Ăn</div>'
+        '<div class="sf-card-body">'
+        'Checklist 12 điểm · 6 mục bắt buộc (*) · '
+        'Khi chấm <b>Không Đạt</b>: bắt buộc có ghi chú mô tả lỗi <i>hoặc</i> ảnh minh chứng · '
+        'Tối đa 1 ảnh/mục (jpg, png, ≤5 MB) · AI Vision phân tích hình ảnh từng mục · '
+        'Phải chấm đủ 12 mục mới được tạo báo cáo'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
     # ── Thông tin chung ────────────────────────────────────────────────────────
     c1, c2 = st.columns(2)
-    sup_school   = c1.text_input("🏫 Tên trường", placeholder="VD: TH Nguyễn Du",
-                                  key="sup_school", max_chars=100)
-    sup_name     = c2.text_input("🏭 Tên nhà cung cấp", placeholder="VD: Công ty TNHH Bếp Xanh",
-                                  key="sup_name", max_chars=100)
+    sup_school    = c1.text_input("🏫 Tên trường", placeholder="VD: TH Nguyễn Du",
+                                   key="sup_school", max_chars=100)
+    sup_name      = c2.text_input("🏭 Tên nhà cung cấp", placeholder="VD: Công ty TNHH Bếp Xanh",
+                                   key="sup_name", max_chars=100)
     c3, c4 = st.columns(2)
     sup_inspector = c3.text_input("👤 Người kiểm tra", placeholder="Họ và tên",
                                    key="sup_inspector", max_chars=80)
@@ -4374,52 +4378,155 @@ def tab_supplier(api_key: str = ""):
     sup_contract  = st.text_input("📃 Số hợp đồng cung cấp (nếu có)", placeholder="VD: HĐ-2025-001",
                                    key="sup_contract", max_chars=50)
 
-    if not hasattr(st.session_state, "sup_r"):
-        st.session_state.sup_r = {}
-    if not hasattr(st.session_state, "sup_notes"):
-        st.session_state.sup_notes = {}
+    # Session state
+    for _sk in ("sup_r", "sup_notes", "sup_imgs", "sup_vision"):
+        if _sk not in st.session_state:
+            st.session_state[_sk] = {}
 
     # ── Checklist 12 điểm ─────────────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">📋 Checklist 12 điểm kiểm tra</div>', unsafe_allow_html=True)
+    st.caption(
+        "• Phải chấm đủ cả 12 mục (Đạt hoặc Không Đạt)  "
+        "• Khi Không Đạt: bắt buộc điền Ghi chú ≥ 10 ký tự HOẶC tải ảnh minh chứng  "
+        "• Tối đa 1 ảnh/mục · Ảnh được phân tích tự động bằng Claude Vision"
+    )
 
     pass_count = fail_count = 0
+
     for item in SUPPLIER_ITEMS:
-        code = item["code"]
-        is_crit = item["critical"]
-        crit_badge = ' <span style="color:#DC2626;font-weight:700">*</span>' if is_crit else ""
+        code     = item["code"]
+        is_crit  = item["critical"]
+        crit_lbl = ' <span style="color:#DC2626;font-weight:700">(*)</span>' if is_crit else ""
+
+        # Trạng thái hiện tại
+        cur_result = st.session_state.sup_r.get(code, "")
+        is_fail    = (cur_result == "❌ Không Đạt")
+        has_img    = code in st.session_state.sup_imgs
+        has_note   = len(st.session_state.sup_notes.get(code, "").strip()) >= 10
+        need_evid  = is_fail and not has_img and not has_note  # thiếu bằng chứng khi Không Đạt
+
+        # Màu viền theo trạng thái
+        _bdr = "#F97316" if need_evid else ("#FCA5A5" if is_crit else "#E8ECF0")
+        _bg  = "#FFF7ED" if need_evid else ("#FFF5F5" if is_crit else "white")
 
         st.markdown(
-            f'<div style="background:{"#FFF5F5" if is_crit else "white"};border:1px solid '
-            f'{"#FCA5A5" if is_crit else "#E8ECF0"};border-radius:8px;padding:10px 14px;margin:4px 0">'
-            f'<div style="font-size:0.85rem;font-weight:600;color:#1E293B">'
-            f'{item["icon"]} [{code}]{crit_badge} {item["desc"]}</div>'
-            f'<div style="font-size:0.75rem;color:#64748B;margin-top:2px">'
-            f'💡 {item["hint"]} · 📖 {item["law"]}</div>'
-            f'</div>',
+            f'<div style="background:{_bg};border:1.5px solid {_bdr};border-radius:9px;'
+            f'padding:11px 15px;margin:8px 0">'
+            f'<div style="font-size:0.87rem;font-weight:600;color:#1E293B">'
+            f'{item["icon"]} [{code}]{crit_lbl}&nbsp; {item["desc"]}</div>'
+            f'<div style="font-size:0.75rem;color:#64748B;margin-top:3px">💡 {item["hint"]}</div>'
+            f'<div style="font-size:0.72rem;color:#94A3B8">📖 {item["law"]}</div>'
+            + (f'<div style="font-size:0.75rem;color:#EA580C;margin-top:4px;font-weight:600">'
+               f'⚠️ Cần bổ sung ghi chú hoặc ảnh minh chứng cho mục Không Đạt này</div>'
+               if need_evid else '')
+            + '</div>',
             unsafe_allow_html=True,
         )
 
-        cols = st.columns([2, 1])
-        result = cols[0].radio(
-            "Kết quả", ["✅ Đạt", "❌ Không Đạt", "⬜ Không kiểm tra được"],
+        # Radio: chỉ 2 lựa chọn (bỏ "Không kiểm tra được")
+        result = st.radio(
+            "Kết quả", ["✅ Đạt", "❌ Không Đạt"],
             key=f"sup_r_{code}", horizontal=True, label_visibility="collapsed",
         )
-        note = cols[1].text_input("Ghi chú", key=f"sup_n_{code}", placeholder="tuỳ chọn",
-                                   label_visibility="collapsed")
-        st.session_state.sup_r[code]     = result
-        st.session_state.sup_notes[code] = note
+        st.session_state.sup_r[code] = result
 
         if result == "✅ Đạt":
             pass_count += 1
-        elif result == "❌ Không Đạt":
+        else:
             fail_count += 1
 
-    total_checked = pass_count + fail_count
+        # Ghi chú — bắt buộc nếu Không Đạt và không có ảnh
+        _note_req = (result == "❌ Không Đạt")
+        _note_lbl = ("📝 Ghi chú mô tả lỗi — BẮT BUỘC nếu không có ảnh (≥ 10 ký tự)"
+                     if _note_req else "📝 Ghi chú (tuỳ chọn)")
+        note = st.text_area(
+            _note_lbl, key=f"sup_note_{code}", max_chars=300, height=70,
+            placeholder=(
+                "Mô tả cụ thể lỗi quan sát được, ví dụ: Xe giao hàng không có thùng cách nhiệt, "
+                "thùng chứa bám bẩn, nhiệt kế đo được 35°C..."
+                if _note_req else "Ghi chú thêm nếu cần..."
+            ),
+        )
+        st.session_state.sup_notes[code] = note
+
+        # Upload ảnh — tối đa 1 ảnh/mục
+        _img_lbl = (
+            "📷 Ảnh minh chứng lỗi — BẮT BUỘC nếu không có ghi chú (1 ảnh · jpg/png · ≤ 5 MB)"
+            if _note_req else "📷 Ảnh minh chứng (tuỳ chọn · 1 ảnh · jpg/png · ≤ 5 MB)"
+        )
+        uploaded = st.file_uploader(
+            _img_lbl, type=["jpg", "jpeg", "png"],
+            key=f"sup_img_{code}", accept_multiple_files=False,
+        )
+        if uploaded is not None:
+            raw = uploaded.read()
+            if len(raw) <= 5 * 1024 * 1024:
+                st.session_state.sup_imgs[code] = {
+                    "bytes": raw,
+                    "type": uploaded.type or "image/jpeg",
+                    "name": uploaded.name,
+                }
+            else:
+                st.warning(f"[{code}] Ảnh vượt 5 MB — vui lòng chọn ảnh nhỏ hơn.")
+
+        # Hiện ảnh + nút Vision nếu đã có ảnh
+        if code in st.session_state.sup_imgs:
+            _img_data = st.session_state.sup_imgs[code]
+            _i1, _i2 = st.columns([1, 3])
+            _i1.image(_img_data["bytes"], width=160, caption=f"Ảnh [{code}]")
+
+            if api_key:
+                if _i2.button(
+                    f"🔍 Phân tích ảnh [{code}] với Claude Vision",
+                    key=f"sup_vis_btn_{code}",
+                ):
+                    import base64 as _b64mod
+                    _b64str = _b64mod.b64encode(_img_data["bytes"]).decode()
+                    _mtype  = _img_data.get("type", "image/jpeg")
+                    _vp = (
+                        f"Đây là hình ảnh minh chứng kiểm tra mục [{code}]: \"{item['desc']}\" "
+                        f"trong biên bản kiểm tra nhà cung cấp suất ăn học đường Việt Nam. "
+                        f"Tiêu chuẩn ĐẠT: {item['pass_std']}. "
+                        f"Tiêu chuẩn KHÔNG ĐẠT: {item['fail_std']}. "
+                        f"Người kiểm tra chấm: {result}. "
+                        f"Hãy quan sát hình ảnh và cho biết trong 2–3 câu ngắn gọn: "
+                        f"hình ảnh thể hiện điều gì, có phù hợp với kết quả đã chấm không, "
+                        f"và những gì cần ghi nhận. Viết bằng tiếng Việt."
+                    )
+                    try:
+                        _client = anthropic.Anthropic(api_key=api_key)
+                        with _i2:
+                            with st.spinner("Claude Vision đang phân tích hình ảnh..."):
+                                _vmsg = _client.messages.create(
+                                    model=MODEL_VISION, max_tokens=350,
+                                    messages=[{"role": "user", "content": [
+                                        {"type": "image", "source": {
+                                            "type": "base64",
+                                            "media_type": _mtype,
+                                            "data": _b64str,
+                                        }},
+                                        {"type": "text", "text": _vp},
+                                    ]}],
+                                )
+                        _vtext = _vmsg.content[0].text if _vmsg.content else ""
+                        st.session_state.sup_vision[code] = _vtext
+                    except Exception as _ve:
+                        _i2.error(f"Lỗi Vision [{code}]: {_ve}")
+
+            if code in st.session_state.sup_vision:
+                _i2.markdown(
+                    f'<div style="background:#EEF2FF;border-left:3px solid #6366F1;'
+                    f'border-radius:6px;padding:8px 12px;font-size:0.8rem;color:#3730A3;margin-top:6px">'
+                    f'🤖 <b>Vision [{code}]:</b> {st.session_state.sup_vision[code]}</div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
 
     # ── KPI realtime ──────────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
-    pct = round(pass_count / max(total_checked, 1) * 100)
+    pct = round(pass_count / max(len(SUPPLIER_ITEMS), 1) * 100)
     crit_fails = [c for c, v in st.session_state.sup_r.items()
                   if v == "❌ Không Đạt" and c in SUPPLIER_CRITICAL]
     if crit_fails:
@@ -4434,7 +4541,7 @@ def tab_supplier(api_key: str = ""):
     rating_color = {"A": "#16A34A", "B": "#F59E0B", "C": "#DC2626"}[rating]
 
     m1.markdown(f'<div class="metric-box"><div class="metric-lbl">Đã kiểm tra</div>'
-                f'<div class="metric-num c-blue">{total_checked}</div>'
+                f'<div class="metric-num c-blue">{len(SUPPLIER_ITEMS)}</div>'
                 f'<div class="metric-lbl">/ {len(SUPPLIER_ITEMS)} điểm</div></div>',
                 unsafe_allow_html=True)
     m2.markdown(f'<div class="metric-box"><div class="metric-lbl">✅ Đạt</div>'
@@ -4446,262 +4553,317 @@ def tab_supplier(api_key: str = ""):
                 f'<div class="metric-lbl">điểm</div></div>',
                 unsafe_allow_html=True)
     m4.markdown(f'<div class="metric-box"><div class="metric-lbl">Xếp loại</div>'
-                f'<div class="metric-num" style="color:{rating_color}">Loại {rating}</div>'
-                f'<div class="metric-lbl">{pct}% đạt</div></div>',
+                f'<div class="metric-num" style="color:{rating_color};font-size:1.6rem;line-height:1.2">'
+                f'Loại {rating}<br>'
+                f'<span style="font-size:0.75rem;font-weight:600">{pct}% đạt</span></div></div>',
                 unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Hiện cảnh báo mục bắt buộc vi phạm
+    # Banner cảnh báo
     if crit_fails:
-        fail_descs = [f'[{c}] ' + next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
+        fail_descs = ['[' + c + '] ' + next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
                       for c in crit_fails]
         st.markdown(
-            f'<div class="alert-critical">'
-            f'<div class="alert-title">🔴 VI PHẠM MỤC BẮT BUỘC — BÁO BAN GIÁM HIỆU NGAY</div>'
-            f'<div class="alert-body">{"<br>".join(f"• {d}" for d in fail_descs)}</div>'
-            f'</div>',
+            '<div class="alert-critical">'
+            '<div class="alert-title">🔴 VI PHẠM MỤC BẮT BUỘC (*) — BÁO BAN GIÁM HIỆU NGAY</div>'
+            '<div class="alert-body">' + "<br>".join(f"• {d}" for d in fail_descs) + '</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
     elif alert_key == "MAJOR":
         st.markdown(
-            '<div class="alert-major"><div class="alert-title">🟠 Nhà cung cấp chưa đạt — '
-            'yêu cầu khắc phục trước bữa tiếp theo</div></div>',
+            '<div class="alert-major"><div class="alert-title">🟠 Nhà cung cấp CHƯA ĐẠT — '
+            'Yêu cầu khắc phục trước bữa ăn tiếp theo</div></div>',
             unsafe_allow_html=True,
         )
     elif alert_key == "MINOR":
         st.markdown(
             '<div class="alert-minor"><div class="alert-title">🟡 Cần cải thiện — '
-            'thông báo nhà cung cấp trong 24h</div></div>',
+            'Thông báo nhà cung cấp trong 24 giờ</div></div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            '<div class="alert-ok"><div class="alert-title">✅ Nhà cung cấp đạt chuẩn — '
-            'lưu hồ sơ</div></div>',
+            '<div class="alert-ok"><div class="alert-title">✅ Nhà cung cấp ĐẠT chuẩn — '
+            'Lưu hồ sơ và tiếp tục theo dõi</div></div>',
             unsafe_allow_html=True,
         )
 
-    # ── Validate trước khi submit ─────────────────────────────────────────────
+    # ── AI Phân tích rủi ro tổng hợp ─────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">🤖 AI Phân tích rủi ro tổng hợp (Tuỳ chọn — chạy trước khi tạo báo cáo)</div>',
+                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sf-card" style="border-left:3px solid #7C3AED;margin-bottom:10px">'
+        '<div class="sf-card-title">Mục đích &amp; Cách đánh giá của AI</div>'
+        '<div class="sf-card-body">'
+        '<b>AI xem xét:</b> (1) Danh sách mục Không Đạt + ghi chú mô tả lỗi của người kiểm tra, '
+        '(2) Nhận xét hình ảnh từ Claude Vision (nếu đã chạy từng mục). '
+        '<br><b>AI đánh giá:</b> Mức độ rủi ro ngộ độc thực phẩm theo khung HACCP — '
+        'Critical Control Point nào bị vi phạm, nguyên nhân có thể, mức độ nghiêm trọng. '
+        '<br><b>AI đề xuất:</b> Biện pháp khắc phục cụ thể, có dẫn chiếu điều khoản Luật ATTP Việt Nam '
+        '(NĐ 15/2018, QCVN 8-1:2011, TTLT 13/2016). '
+        '<br><b>Kết quả AI được đính kèm vào báo cáo Word.</b>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    _ai_disabled = not api_key or fail_count == 0
+    _ai_hint = ("Chỉ cần thiết khi có mục Không Đạt" if fail_count == 0
+                else ("Cần nhập API key" if not api_key else f"Phân tích {fail_count} mục không đạt"))
+    if st.button(f"🤖 Chạy phân tích AI ({_ai_hint})",
+                 disabled=_ai_disabled, use_container_width=False):
+        _fails = []
+        for _it in SUPPLIER_ITEMS:
+            _c = _it["code"]
+            if st.session_state.sup_r.get(_c) == "❌ Không Đạt":
+                _note_txt = st.session_state.sup_notes.get(_c, "").strip()
+                _vision_txt = st.session_state.sup_vision.get(_c, "")
+                _entry = f"[{_c}] {_it['desc']}"
+                if _note_txt:
+                    _entry += f" — Ghi chú: {_note_txt}"
+                if _vision_txt:
+                    _entry += f" — Vision AI nhận xét: {_vision_txt}"
+                _fails.append(_entry)
+
+        _prompt = (
+            f"Đây là kết quả kiểm tra nhà cung cấp suất ăn học đường '{sup_name}' "
+            f"tại trường '{sup_school}' ngày {sup_date.strftime('%d/%m/%Y')}. "
+            f"Xếp loại: {rating} ({pct}% đạt — {pass_count}/{len(SUPPLIER_ITEMS)} điểm). "
+            f"Các vi phạm phát hiện:\n" + "\n".join(f"  {x}" for x in _fails) + "\n\n"
+            "Hãy viết phân tích ngắn gọn (khoảng 200 từ) bằng tiếng Việt bao gồm:\n"
+            "1. Đánh giá mức độ rủi ro ngộ độc thực phẩm theo HACCP (CCP nào bị vi phạm)\n"
+            "2. Nguyên nhân có thể và hậu quả tiềm ẩn\n"
+            "3. Biện pháp khắc phục ưu tiên, dẫn chiếu điều khoản pháp luật cụ thể\n"
+            "4. Khuyến nghị hành động tiếp theo (tạm dừng / tiếp tục / tăng tần suất giám sát)"
+        )
+        try:
+            _client = anthropic.Anthropic(api_key=api_key)
+            with st.spinner("AI đang phân tích toàn bộ kết quả kiểm tra..."):
+                _amsg = _client.messages.create(
+                    model=MODEL, max_tokens=800,
+                    messages=[{"role": "user", "content": _prompt}],
+                )
+            _ai_text = _amsg.content[0].text if _amsg.content else ""
+            st.session_state["sup_ai_analysis"] = _ai_text
+            st.markdown(
+                '<div class="sf-card" style="border-left:3px solid #7C3AED">'
+                '<div class="sf-card-title">🤖 Kết quả phân tích AI tổng hợp</div>'
+                f'<div class="sf-card-body">{_ai_text}</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        except Exception as _ae:
+            st.error(f"Lỗi AI: {_ae}")
+
+    if "sup_ai_analysis" in st.session_state and st.session_state.sup_ai_analysis:
+        st.caption("✅ Kết quả AI đã được lưu — sẽ được đính kèm vào báo cáo Word khi tạo.")
+
+    # ── Validate ─────────────────────────────────────────────────────────────
+    # Kiểm tra mục Không Đạt thiếu bằng chứng
+    _missing_evid = [
+        item["code"] for item in SUPPLIER_ITEMS
+        if st.session_state.sup_r.get(item["code"]) == "❌ Không Đạt"
+        and item["code"] not in st.session_state.sup_imgs
+        and len(st.session_state.sup_notes.get(item["code"], "").strip()) < 10
+    ]
     can_submit = (
         bool(sup_school.strip()) and
         bool(sup_name.strip()) and
         bool(sup_inspector.strip()) and
-        total_checked == len(SUPPLIER_ITEMS)
+        len(_missing_evid) == 0
     )
 
-    col_btn, col_ai = st.columns([1, 1])
-
     # ── Tạo báo cáo Word + lưu DB ─────────────────────────────────────────────
-    if col_btn.button("📄 Tạo báo cáo Word & Lưu DB", type="primary",
-                      disabled=not can_submit, use_container_width=True):
-        guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
-        if st.session_state.get(guard_key):
-            st.info("Đã lưu rồi — tải lại Word bên dưới.")
-        else:
-            # Lưu DB
-            if db_ok():
-                results_dict = {c: ("Đạt" if v == "✅ Đạt" else "Không Đạt" if v == "❌ Không Đạt" else "Không KT")
-                                for c, v in st.session_state.sup_r.items()}
-                notes_dict = st.session_state.sup_notes.copy()
-                extra = {"contract": sup_contract, "supplier": sup_name}
-                sess_id = db_save_checklist(
-                    school=sup_school, date_str=str(sup_date),
-                    inspector=sup_inspector, menu=f"Nhà CC: {sup_name}",
-                    level="—", results=results_dict, notes=notes_dict,
-                    alert_level=alert_key, pass_count=pass_count, fail_count=fail_count,
-                    ai_narrative=f"Xếp loại {rating}", extra_results=extra,
-                )
-                if sess_id:
-                    st.session_state[guard_key] = True
-                    st.success("✅ Đã lưu vào database!")
-                else:
-                    st.warning("Không lưu được DB — kiểm tra kết nối Supabase.")
-            else:
-                st.warning("Database chưa kết nối — báo cáo chỉ được tạo file, không lưu DB.")
-
-            # Tạo Word
-            try:
-                from docx import Document
-                from docx.shared import Pt, Cm, RGBColor
-                from docx.enum.text import WD_ALIGN_PARAGRAPH
-                from io import BytesIO
-
-                doc = Document()
-                style = doc.styles["Normal"]
-                style.font.name = "Times New Roman"
-                style.font.size = Pt(13)
-
-                for s in doc.sections:
-                    s.top_margin = Cm(2.5); s.bottom_margin = Cm(2.5)
-                    s.left_margin = Cm(3.0); s.right_margin = Cm(2.0)
-
-                # Quốc hiệu
-                p = doc.add_paragraph("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(13); r.bold = True
-
-                p = doc.add_paragraph("Độc lập – Tự do – Hạnh phúc")
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(13); r.bold = True
-
-                doc.add_paragraph("")
-
-                # Tiêu đề
-                p = doc.add_paragraph("BIÊN BẢN KIỂM TRA NHÀ CUNG CẤP SUẤT ĂN HỌC ĐƯỜNG")
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(14); r.bold = True
-
-                p = doc.add_paragraph(
-                    f"Ngày kiểm tra: {sup_date.strftime('%d/%m/%Y')} | "
-                    f"Nhà cung cấp: {sup_name} | Trường: {sup_school}"
-                )
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                for run in p.runs: run.font.name = "Times New Roman"; run.font.size = Pt(13)
-
-                doc.add_paragraph("")
-
-                # Thông tin kiểm tra
-                info_pairs = [
-                    ("Tên trường", sup_school),
-                    ("Nhà cung cấp", sup_name),
-                    ("Người kiểm tra", sup_inspector),
-                    ("Ngày kiểm tra", sup_date.strftime("%d/%m/%Y")),
-                    ("Số hợp đồng", sup_contract or "—"),
-                    ("Xếp loại tổng thể", f"Loại {rating} ({pct}% đạt)"),
-                ]
-                for label, val in info_pairs:
-                    p = doc.add_paragraph()
-                    r = p.add_run(f"{label}: "); r.bold = True
-                    r.font.name = "Times New Roman"; r.font.size = Pt(13)
-                    r = p.add_run(val)
-                    r.font.name = "Times New Roman"; r.font.size = Pt(13)
-
-                doc.add_paragraph("")
-                p = doc.add_paragraph("KẾT QUẢ KIỂM TRA CHI TIẾT (12 ĐIỂM)")
-                r = p.runs[0]; r.bold = True
-                r.font.name = "Times New Roman"; r.font.size = Pt(13)
-
-                # Bảng kết quả
-                tbl = doc.add_table(rows=1, cols=4)
-                tbl.style = "Table Grid"
-                hdr = tbl.rows[0].cells
-                for i, h in enumerate(["Mã", "Nội dung kiểm tra", "Kết quả", "Ghi chú"]):
-                    hdr[i].text = h
-                    for para in hdr[i].paragraphs:
-                        for run in para.runs:
-                            run.bold = True
-                            run.font.name = "Times New Roman"
-                            run.font.size = Pt(12)
-
-                for item in SUPPLIER_ITEMS:
-                    code = item["code"]
-                    row = tbl.add_row().cells
-                    crit_mark = " (*)" if item["critical"] else ""
-                    row[0].text = f"{code}{crit_mark}"
-                    row[1].text = item["desc"]
-                    res_raw = st.session_state.sup_r.get(code, "")
-                    row[2].text = "Đạt" if "Đạt" in res_raw and "Không" not in res_raw else (
-                        "Không Đạt" if "Không Đạt" in res_raw else "Không KT")
-                    row[3].text = st.session_state.sup_notes.get(code, "")
-                    for cell in row:
-                        for para in cell.paragraphs:
-                            for run in para.runs:
-                                run.font.name = "Times New Roman"
-                                run.font.size = Pt(12)
-
-                doc.add_paragraph("")
-
-                # Kết luận
-                conclusion_text = {
-                    "A": f"Nhà cung cấp {sup_name} ĐẠT chuẩn kiểm tra — Loại A. "
-                         f"Tiếp tục hợp đồng cung cấp bình thường.",
-                    "B": f"Nhà cung cấp {sup_name} xếp Loại B — Cần cải thiện. "
-                         f"Thông báo khắc phục trong vòng 24 giờ.",
-                    "C": f"Nhà cung cấp {sup_name} KHÔNG ĐẠT chuẩn — Loại C. "
-                         f"Báo cáo ngay Ban Giám Hiệu. Xem xét tạm dừng hợp đồng.",
-                }
-                p = doc.add_paragraph("KẾT LUẬN: ")
-                r = p.runs[0]; r.bold = True
-                r.font.name = "Times New Roman"; r.font.size = Pt(13)
-                r = p.add_run(conclusion_text[rating])
-                r.font.name = "Times New Roman"; r.font.size = Pt(13)
-                if crit_fails:
-                    r2 = p.add_run(f"\n⚠️ Vi phạm mục bắt buộc: {', '.join(crit_fails)}")
-                    r2.font.name = "Times New Roman"; r2.font.size = Pt(13)
-                    r2.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
-
-                doc.add_paragraph("")
-                p = doc.add_paragraph(
-                    f"......., ngày {sup_date.strftime('%d')} tháng "
-                    f"{sup_date.strftime('%m')} năm {sup_date.strftime('%Y')}"
-                )
-                p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                for run in p.runs: run.font.name = "Times New Roman"; run.font.size = Pt(13)
-
-                sig1, sig2 = doc.add_table(rows=1, cols=2).rows[0].cells
-                sig1.text = "NGƯỜI KIỂM TRA\n(Ký, ghi rõ họ tên)"
-                sig2.text = "ĐẠI DIỆN NHÀ CUNG CẤP\n(Ký, ghi rõ họ tên)"
-                for cell in [sig1, sig2]:
-                    for para in cell.paragraphs:
-                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        for run in para.runs:
-                            run.bold = True
-                            run.font.name = "Times New Roman"; run.font.size = Pt(13)
-
-                buf = BytesIO()
-                doc.save(buf)
-                buf.seek(0)
-
-                fn = f"KiemTraNCC_{sup_name.replace(' ', '_')}_{sup_date.strftime('%Y%m%d')}.docx"
-                st.download_button(
-                    "⬇️ Tải báo cáo Word (.docx)",
-                    data=buf.getvalue(), file_name=fn,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True,
-                )
-            except Exception as e:
-                st.error(f"Lỗi tạo Word: {e}")
-
-    # ── AI phân tích (tuỳ chọn) ──────────────────────────────────────────────
-    if col_ai.button("🤖 AI phân tích rủi ro", disabled=(not api_key or total_checked < 6),
-                     use_container_width=True):
-        fail_list = [
-            next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
-            for c, v in st.session_state.sup_r.items() if v == "❌ Không Đạt"
-        ]
-        prompt = (
-            f"Tôi vừa kiểm tra nhà cung cấp suất ăn học đường '{sup_name}' cho trường '{sup_school}'. "
-            f"Kết quả: {pass_count}/{len(SUPPLIER_ITEMS)} điểm đạt, xếp loại {rating}. "
-            + (f"Các vi phạm: {'; '.join(fail_list)}. " if fail_list else "Không có vi phạm. ")
-            + "Hãy phân tích rủi ro ngộ độc thực phẩm và đề xuất biện pháp khắc phục cụ thể theo luật Việt Nam, "
-            + "viết ngắn gọn khoảng 150 từ bằng tiếng Việt."
-        )
-        try:
-            client = anthropic.Anthropic(api_key=api_key)
-            with st.spinner("AI đang phân tích..."):
-                msg = client.messages.create(
-                    model=MODEL,
-                    max_tokens=600,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-            ai_text = msg.content[0].text if msg.content else ""
-            st.markdown(
-                f'<div class="sf-card" style="border-left:3px solid #7C3AED">'
-                f'<div class="sf-card-title">🤖 Phân tích AI</div>'
-                f'<div class="sf-card-body">{ai_text}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        except Exception as e:
-            st.error(f"Lỗi AI: {e}")
+    st.markdown('<div class="sec-hdr">📄 Tạo báo cáo & Lưu hồ sơ</div>', unsafe_allow_html=True)
 
     if not can_submit:
-        missing = []
-        if not sup_school.strip(): missing.append("Tên trường")
-        if not sup_name.strip(): missing.append("Tên nhà cung cấp")
-        if not sup_inspector.strip(): missing.append("Người kiểm tra")
-        if total_checked < len(SUPPLIER_ITEMS): missing.append(f"Chưa chấm đủ {len(SUPPLIER_ITEMS)} điểm")
-        st.caption(f"⚠️ Cần điền đủ: {', '.join(missing)}")
+        _miss = []
+        if not sup_school.strip():    _miss.append("Tên trường")
+        if not sup_name.strip():      _miss.append("Tên nhà cung cấp")
+        if not sup_inspector.strip(): _miss.append("Người kiểm tra")
+        if _missing_evid:
+            _miss.append(f"Mục Không Đạt chưa có bằng chứng: {', '.join(_missing_evid)}")
+        st.warning("⚠️ Chưa đủ điều kiện tạo báo cáo: " + " · ".join(_miss))
+
+    if st.button("📄 Tạo báo cáo Word & Lưu DB", type="primary",
+                 disabled=not can_submit, use_container_width=True):
+        guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
+        already_saved = st.session_state.get(guard_key, False)
+
+        ai_narrative = st.session_state.get("sup_ai_analysis", f"Xếp loại {rating}")
+
+        # Lưu DB (chỉ 1 lần)
+        if not already_saved and db_ok():
+            _res_dict = {}
+            for _it in SUPPLIER_ITEMS:
+                _c = _it["code"]
+                _v = st.session_state.sup_r.get(_c, "")
+                _res_dict[_c] = "Đạt" if _v == "✅ Đạt" else "Không Đạt"
+            _notes_dict = {c: st.session_state.sup_notes.get(c, "") for c in _res_dict}
+            _sid = db_save_checklist(
+                school=sup_school, date_str=str(sup_date),
+                inspector=sup_inspector, menu=f"NCC: {sup_name}",
+                level="—", results=_res_dict, notes=_notes_dict,
+                alert_level=alert_key, pass_count=pass_count, fail_count=fail_count,
+                ai_narrative=ai_narrative[:500],
+                extra_results={"contract": sup_contract, "supplier": sup_name},
+            )
+            if _sid:
+                st.session_state[guard_key] = True
+                st.success("✅ Đã lưu vào database!")
+            else:
+                st.warning("Không lưu được DB — kiểm tra kết nối Supabase.")
+        elif already_saved:
+            st.info("Phiên này đã lưu DB — chỉ xuất lại file Word.")
+        else:
+            st.warning("Database chưa kết nối — chỉ tạo file Word, không lưu DB.")
+
+        # Tạo Word
+        try:
+            from docx import Document
+            from docx.shared import Pt, Cm, RGBColor
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from io import BytesIO
+
+            doc = Document()
+            _sty = doc.styles["Normal"]
+            _sty.font.name = "Times New Roman"
+            _sty.font.size = Pt(13)
+            for _sec in doc.sections:
+                _sec.top_margin    = Cm(2.5); _sec.bottom_margin = Cm(2.5)
+                _sec.left_margin   = Cm(3.0); _sec.right_margin  = Cm(2.0)
+
+            def _wr(para, text, bold=False, size=13, color=None):
+                r = para.add_run(text)
+                r.font.name = "Times New Roman"; r.font.size = Pt(size); r.bold = bold
+                if color: r.font.color.rgb = color
+                return r
+
+            # Quốc hiệu
+            for _txt in ("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", "Độc lập – Tự do – Hạnh phúc"):
+                _p = doc.add_paragraph(); _p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                _wr(_p, _txt, bold=True)
+
+            doc.add_paragraph("")
+            _p = doc.add_paragraph(); _p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _wr(_p, "BIÊN BẢN KIỂM TRA NHÀ CUNG CẤP SUẤT ĂN HỌC ĐƯỜNG", bold=True, size=14)
+
+            _p = doc.add_paragraph(); _p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            _wr(_p, f"Ngày {sup_date.strftime('%d/%m/%Y')} · NCC: {sup_name} · Trường: {sup_school}")
+
+            doc.add_paragraph("")
+            for _lbl, _val in [
+                ("Tên trường", sup_school), ("Nhà cung cấp", sup_name),
+                ("Người kiểm tra", sup_inspector), ("Ngày kiểm tra", sup_date.strftime("%d/%m/%Y")),
+                ("Số hợp đồng", sup_contract or "—"),
+                ("Kết quả tổng hợp", f"Loại {rating} — {pct}% đạt ({pass_count}/{len(SUPPLIER_ITEMS)} điểm)"),
+            ]:
+                _p = doc.add_paragraph()
+                _wr(_p, f"{_lbl}: ", bold=True)
+                _wr(_p, _val)
+
+            doc.add_paragraph("")
+            _p = doc.add_paragraph(); _wr(_p, "KẾT QUẢ KIỂM TRA CHI TIẾT (12 ĐIỂM)", bold=True)
+
+            # Bảng 5 cột
+            _tbl = doc.add_table(rows=1, cols=5)
+            _tbl.style = "Table Grid"
+            _hdrs = ["Mã", "Nội dung kiểm tra", "Kết quả", "Ghi chú", "Vision AI"]
+            for _ci, _h in enumerate(_hdrs):
+                _tbl.rows[0].cells[_ci].text = _h
+                for _pp in _tbl.rows[0].cells[_ci].paragraphs:
+                    for _rr in _pp.runs:
+                        _rr.bold = True
+                        _rr.font.name = "Times New Roman"; _rr.font.size = Pt(11)
+
+            for _it in SUPPLIER_ITEMS:
+                _c = _it["code"]
+                _row = _tbl.add_row().cells
+                _row[0].text = f"{_c}{'(*)' if _it['critical'] else ''}"
+                _row[1].text = _it["desc"]
+                _rv = st.session_state.sup_r.get(_c, "")
+                _row[2].text = "Đạt" if _rv == "✅ Đạt" else "Không Đạt"
+                _row[3].text = st.session_state.sup_notes.get(_c, "")
+                _row[4].text = st.session_state.sup_vision.get(_c, "")
+                if _row[2].text == "Không Đạt":
+                    for _pp in _row[2].paragraphs:
+                        for _rr in _pp.runs:
+                            _rr.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+                for _cell in _row:
+                    for _pp in _cell.paragraphs:
+                        for _rr in _pp.runs:
+                            _rr.font.name = "Times New Roman"; _rr.font.size = Pt(11)
+
+            # Ảnh minh chứng trong Word (embed nếu có)
+            _img_count = sum(1 for c in st.session_state.sup_imgs
+                             if st.session_state.sup_r.get(c) == "❌ Không Đạt")
+            if _img_count > 0:
+                doc.add_paragraph("")
+                _p = doc.add_paragraph(); _wr(_p, "ẢNH MINH CHỨNG CÁC MỤC KHÔNG ĐẠT", bold=True)
+                for _it2 in SUPPLIER_ITEMS:
+                    _c2 = _it2["code"]
+                    if (_c2 in st.session_state.sup_imgs and
+                            st.session_state.sup_r.get(_c2) == "❌ Không Đạt"):
+                        _p2 = doc.add_paragraph()
+                        _wr(_p2, f"[{_c2}] {_it2['desc']}", bold=True, size=11)
+                        try:
+                            from io import BytesIO as _BIO
+                            _ibuf = _BIO(st.session_state.sup_imgs[_c2]["bytes"])
+                            doc.add_picture(_ibuf, width=Cm(10))
+                        except Exception:
+                            _p3 = doc.add_paragraph()
+                            _wr(_p3, "(Không nhúng được ảnh — xem ảnh trong hồ sơ digital)", size=11)
+
+            # Kết luận
+            doc.add_paragraph("")
+            _concl = {
+                "A": f"Nhà cung cấp {sup_name} ĐẠT chuẩn (Loại A). Tiếp tục hợp đồng bình thường.",
+                "B": f"Nhà cung cấp {sup_name} xếp Loại B. Thông báo khắc phục trong 24 giờ.",
+                "C": f"Nhà cung cấp {sup_name} KHÔNG ĐẠT (Loại C). Báo Ban Giám Hiệu ngay. "
+                     f"Xem xét tạm dừng hợp đồng.",
+            }[rating]
+            _p = doc.add_paragraph(); _wr(_p, "KẾT LUẬN: ", bold=True)
+            _wr(_p, _concl)
+            if crit_fails:
+                _wr(_p, f"\n⚠️ Vi phạm mục bắt buộc: {', '.join(crit_fails)}",
+                    color=RGBColor(0xDC, 0x26, 0x26))
+
+            # AI analysis trong Word
+            if ai_narrative and "Xếp loại" not in ai_narrative:
+                doc.add_paragraph("")
+                _p = doc.add_paragraph(); _wr(_p, "PHÂN TÍCH RỦI RO (AI):", bold=True)
+                _p2 = doc.add_paragraph(); _wr(_p2, ai_narrative, size=12)
+
+            # Chữ ký
+            doc.add_paragraph("")
+            _p = doc.add_paragraph(
+                f"......., ngày {sup_date.strftime('%d')} tháng "
+                f"{sup_date.strftime('%m')} năm {sup_date.strftime('%Y')}"
+            )
+            _p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            for _rr in _p.runs: _rr.font.name = "Times New Roman"; _rr.font.size = Pt(13)
+
+            _sig_tbl = doc.add_table(rows=1, cols=2)
+            _s1, _s2 = _sig_tbl.rows[0].cells
+            _s1.text = "NGƯỜI KIỂM TRA\n(Ký, ghi rõ họ tên)"
+            _s2.text = "ĐẠI DIỆN NHÀ CUNG CẤP\n(Ký, ghi rõ họ tên)"
+            for _cell in [_s1, _s2]:
+                for _pp in _cell.paragraphs:
+                    _pp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    for _rr in _pp.runs:
+                        _rr.bold = True
+                        _rr.font.name = "Times New Roman"; _rr.font.size = Pt(13)
+
+            _buf = BytesIO()
+            doc.save(_buf); _buf.seek(0)
+            _fn = f"KiemTraNCC_{sup_name.replace(' ', '_')}_{sup_date.strftime('%Y%m%d')}.docx"
+            st.download_button(
+                "⬇️ Tải báo cáo Word (.docx)", data=_buf.getvalue(), file_name=_fn,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+            )
+        except Exception as _we:
+            st.error(f"Lỗi tạo Word: {_we}")
 
 
 def tab_about():
