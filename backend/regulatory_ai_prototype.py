@@ -246,6 +246,127 @@ def db_get_schools() -> list[str]:
         return []
 
 
+# ── G3: Authentication & User Management ─────────────────────────────────────
+
+ROLE_VN = {
+    "phu_huynh":      "Phụ Huynh",
+    "ban_giam_sat":   "Ban Giám Sát (Đại Diện PHHS)",
+    "y_te_hoc_duong": "Y Tế Học Đường",
+    "ban_giam_hieu":  "Ban Giám Hiệu",
+}
+ROLE_KEY = {v: k for k, v in ROLE_VN.items()}
+ROLE_CLR_MAP = {
+    "Phụ Huynh":                    "#2563EB",
+    "Ban Giám Sát (Đại Diện PHHS)": "#7C3AED",
+    "Y Tế Học Đường":               "#0D9488",
+    "Ban Giám Hiệu":                "#B45309",
+}
+
+
+def _auth_sb():
+    """Tạo fresh Supabase client cho auth — tránh chia sẻ auth state toàn cục."""
+    try:
+        from supabase import create_client
+        url = st.secrets.get("SUPABASE_URL", "") if hasattr(st, "secrets") else ""
+        key = st.secrets.get("SUPABASE_ANON_KEY", "") if hasattr(st, "secrets") else ""
+        if url and key:
+            return create_client(str(url), str(key))
+    except Exception:
+        pass
+    return None
+
+
+def db_auth_login(email: str, password: str) -> dict:
+    """Đăng nhập email/password → {id, email, access_token} hoặc raise Exception."""
+    client = _auth_sb()
+    if not client:
+        raise Exception("Database chưa kết nối — không thể đăng nhập")
+    resp = client.auth.sign_in_with_password({"email": email.strip().lower(), "password": password})
+    if not resp.user or not resp.session:
+        raise Exception("Email hoặc mật khẩu không đúng")
+    return {"id": str(resp.user.id), "email": resp.user.email,
+            "access_token": resp.session.access_token}
+
+
+def db_auth_signup(email: str, password: str) -> str:
+    """Tạo tài khoản Supabase Auth → user_id hoặc raise."""
+    client = _auth_sb()
+    if not client:
+        raise Exception("Database chưa kết nối")
+    resp = client.auth.sign_up({"email": email.strip().lower(), "password": password})
+    if not resp.user:
+        raise Exception("Không tạo được tài khoản — email có thể đã tồn tại")
+    return str(resp.user.id)
+
+
+def db_auth_reset_password(email: str) -> bool:
+    """Gửi email đặt lại mật khẩu."""
+    client = _auth_sb()
+    if not client:
+        return False
+    try:
+        client.auth.reset_password_email(email.strip().lower())
+        return True
+    except Exception:
+        return False
+
+
+def db_get_profile(user_id: str) -> dict | None:
+    """Lấy profile từ user_profiles table."""
+    sb = _get_sb()
+    if not sb:
+        return None
+    try:
+        r = sb.table("user_profiles").select("*").eq("id", user_id).execute()
+        return r.data[0] if r.data else None
+    except Exception:
+        return None
+
+
+def db_save_profile(user_id: str, email: str, full_name: str,
+                    role: str, school_name: str) -> bool:
+    """Tạo hoặc cập nhật user profile."""
+    sb = _get_sb()
+    if not sb:
+        return False
+    try:
+        sb.table("user_profiles").upsert({
+            "id": user_id, "email": email.strip().lower(),
+            "full_name": full_name.strip(), "role": role,
+            "school_name": school_name.strip() if school_name else "",
+            "is_active": True,
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
+def db_get_all_profiles(school: str = "") -> list:
+    """Lấy tất cả user profiles (BGH admin)."""
+    sb = _get_sb()
+    if not sb:
+        return []
+    try:
+        q = sb.table("user_profiles").select("*").order("created_at", desc=False)
+        if school:
+            q = q.eq("school_name", school)
+        return q.execute().data or []
+    except Exception:
+        return []
+
+
+def db_toggle_profile(user_id: str, is_active: bool) -> bool:
+    """Bật/tắt tài khoản."""
+    sb = _get_sb()
+    if not sb:
+        return False
+    try:
+        sb.table("user_profiles").update({"is_active": is_active}).eq("id", user_id).execute()
+        return True
+    except Exception:
+        return False
+
+
 def db_get_feedback(school: str = "", status: str = "pending") -> list:
     """Lấy feedback Phụ Huynh."""
     sb = _get_sb()
@@ -5249,6 +5370,186 @@ def tab_supplier(api_key: str = "", role: str = ""):
             st.error(f"Lỗi tạo Word: {_we}")
 
 
+def show_login_page():
+    """Trang đăng nhập — hiển thị trước khi vào app chính."""
+    # Logo + tiêu đề
+    st.markdown(
+        '<div style="text-align:center;padding:50px 20px 32px">'
+        '<div style="font-size:3.2rem">🍱</div>'
+        '<div style="font-size:2rem;font-weight:800;color:#1B3B6F;margin-top:10px">SchoolFood AI</div>'
+        '<div style="font-size:0.95rem;color:#64748B;margin-top:6px">'
+        'Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    _, col, _ = st.columns([1, 1.6, 1])
+    with col:
+        st.markdown(
+            '<div style="background:white;border:1px solid #E2E8F0;border-radius:16px;'
+            'padding:32px 28px;box-shadow:0 4px 24px rgba(0,0,0,0.09)">'
+            '<div style="font-size:1.1rem;font-weight:700;color:#1E293B;'
+            'text-align:center;margin-bottom:24px">Đăng nhập tài khoản</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        with st.form("login_form", clear_on_submit=False):
+            _email    = st.text_input("📧 Email", placeholder="ten@truong.edu.vn")
+            _password = st.text_input("🔒 Mật khẩu", type="password", placeholder="••••••••")
+            _submit   = st.form_submit_button("Đăng nhập →", type="primary",
+                                               use_container_width=True)
+
+        if _submit:
+            if not _email or not _password:
+                st.error("Vui lòng nhập đầy đủ email và mật khẩu.")
+            elif not db_ok():
+                st.error("❌ Database chưa kết nối. Liên hệ quản trị viên thiết lập Supabase.")
+            else:
+                try:
+                    with st.spinner("Đang xác thực..."):
+                        _user = db_auth_login(_email, _password)
+                    _profile = db_get_profile(_user["id"])
+                    if not _profile:
+                        st.error("❌ Tài khoản chưa được cấu hình. Liên hệ Ban Giám Hiệu nhà trường.")
+                    elif not _profile.get("is_active", True):
+                        st.error("❌ Tài khoản đã bị tạm khóa. Liên hệ Ban Giám Hiệu.")
+                    else:
+                        try:
+                            _get_sb().table("user_profiles").update({
+                                "last_login": now_vn().isoformat()
+                            }).eq("id", _user["id"]).execute()
+                        except Exception:
+                            pass
+                        st.session_state.auth_user    = _user
+                        st.session_state.user_profile = _profile
+                        st.rerun()
+                except Exception as _le:
+                    st.error(f"❌ {_le}")
+
+        st.caption("Chưa có tài khoản? Liên hệ Ban Giám Hiệu nhà trường để được cấp.")
+
+        # Quên mật khẩu
+        with st.expander("🔑 Quên mật khẩu?"):
+            _fe = st.text_input("Email đã đăng ký", key="reset_email")
+            if st.button("Gửi link đặt lại mật khẩu", key="reset_btn"):
+                if _fe and db_ok():
+                    if db_auth_reset_password(_fe):
+                        st.success("✅ Đã gửi email — kiểm tra hộp thư (kể cả spam).")
+                    else:
+                        st.error("Không gửi được. Kiểm tra kết nối DB.")
+                else:
+                    st.warning("Nhập email và đảm bảo database đã kết nối.")
+
+    # Demo mode
+    st.markdown('<div style="text-align:center;margin-top:20px">', unsafe_allow_html=True)
+    if st.button("🔓 Dùng chế độ Demo (không cần đăng nhập)", use_container_width=False):
+        st.session_state.auth_user    = {"id": "demo", "email": "demo@demo.vn", "demo": True}
+        st.session_state.user_profile = {
+            "full_name": "Demo — Chưa đăng nhập", "role": "ban_giam_sat",
+            "school_name": "", "is_active": True,
+        }
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div style="text-align:center;font-size:0.75rem;color:#94A3B8;margin-top:32px">'
+        '⚖️ NĐ 15/2018 · TTLT 13/2016 · QĐ 3958/QĐ-BYT 2025 · SchoolFood AI v2.0'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def tab_user_management(school: str = ""):
+    """Ban Giám Hiệu: Quản lý tài khoản người dùng."""
+    st.markdown(
+        '<div class="sf-card">'
+        '<div class="sf-card-title">👤 Quản lý tài khoản người dùng</div>'
+        '<div class="sf-card-body">'
+        'Tạo tài khoản, phân vai trò và quản lý người dùng trong hệ thống SchoolFood AI</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not db_ok():
+        st.warning("Database chưa kết nối — không thể quản lý tài khoản.")
+        return
+
+    # ── Danh sách người dùng ──────────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">📋 Danh sách tài khoản</div>', unsafe_allow_html=True)
+    _profiles = db_get_all_profiles(school=school if school else "")
+    if _profiles:
+        import pandas as _pd_um
+        _df_um = _pd_um.DataFrame([{
+            "Email": p.get("email", ""),
+            "Họ và tên": p.get("full_name", ""),
+            "Vai trò": ROLE_VN.get(p.get("role", ""), p.get("role", "")),
+            "Trường": p.get("school_name", ""),
+            "Trạng thái": "✅ Hoạt động" if p.get("is_active") else "🔒 Tạm khóa",
+            "Đăng nhập cuối": (p.get("last_login", "") or "")[:16],
+        } for p in _profiles])
+        st.dataframe(_df_um, use_container_width=True, hide_index=True)
+
+        # Bật/tắt tài khoản
+        st.markdown('<div class="sec-hdr">🔧 Cập nhật trạng thái</div>', unsafe_allow_html=True)
+        _emails = [p.get("email", "") for p in _profiles]
+        _sel_email = st.selectbox("Chọn tài khoản", _emails, key="um_sel_email")
+        _sel_p = next((p for p in _profiles if p.get("email") == _sel_email), None)
+        if _sel_p:
+            _cur_active = _sel_p.get("is_active", True)
+            _col1, _col2 = st.columns(2)
+            if _cur_active:
+                if _col1.button("🔒 Tạm khóa tài khoản này", key="um_deact"):
+                    if db_toggle_profile(_sel_p["id"], False):
+                        st.success("✅ Đã tạm khóa!"); st.rerun()
+            else:
+                if _col1.button("✅ Kích hoạt lại", key="um_act"):
+                    if db_toggle_profile(_sel_p["id"], True):
+                        st.success("✅ Đã kích hoạt!"); st.rerun()
+    else:
+        st.info("Chưa có tài khoản nào. Hãy thêm bên dưới.")
+
+    # ── Thêm người dùng mới ───────────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">➕ Thêm người dùng mới</div>', unsafe_allow_html=True)
+    st.caption(
+        "Nhập email + mật khẩu tạm → người dùng đăng nhập lần đầu và đổi mật khẩu. "
+        "Chức năng 'Quên mật khẩu' ở trang đăng nhập hỗ trợ tự đổi."
+    )
+    with st.form("add_user_form", clear_on_submit=True):
+        _nu_c1, _nu_c2 = st.columns(2)
+        _nu_email = _nu_c1.text_input("📧 Email người dùng", placeholder="ten@truong.edu.vn")
+        _nu_name  = _nu_c2.text_input("👤 Họ và tên đầy đủ", placeholder="Nguyễn Văn A")
+        _nu_c3, _nu_c4 = st.columns(2)
+        _nu_role   = _nu_c3.selectbox("Vai trò", list(ROLE_VN.values()))
+        _nu_school = _nu_c4.text_input("🏫 Tên trường", value=school,
+                                        placeholder="VD: THCS Nguyễn Du")
+        _nu_pw = st.text_input("🔒 Mật khẩu tạm thời (≥ 6 ký tự)",
+                                type="password", placeholder="Người dùng sẽ đổi sau lần đầu")
+        _nu_submit = st.form_submit_button("➕ Tạo tài khoản", type="primary",
+                                            use_container_width=True)
+
+    if _nu_submit:
+        if not all([_nu_email, _nu_name, _nu_pw, _nu_school]):
+            st.warning("⚠️ Vui lòng điền đầy đủ: email, họ tên, trường, mật khẩu.")
+        elif len(_nu_pw) < 6:
+            st.warning("Mật khẩu tạm thời cần ≥ 6 ký tự.")
+        else:
+            try:
+                with st.spinner("Đang tạo tài khoản..."):
+                    _uid = db_auth_signup(_nu_email, _nu_pw)
+                _ok = db_save_profile(_uid, _nu_email, _nu_name,
+                                       ROLE_KEY.get(_nu_role, "phu_huynh"), _nu_school)
+                if _ok:
+                    st.success(
+                        f"✅ Đã tạo tài khoản **{_nu_name}** ({_nu_email}) — "
+                        f"Vai trò: {_nu_role} · Trường: {_nu_school}"
+                    )
+                    st.rerun()
+                else:
+                    st.warning("Tài khoản auth đã tạo nhưng không lưu được profile — kiểm tra DB.")
+            except Exception as _ue:
+                st.error(f"❌ Lỗi: {_ue}")
+
+
 def tab_about():
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">Về SchoolFood AI</div>
@@ -5333,70 +5634,115 @@ def main():
         unsafe_allow_html=True,
     )
 
-    # ── Đọc API key (Secrets → ENV → trống) ─────────────────────────────────
+    # ── G3: Kiểm tra xác thực ────────────────────────────────────────────────
+    # Nếu DB kết nối và chưa đăng nhập → hiện trang login
+    # Nếu DB không có (demo/local) → dùng chế độ selectbox cũ
+    _use_auth = db_ok()
+    _auth_user    = st.session_state.get("auth_user")
+    _user_profile = st.session_state.get("user_profile")
+
+    if _use_auth and not _auth_user:
+        show_login_page()
+        return  # Dừng main(), hiện login page
+
+    # ── Đọc API key ──────────────────────────────────────────────────────────
     import os
     api_key = (
         (st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, "secrets") else "")
         or os.environ.get("ANTHROPIC_API_KEY", "")
     )
 
-    # ── Thanh điều khiển ngang — thay thế sidebar, luôn hiển thị ─────────────
-    st.markdown("""
-    <div style="background:white;border:1px solid #E2E8F0;border-radius:12px;
-                padding:12px 20px;margin-bottom:10px;
-                box-shadow:0 1px 4px rgba(0,0,0,0.07)">
-        <div style="font-size:0.72rem;font-weight:700;color:#94A3B8;
-                    text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">
-            ⚙️ Cài đặt người dùng
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # ── Thanh thông tin người dùng / điều khiển ──────────────────────────────
+    if _use_auth and _user_profile:
+        # ── Chế độ đã đăng nhập: hiện thông tin user + logout ────────────────
+        _pf        = _user_profile
+        _role_key  = _pf.get("role", "phu_huynh")
+        role       = ROLE_VN.get(_role_key, "Phụ Huynh")
+        _school_pf = _pf.get("school_name", "")
+        _is_demo   = _auth_user.get("demo", False)
 
-    # ── Hàng 1: Vai trò / Cấp trường / Tỉnh TP / API status ─────────────────
-    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([2, 2, 1.5, 2.5])
-    with ctrl1:
-        role = st.selectbox(
-            "Vai trò",
-            ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)",
-             "Y Tế Học Đường", "Ban Giám Hiệu"],
+        _clr = ROLE_CLR_MAP.get(role, "#64748B")
+        st.markdown(
+            f'<div style="background:white;border:1px solid #E2E8F0;border-radius:12px;'
+            f'padding:10px 20px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);'
+            f'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+            f'<div style="display:flex;align-items:center;gap:12px">'
+            f'<div style="background:{_clr};color:white;border-radius:8px;'
+            f'padding:4px 12px;font-size:0.78rem;font-weight:700">{role}</div>'
+            f'<div style="font-size:0.88rem;color:#1E293B;font-weight:600">'
+            f'{_pf.get("full_name","")}</div>'
+            f'<div style="font-size:0.78rem;color:#64748B">{_auth_user.get("email","")}</div>'
+            + (f'<div style="font-size:0.78rem;color:#475569">🏫 {_school_pf}</div>'
+               if _school_pf else '')
+            + (f'<span style="background:#FEF9C3;color:#92400E;font-size:0.72rem;'
+               f'padding:2px 8px;border-radius:6px">🔓 Demo</span>' if _is_demo else '')
+            + f'</div></div>',
+            unsafe_allow_html=True,
         )
-    with ctrl2:
-        level = st.selectbox(
-            "Cấp trường",
-            ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+        _c_level, _c_api, _c_logout = st.columns([2, 3, 1])
+        level = _c_level.selectbox(
+            "Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+            label_visibility="collapsed",
         )
-    with ctrl3:
-        loc = st.text_input("Tỉnh/TP", value="TP.HCM")
-    with ctrl4:
-        if api_key:
-            # Dùng disabled input — tự động căn thẳng hàng với các Streamlit input khác
-            st.text_input(
-                "Trạng thái AI",
-                value="✅ AI đã kết nối — sẵn sàng",
-                disabled=True,
-                label_visibility="visible",
-            )
-        else:
-            manual_key = st.text_input(
-                "Claude API Key (tuỳ chọn)",
-                type="password",
-                placeholder="sk-ant-...",
-                help="Không có key? Checklist vẫn dùng được đầy đủ",
-            )
-            if manual_key:
-                api_key = manual_key
+        with _c_api:
+            if api_key:
+                st.text_input("API", value="✅ AI sẵn sàng", disabled=True,
+                              label_visibility="collapsed")
+            else:
+                _mk = st.text_input("Claude API Key", type="password",
+                                    placeholder="sk-ant-... (tuỳ chọn)",
+                                    label_visibility="collapsed")
+                if _mk:
+                    api_key = _mk
+        if _c_logout.button("🚪 Đăng xuất", use_container_width=True):
+            for _k in ("auth_user", "user_profile"):
+                st.session_state.pop(_k, None)
+            st.rerun()
 
-    # ── Hàng 2: Mô tả vai trò + lịch nhắc nhở + hotline ─────────────────────
+        loc = _school_pf or "TP.HCM"
+
+    else:
+        # ── Chế độ demo/local: giữ selectbox cũ ─────────────────────────────
+        st.markdown(
+            '<div style="background:#FEF9C3;border:1px solid #FDE68A;border-radius:10px;'
+            'padding:8px 16px;margin-bottom:8px;font-size:0.8rem;color:#92400E">'
+            '🔓 <b>Chế độ Demo</b> — Database chưa kết nối, dùng selectbox để chọn vai trò</div>',
+            unsafe_allow_html=True,
+        )
+        ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([2, 2, 1.5, 2.5])
+        with ctrl1:
+            role = st.selectbox(
+                "Vai trò",
+                ["Phụ Huynh", "Ban Giám Sát (Đại Diện PHHS)",
+                 "Y Tế Học Đường", "Ban Giám Hiệu"],
+            )
+        with ctrl2:
+            level = st.selectbox(
+                "Cấp trường",
+                ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+            )
+        with ctrl3:
+            loc = st.text_input("Tỉnh/TP", value="TP.HCM")
+        with ctrl4:
+            if api_key:
+                st.text_input("AI", value="✅ AI đã kết nối", disabled=True,
+                              label_visibility="visible")
+            else:
+                _mk2 = st.text_input("Claude API Key", type="password",
+                                     placeholder="sk-ant-...",
+                                     help="Không có key? Checklist vẫn dùng được đầy đủ")
+                if _mk2:
+                    api_key = _mk2
+        _school_pf = ""
+
+    # ── Mô tả vai trò (dùng chung) ───────────────────────────────────────────
     DESCS = {
         "Phụ Huynh":                    "Xem thực đơn, kết quả kiểm tra và gửi phản hồi",
         "Ban Giám Sát (Đại Diện PHHS)": "Kiểm tra bếp ăn 2 lần/tuần, tạo báo cáo chính thức theo luật",
         "Y Tế Học Đường":               "Ghi kiểm thực 3 bước hàng ngày, xác nhận mẫu lưu thức ăn",
         "Ban Giám Hiệu":                "Xem tổng quan tình hình ATTP, duyệt báo cáo và quản lý nhà cung cấp",
     }
-    ROLE_CLR = {
-        "Phụ Huynh": "#2563EB", "Ban Giám Sát (Đại Diện PHHS)": "#7C3AED",
-        "Y Tế Học Đường": "#0D9488", "Ban Giám Hiệu": "#B45309",
-    }
+    ROLE_CLR = ROLE_CLR_MAP
 
     # Tính nhắc nhở
     _t_info   = _REMINDER_TIMES.get(role)
@@ -5502,19 +5848,19 @@ def main():
         with _tabs[6]: tab_guide()
 
     else:  # Ban Giám Hiệu
-        # BGH: duyệt tổng quan + lịch chuẩn mực, không cần form checklist hàng ngày
-        _tabs = st.tabs([
-            "💬 Hỏi đáp AI",
-            _hist_label,
-            "📅 Lịch & Chuẩn mực",
-            "🚨 Khẩn cấp",
-            "📖 Hướng dẫn",
-        ])
+        # BGH: duyệt tổng quan + lịch chuẩn mực + quản lý tài khoản
+        _bgh_tabs = ["💬 Hỏi đáp AI", _hist_label, "📅 Lịch & Chuẩn mực",
+                     "🚨 Khẩn cấp", "📖 Hướng dẫn"]
+        if _use_auth:
+            _bgh_tabs.append("👤 Quản lý tài khoản")
+        _tabs = st.tabs(_bgh_tabs)
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_history(role=role)
         with _tabs[2]: tab_schedule()
         with _tabs[3]: tab_emergency(api_key)
         with _tabs[4]: tab_guide()
+        if _use_auth and len(_tabs) > 5:
+            with _tabs[5]: tab_user_management(school=_school_pf)
 
 
 if __name__ == "__main__":

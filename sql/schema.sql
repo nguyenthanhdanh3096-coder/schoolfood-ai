@@ -123,6 +123,39 @@ WHERE status = 'pending'
 ORDER BY created_at DESC;
 
 -- ============================================================
+-- BẢNG 6: Hồ sơ người dùng (G3 — Authentication)
+-- Chạy bảng này để bật tính năng đăng nhập theo vai trò
+-- ============================================================
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id          TEXT        PRIMARY KEY,   -- Supabase Auth user ID (UUID dạng text)
+    email       TEXT        UNIQUE NOT NULL,
+    full_name   TEXT        NOT NULL,
+    role        TEXT        NOT NULL DEFAULT 'phu_huynh',
+    -- 'phu_huynh' | 'ban_giam_sat' | 'y_te_hoc_duong' | 'ban_giam_hieu'
+    school_name TEXT        DEFAULT '',
+    is_active   BOOLEAN     DEFAULT true,
+    created_at  TIMESTAMPTZ DEFAULT now(),
+    last_login  TIMESTAMPTZ,
+    CONSTRAINT valid_role CHECK (
+        role IN ('phu_huynh','ban_giam_sat','y_te_hoc_duong','ban_giam_hieu')
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_school
+    ON user_profiles(school_name);
+
+-- Tạo tài khoản Ban Giám Hiệu đầu tiên (admin):
+-- 1. Vào Supabase → Authentication → Users → "Invite user" hoặc "Add user"
+-- 2. Nhập email + mật khẩu → lấy User UID
+-- 3. Chạy câu lệnh này (thay YOUR_USER_ID và YOUR_SCHOOL):
+--
+-- INSERT INTO user_profiles (id, email, full_name, role, school_name)
+-- VALUES ('YOUR_USER_ID', 'admin@truong.edu.vn', 'Hiệu Trưởng', 'ban_giam_hieu', 'Trường XYZ')
+-- ON CONFLICT (id) DO NOTHING;
+--
+-- Sau đó dùng tab "Quản lý tài khoản" trong app để tạo các tài khoản còn lại.
+
+-- ============================================================
 -- KIỂM TRA: Chạy sau khi setup xong
 -- ============================================================
 -- SELECT table_name FROM information_schema.tables
