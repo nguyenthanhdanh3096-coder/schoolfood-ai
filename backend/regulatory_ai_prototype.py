@@ -4634,28 +4634,58 @@ def tab_supplier(api_key: str = ""):
     _delivery_mode = check_mode.startswith("🚚")
 
     if _delivery_mode:
-        st.markdown(
-            '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:9px;'
-            'padding:10px 16px;margin-bottom:10px;font-size:0.8rem;color:#1E40AF">'
-            '🚚 <b>Kiểm tra khi nhận hàng</b> — Dành cho mỗi lần NCC giao hàng · '
-            'Tập trung vào chất lượng chuyến hàng hôm nay: xe vận chuyển, nhiệt độ, hóa đơn, '
-            'nhãn mác, khẩu phần, mẫu lưu · <b>Bỏ qua S01–S02</b> (giấy phép & chứng nhận '
-            'ATTP — kiểm tra riêng 1 lần/tháng khi làm kiểm tra toàn diện)</div>',
-            unsafe_allow_html=True,
-        )
-        # Chỉ hiện S03-S12
-        _active_items = [it for it in SUPPLIER_ITEMS if it["code"] not in ("S01", "S02")]
+        _active_items    = [it for it in SUPPLIER_ITEMS if it["code"] not in ("S01", "S02")]
         _active_critical = {c for c in SUPPLIER_CRITICAL if c not in ("S01", "S02")}
-    else:
+        # Card giải thích — 2 cột rõ vai trò
         st.markdown(
-            '<div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:9px;'
-            'padding:10px 16px;margin-bottom:10px;font-size:0.8rem;color:#5B21B6">'
-            '📋 <b>Kiểm tra toàn diện</b> — Thực hiện 1 lần/tháng hoặc trước gia hạn hợp đồng · '
-            'Kiểm tra đầy đủ 12 điểm bao gồm giấy phép (S01) và chứng nhận ATTP (S02)</div>',
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+            # Y Tế Học Đường
+            '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:9px;padding:10px 14px">'
+            '<div style="font-size:0.82rem;font-weight:700;color:#1D4ED8;margin-bottom:5px">'
+            '🏥 Y Tế Học Đường</div>'
+            '<div style="font-size:0.77rem;color:#1E40AF;line-height:1.7">'
+            '📅 <b>Tần suất:</b> Mỗi ngày có bữa ăn, khi NCC giao hàng vào bếp<br>'
+            '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12 ngay tại điểm giao<br>'
+            '⚡ <b>Căn cứ:</b> TTLT 13/2016 Điều 9 khoản a — kiểm tra nguyên liệu đầu vào'
+            '</div></div>'
+            # Ban Giám Sát
+            '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:9px;padding:10px 14px">'
+            '<div style="font-size:0.82rem;font-weight:700;color:#15803D;margin-bottom:5px">'
+            '👥 Ban Giám Sát (Đại Diện PHHS)</div>'
+            '<div style="font-size:0.77rem;color:#166534;line-height:1.7">'
+            '📅 <b>Tần suất:</b> Khi có mặt lúc NCC giao hàng trong lịch kiểm tra<br>'
+            '📋 <b>Nội dung:</b> Kiểm tra 10 mục S03–S12, ảnh minh chứng khi cần<br>'
+            '💡 <b>Lưu ý:</b> S01–S02 bỏ qua — đã kiểm tra trong đợt toàn diện hàng tháng'
+            '</div></div>'
+            '</div>',
             unsafe_allow_html=True,
         )
-        _active_items = SUPPLIER_ITEMS
+    else:
+        _active_items    = SUPPLIER_ITEMS
         _active_critical = SUPPLIER_CRITICAL
+        st.markdown(
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+            # Y Tế Học Đường
+            '<div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:9px;padding:10px 14px">'
+            '<div style="font-size:0.82rem;font-weight:700;color:#6D28D9;margin-bottom:5px">'
+            '🏥 Y Tế Học Đường</div>'
+            '<div style="font-size:0.77rem;color:#5B21B6;line-height:1.7">'
+            '📅 <b>Tần suất:</b> Khi phát hiện vi phạm liên tục hoặc theo yêu cầu Ban Giám Hiệu<br>'
+            '📋 <b>Nội dung:</b> Đủ 12 mục, bổ sung check giấy phép (S01) và chứng nhận ATTP (S02)<br>'
+            '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu trong 24 giờ'
+            '</div></div>'
+            # Ban Giám Sát
+            '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:9px;padding:10px 14px">'
+            '<div style="font-size:0.82rem;font-weight:700;color:#C2410C;margin-bottom:5px">'
+            '👥 Ban Giám Sát (Đại Diện PHHS)</div>'
+            '<div style="font-size:0.77rem;color:#9A3412;line-height:1.7">'
+            '📅 <b>Tần suất:</b> <b>1 lần/tháng</b> — cuối tháng hoặc trước gia hạn hợp đồng<br>'
+            '📋 <b>Nội dung:</b> Đủ 12 mục, đặc biệt xác minh S01 (giấy phép) và S02 (chứng nhận)<br>'
+            '📤 <b>Báo cáo:</b> Gửi Ban Giám Hiệu · Lưu hồ sơ xét duyệt hợp đồng'
+            '</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
     # Ngưỡng điểm tỷ lệ theo số mục đang kiểm tra
     _n_active = len(_active_items)
@@ -4681,10 +4711,14 @@ def tab_supplier(api_key: str = ""):
         if _sk not in st.session_state:
             st.session_state[_sk] = {}
 
-    # ── Checklist 12 điểm ─────────────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">📋 Checklist 12 điểm kiểm tra</div>', unsafe_allow_html=True)
+    # ── Checklist (số mục phụ thuộc chế độ) ──────────────────────────────────
+    _hdr_mode = "🚚 Kiểm tra giao hàng" if _delivery_mode else "📋 Kiểm tra toàn diện"
+    st.markdown(
+        f'<div class="sec-hdr">{_hdr_mode} — {_n_active} mục cần hoàn thành</div>',
+        unsafe_allow_html=True,
+    )
     st.caption(
-        "• Phải chấm đủ cả 12 mục (Đạt hoặc Không Đạt)  "
+        f"• Phải chấm đủ cả {_n_active} mục (Đạt hoặc Không Đạt)  "
         "• Khi Không Đạt: bắt buộc điền Ghi chú ≥ 10 ký tự HOẶC tải ảnh minh chứng  "
         "• Tối đa 1 ảnh/mục · Ảnh được phân tích tự động bằng Claude Vision"
     )
