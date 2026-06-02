@@ -408,20 +408,20 @@ ALERT_SYSTEM = {
 SCHEDULE = [
     {
         "role": "🏥 Y Tế Học Đường",
-        "freq": "Mỗi ngày có bữa ăn",
-        "when": "10:00–10:45 (trước bữa trưa 30–45 phút)",
-        "what": "Kiểm thực 3 bước (theo sổ bắt buộc)",
-        "notice": "Không cần báo trước nhà cung cấp",
-        "report": "Lưu sổ tại bếp · Báo Hiệu Trưởng ngay khi có vấn đề",
+        "freq": "Kiểm thực 3 bước: MỖI NGÀY có bữa ăn · Kiểm tra NCC: Khi nhận hàng (tối thiểu 1 lần/tuần)",
+        "when": "Kiểm thực: 10:00–10:45 (trước bữa trưa 30–45 phút) · Kiểm NCC: Ngay khi xe giao hàng đến",
+        "what": "Kiểm thực 3 bước (sổ bắt buộc TTLT 13/2016) · Checklist 12 điểm NCC khi nhận hàng",
+        "notice": "Không cần báo trước",
+        "report": "Lưu sổ tại bếp · Báo Hiệu Trưởng ngay khi có vấn đề · Gửi kết quả NCC định kỳ tháng",
         "color": "#2563EB",
     },
     {
         "role": "👥 Ban Giám Sát (Đại Diện PHHS)",
-        "freq": "2 lần / tuần tối thiểu",
-        "when": "Thứ 2–3 (báo trước 1 ngày) + 1 lần đột xuất bất kỳ",
-        "what": "Checklist 20 điểm đầy đủ + ảnh minh chứng",
-        "notice": "1 lần báo trước ≥ 24h, 1 lần KHÔNG báo trước (đột xuất)",
-        "report": "Gửi báo cáo cho Hiệu Trưởng trong 24h sau kiểm tra",
+        "freq": "Checklist bữa ăn: 2 lần/tuần tối thiểu · Kiểm tra NCC toàn diện: 1 lần/tháng",
+        "when": "Bữa ăn: Thứ 2–3 (báo trước 1 ngày) + 1 lần đột xuất · NCC: Cuối tháng hoặc khi nhận hàng",
+        "what": "Checklist 20 điểm + ảnh minh chứng · Đánh giá NCC 12 điểm toàn diện (giấy phép + giao hàng)",
+        "notice": "Bữa ăn: 1 lần báo trước ≥ 24h, 1 lần đột xuất · NCC: Có thể báo trước 1 ngày",
+        "report": "Gửi báo cáo Hiệu Trưởng trong 24h · Báo cáo NCC tháng ghi nhận xếp loại A/B/C",
         "color": "#7C3AED",
     },
     {
@@ -3447,6 +3447,19 @@ MANUAL_CONTENT = {
                  "18–20 điểm ĐẠT → ✅ Đạt chuẩn ATTP — lưu hồ sơ bình thường\n"
                  "15–17 điểm ĐẠT → ⚠️ Cần cải thiện — yêu cầu khắc phục trong 24h\n"
                  "< 15 điểm ĐẠT → ❌ Không đạt — báo ngay Ban Giám Hiệu"),
+                ("Tại sao 3 checklist có điểm giống nhau? — Không phải trùng lặp",
+                 "Nhiều tiêu chí xuất hiện ở cả Checklist BGS (C*), Kiểm thực Y Tế (B*) và Đánh giá NCC (S*).\n"
+                 "Đây là thiết kế CÓ CHỦ Ý theo nguyên tắc HACCP — kiểm soát nhiều điểm trên cùng 1 chuỗi:\n\n"
+                 "Ví dụ — Nhiệt độ thực phẩm:\n"
+                 "• S04 (NCC): Nhiệt độ khi giao hàng ≥ 60°C hay < 8°C → Nhà CC có giữ đúng chuẩn không?\n"
+                 "• B1_04 (Y Tế Bước 1): Tủ lạnh < 5°C khi nhận hàng → Sau giao có bảo quản đúng không?\n"
+                 "• C07 (BGS): Nhiệt độ thức ăn khi nhận ≥ 60°C → Tại thời điểm kiểm tra BGS có đúng không?\n"
+                 "• B3_01 (Y Tế Bước 3): Nhiệt độ chia ≥ 60°C → Đến lúc phục vụ học sinh còn đúng không?\n\n"
+                 "Ví dụ — Mẫu lưu thức ăn:\n"
+                 "• S11 (NCC): NCC có giao đủ mẫu lưu không? → Trách nhiệm nhà cung cấp\n"
+                 "• C20 / B3_05 (BGS/Y Tế): Mẫu lưu đã được lấy và bảo quản đúng không? → Trách nhiệm nhà trường\n\n"
+                 "→ Mỗi vai trò kiểm tra cùng 1 tiêu chí nhưng ở THỜI ĐIỂM và GÓC ĐỘ TRÁCH NHIỆM khác nhau.\n"
+                 "Đây là cơ chế 'Defense in Depth' — nếu 1 tầng bỏ sót, tầng kế tiếp vẫn phát hiện được."),
                 ("Câu hỏi AI bổ sung theo thực đơn",
                  "Ngoài 20 câu chuẩn, khi nhập thực đơn và bấm 🤖 Tạo câu hỏi bổ sung, AI sẽ tạo "
                  "thêm 3–5 điểm kiểm tra đặc thù cho từng nguyên liệu dựa trên QCVN 8-1/8-2/8-3.\n\n"
@@ -4216,8 +4229,8 @@ def tab_history(role: str = "", school_filter: str = ""):
                         fig_hbar.update_layout(
                             plot_bgcolor="white", paper_bgcolor="#F8FAFC",
                             font=dict(family="Inter, sans-serif", size=12, color="#334155"),
-                            title=None,   # bỏ title trong chart, đã có sec-hdr bên ngoài
-                            margin=dict(l=10, r=60, t=10, b=16),
+                            # Không set title key → Plotly không render chữ nào
+                            margin=dict(l=10, r=60, t=4, b=16),
                             height=max(280, n * 50),
                             xaxis=dict(title="Số lần không đạt", showgrid=True,
                                        gridcolor="#E2E8F0", dtick=1),
@@ -4333,6 +4346,75 @@ def tab_history(role: str = "", school_filter: str = ""):
                             bordercolor="#E2E8F0", borderwidth=1),
             )
             st.plotly_chart(fig_ncc_trend, use_container_width=True)
+
+        # Top 10 lỗi NCC nhiều nhất
+        st.markdown('<div class="sec-hdr">🟣 Top điểm không đạt nhiều nhất (Nhà Cung Cấp)</div>',
+                    unsafe_allow_html=True)
+        try:
+            sb = _get_sb()
+            if sb:
+                _ncc_ids = [s["id"] for s in sessions
+                            if s.get("check_type") == "nha_cung_cap" and s.get("id")]
+                if _ncc_ids:
+                    _ncc_items: list = []
+                    for _i in range(0, len(_ncc_ids), 100):
+                        _batch = _ncc_ids[_i:_i+100]
+                        _r = sb.table("checklist_results")\
+                            .select("item_code,result")\
+                            .in_("session_id", _batch)\
+                            .in_("result", ["Không Đạt", "❌ Không Đạt"])\
+                            .execute()
+                        _ncc_items += (_r.data or [])
+                    if _ncc_items:
+                        # Map S01-S12 từ SUPPLIER_ITEMS constant
+                        _NCC_KW = {it["code"]: f"{it['icon']} {it['desc']}"
+                                   for it in SUPPLIER_ITEMS}
+                        _NCC_KW.update({  # backward compat nếu desc dài
+                            "S01": "📄 Giấy phép CSSX/KDDV",
+                            "S02": "🏅 Chứng nhận ATTP cơ sở",
+                            "S03": "🚚 Xe/thùng vận chuyển",
+                            "S04": "🌡️ Nhiệt độ vận chuyển",
+                            "S05": "🧾 Hóa đơn nguồn gốc hôm nay",
+                            "S06": "🏷️ Nhãn mác thực phẩm",
+                            "S07": "📋 Thực đơn khớp đặt hàng",
+                            "S08": "⚖️ Khẩu phần đủ định mức",
+                            "S09": "👷 BHLĐ nhân viên giao hàng",
+                            "S10": "📦 Dụng cụ đựng thực phẩm",
+                            "S11": "🧫 Mẫu lưu thực phẩm 24h",
+                            "S12": "⏰ Thời gian giao hàng đúng lịch",
+                        })
+                        df_ncc_it = pd.DataFrame(_ncc_items)
+                        df_ncc_it = df_ncc_it[df_ncc_it["item_code"].str.startswith("S")]
+                        df_ncc_it["Tên điểm"] = df_ncc_it["item_code"].map(
+                            lambda c: _NCC_KW.get(c, c))
+                        top_ncc = (df_ncc_it.groupby("Tên điểm").size()
+                                   .reset_index(name="Số lần")
+                                   .sort_values("Số lần").tail(12))
+                        n_n = len(top_ncc)
+                        fig_ncc_fail = go.Figure(go.Bar(
+                            x=top_ncc["Số lần"], y=top_ncc["Tên điểm"], orientation="h",
+                            marker_color=[f"rgba(124,58,237,{0.25+0.75*i/max(n_n-1,1)})"
+                                          for i in range(n_n)],
+                            text=top_ncc["Số lần"], textposition="outside",
+                            textfont=dict(size=12),
+                            hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
+                        ))
+                        fig_ncc_fail.update_layout(
+                            plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                            font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+                            margin=dict(l=10, r=60, t=4, b=16),
+                            height=max(280, n_n * 50),
+                            xaxis=dict(title="Số lần không đạt", showgrid=True,
+                                       gridcolor="#E2E8F0", dtick=1),
+                            yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
+                        )
+                        st.plotly_chart(fig_ncc_fail, use_container_width=True)
+                    else:
+                        st.info("Chưa có điểm không đạt nào từ nhà cung cấp.")
+                else:
+                    st.info("Chưa có dữ liệu kiểm tra nhà cung cấp.")
+        except Exception as _ne:
+            st.warning(f"Không thể tải top fail NCC: {_ne}")
 
         # Bảng chi tiết NCC
         st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Nhà Cung Cấp</div>',
@@ -4519,13 +4601,39 @@ def tab_supplier(api_key: str = ""):
     """G4: Checklist kiểm tra nhà cung cấp suất ăn 12 điểm."""
     st.markdown(
         '<div class="sf-card">'
-        '<div class="sf-card-title">🏭 Kiểm tra Nhà Cung Cấp Suất Ăn</div>'
+        '<div class="sf-card-title">🏭 Đánh Giá Nhà Cung Cấp Suất Ăn</div>'
         '<div class="sf-card-body">'
-        'Checklist 12 điểm · 6 mục bắt buộc (*) · '
-        'Khi chấm <b>Không Đạt</b>: bắt buộc có ghi chú mô tả lỗi <i>hoặc</i> ảnh minh chứng · '
-        'Tối đa 1 ảnh/mục (jpg, png, ≤5 MB) · AI Vision phân tích hình ảnh từng mục · '
-        'Phải chấm đủ 12 mục mới được tạo báo cáo'
+        'Checklist 12 điểm theo Luật ATTP 55/2010 · NĐ 15/2018 · 6 mục bắt buộc (*) · '
+        'Khi chấm <b>Không Đạt</b>: bắt buộc có ghi chú <i>hoặc</i> ảnh minh chứng · '
+        'AI Vision phân tích hình ảnh từng mục'
         '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Hướng dẫn tần suất đánh giá ──────────────────────────────────────────
+    st.markdown(
+        '<div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+        # Kiểm tra giao hàng
+        '<div style="flex:1;min-width:240px;background:#EFF6FF;border:1px solid #BFDBFE;'
+        'border-radius:9px;padding:10px 14px">'
+        '<div style="font-size:0.85rem;font-weight:700;color:#1D4ED8;margin-bottom:4px">'
+        '🚚 Kiểm tra khi nhận hàng (S03–S12)</div>'
+        '<div style="font-size:0.78rem;color:#1E40AF;line-height:1.7">'
+        '<b>Y Tế Học Đường:</b> Mỗi lần NCC giao hàng<br>'
+        '<b>Ban Giám Sát:</b> Khi có mặt tại thời điểm giao hàng<br>'
+        'Tập trung: Xe, nhiệt độ, hóa đơn, nhãn mác, khẩu phần, mẫu lưu'
+        '</div></div>'
+        # Kiểm tra toàn diện
+        '<div style="flex:1;min-width:240px;background:#F5F3FF;border:1px solid #DDD6FE;'
+        'border-radius:9px;padding:10px 14px">'
+        '<div style="font-size:0.85rem;font-weight:700;color:#6D28D9;margin-bottom:4px">'
+        '📋 Kiểm tra toàn diện 12 điểm (S01–S12)</div>'
+        '<div style="font-size:0.78rem;color:#5B21B6;line-height:1.7">'
+        '<b>Ban Giám Sát:</b> 1 lần/tháng · Cuối tháng hoặc trước gia hạn HĐ<br>'
+        '<b>Y Tế Học Đường:</b> Khi nhận thấy dấu hiệu vi phạm bất thường<br>'
+        'Bổ sung thêm: Giấy phép (S01), Chứng nhận ATTP (S02)'
+        '</div></div>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
