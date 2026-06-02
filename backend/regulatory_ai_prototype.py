@@ -2409,7 +2409,7 @@ def tab_parent_view(api_key: str = ""):
 
 
 # ── Kiểm thực 3 bước — Tab dành riêng Y Tế Học Đường ────────────────────────
-def tab_kiem_thuc(api_key: str = ""):
+def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"):
     """Kiểm thực 3 bước theo TTLT 13/2016 — dành riêng cho Y Tế Học Đường."""
     ai_on = bool(api_key)
     st.markdown("""<div class="sf-card">
@@ -2419,6 +2419,22 @@ def tab_kiem_thuc(api_key: str = ""):
             với sổ kiểm thực giấy bắt buộc. Mỗi bước ghi nhận <b>timestamp tự động</b>.
         </div>
     </div>""", unsafe_allow_html=True)
+
+    # ── Banner tiêu chuẩn dinh dưỡng — dùng level từ thanh điều khiển ───────
+    n_yte = NUTRITION.get(level, NUTRITION[list(NUTRITION.keys())[0]])
+    st.markdown(
+        f'<div class="nutrition-banner">'
+        f'<div class="nutrition-label">📊 Tiêu Chuẩn Dinh Dưỡng Bữa Trưa — Cấp {n_yte["short"]} (QĐ 3958/QĐ-BYT 2025)</div>'
+        f'<div class="nutrition-grid">'
+        f'<div class="nutrition-item">⚡ Năng lượng: <span class="nutrition-val">{n_yte["kcal"]}</span> ({n_yte["pct_day"]} nhu cầu ngày)</div>'
+        f'<div class="nutrition-item">🥩 Thịt/cá tối thiểu: <span class="nutrition-val">{n_yte["meat_g"]}g/học sinh</span></div>'
+        f'<div class="nutrition-item">🥦 Rau xanh: <span class="nutrition-val">{n_yte["veg_range"]}/học sinh</span></div>'
+        f'<div class="nutrition-item">💪 Protein: <span class="nutrition-val">{n_yte["protein_pct"]}</span> tổng năng lượng</div>'
+        f'</div>'
+        f'<div style="font-size:0.75rem;color:#1D4ED8;margin-top:6px">💡 {n_yte["note"]}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # Thông tin buổi kiểm tra
     st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
@@ -3650,7 +3666,7 @@ def main():
         if role == "Phụ Huynh":
             tab_parent_view(api_key)
         elif role == "Y Tế Học Đường":
-            tab_kiem_thuc(api_key)   # Module kiểm thực 3 bước + AI
+            tab_kiem_thuc(api_key, level)   # Module kiểm thực 3 bước + AI
         else:
             tab_checklist(api_key)   # Ban Giám Sát + Ban Giám Hiệu dùng 20 câu
     with t3: tab_schedule()
