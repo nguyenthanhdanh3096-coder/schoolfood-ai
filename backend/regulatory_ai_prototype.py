@@ -517,6 +517,78 @@ KIEM_THUC = [
     },
 ]
 
+# ── G4: Checklist Nhà Cung Cấp (12 điểm) ────────────────────────────────────
+SUPPLIER_ITEMS = [
+    {"code": "S01", "icon": "📄", "critical": True,
+     "desc": "Giấy phép CSSX/KDDV thực phẩm còn hiệu lực",
+     "hint": "Kiểm tra số giấy phép, ngày cấp, ngày hết hạn trên văn bản gốc",
+     "pass_std": "Còn hiệu lực, đúng địa chỉ cơ sở", "fail_std": "Hết hạn hoặc không xuất trình được",
+     "law": "Luật ATTP 55/2010 Điều 34"},
+    {"code": "S02", "icon": "🏅", "critical": True,
+     "desc": "Giấy chứng nhận cơ sở đủ điều kiện ATTP còn hiệu lực",
+     "hint": "Chứng nhận 3 năm/lần cấp bởi Sở Y Tế hoặc Sở NN&PTNT",
+     "pass_std": "Còn hiệu lực, không quá 3 năm kể từ ngày cấp", "fail_std": "Hết hạn hoặc không có",
+     "law": "NĐ 15/2018 Điều 11"},
+    {"code": "S03", "icon": "🚚", "critical": True,
+     "desc": "Xe/thùng vận chuyển cách nhiệt, sạch sẽ, không côn trùng",
+     "hint": "Quan sát trực tiếp xe hoặc thùng lạnh khi giao hàng",
+     "pass_std": "Kín, sạch, không mùi hôi, không côn trùng", "fail_std": "Bẩn, nứt vỡ hoặc có côn trùng",
+     "law": "NĐ 15/2018 Điều 18"},
+    {"code": "S04", "icon": "🌡️", "critical": True,
+     "desc": "Nhiệt độ vận chuyển thực phẩm chín ≥ 60°C hoặc lạnh < 8°C",
+     "hint": "Dùng nhiệt kế đo tại điểm trung tâm thùng hàng khi nhận",
+     "pass_std": "Nóng ≥ 60°C | Lạnh < 8°C", "fail_std": "8°C–60°C — vùng nguy hiểm vi khuẩn",
+     "law": "QCVN 8-1:2011/BYT + WHO Five Keys"},
+    {"code": "S05", "icon": "🧾", "critical": True,
+     "desc": "Hóa đơn và chứng từ nguồn gốc thực phẩm cho lô hàng hôm nay",
+     "hint": "Hóa đơn phải ghi đúng ngày, tên hàng, đơn vị cung cấp có địa chỉ rõ ràng",
+     "pass_std": "Hóa đơn đủ hàng, đúng ngày, có địa chỉ nhà cung cấp",
+     "fail_std": "Không có hóa đơn hoặc hóa đơn viết tay mờ",
+     "law": "NĐ 15/2018 Điều 11"},
+    {"code": "S06", "icon": "🏷️", "critical": False,
+     "desc": "Nhãn mác thực phẩm đóng gói đủ: ngày sản xuất, hạn dùng, nơi sản xuất",
+     "hint": "Kiểm tra mẫu ngẫu nhiên 3 gói/thùng hàng",
+     "pass_std": "Đủ 3 thông tin bắt buộc, chữ rõ, không tẩy xóa",
+     "fail_std": "Thiếu 1 trong 3 thông tin hoặc nhãn bị che/xóa",
+     "law": "NĐ 43/2017/NĐ-CP về nhãn hàng hóa"},
+    {"code": "S07", "icon": "📋", "critical": False,
+     "desc": "Thực đơn giao khớp với đơn đặt hàng và cam kết dinh dưỡng",
+     "hint": "So sánh phiếu giao hàng hôm nay với thực đơn tuần đã ký duyệt",
+     "pass_std": "Khớp hoàn toàn hoặc sai lệch < 5% có báo trước",
+     "fail_std": "Thiếu món hoặc thay thế không báo trước",
+     "law": "QĐ 3958/QĐ-BYT 2025"},
+    {"code": "S08", "icon": "⚖️", "critical": False,
+     "desc": "Khẩu phần đủ định lượng: thịt/cá ≥ định mức ký hợp đồng",
+     "hint": "Cân ngẫu nhiên 3 suất ăn, so với định mức đã ký",
+     "pass_std": "Đạt ≥ 90% định mức", "fail_std": "Thiếu > 10% định mức",
+     "law": "QĐ 3958/QĐ-BYT 2025 + hợp đồng cung cấp"},
+    {"code": "S09", "icon": "👷", "critical": False,
+     "desc": "Nhân viên giao hàng đeo khẩu trang, găng tay, đồng phục sạch",
+     "hint": "Quan sát tất cả người tiếp xúc trực tiếp với thực phẩm",
+     "pass_std": "100% nhân viên đeo đầy đủ BHLĐ", "fail_std": "Bất kỳ ai thiếu BHLĐ",
+     "law": "NĐ 15/2018 Điều 13"},
+    {"code": "S10", "icon": "📦", "critical": False,
+     "desc": "Dụng cụ đựng thực phẩm kín, sạch, không nứt vỡ",
+     "hint": "Kiểm tra khay, hộp, nồi đựng khi giao",
+     "pass_std": "Kín, sạch, nguyên vẹn", "fail_std": "Nứt vỡ hoặc bẩn",
+     "law": "NĐ 15/2018 Điều 13"},
+    {"code": "S11", "icon": "🧫", "critical": True,
+     "desc": "Mẫu lưu thực phẩm được giao đúng quy định (≥ 3 mẫu, ≥ 100g/mẫu, nhãn đủ 3 thông tin)",
+     "hint": "Kiểm tra tủ lạnh mẫu lưu: tên món + giờ lấy + ngày",
+     "pass_std": "Đủ số lượng, đủ trọng lượng, nhãn đầy đủ",
+     "fail_std": "Thiếu mẫu, thiếu lượng hoặc thiếu nhãn",
+     "law": "TTLT 13/2016 Điều 9 — BẮT BUỘC PHÁP LUẬT"},
+    {"code": "S12", "icon": "⏰", "critical": False,
+     "desc": "Thời gian giao hàng đúng lịch (trước bữa ăn tối thiểu 30 phút)",
+     "hint": "Ghi lại giờ xe đến cổng trường vs giờ bắt đầu phục vụ",
+     "pass_std": "Đến đúng giờ hoặc sớm hơn ≥ 30 phút",
+     "fail_std": "Trễ > 15 phút so với lịch hẹn",
+     "law": "Điều khoản hợp đồng cung cấp"},
+]
+SUPPLIER_CRITICAL = {"S01", "S02", "S03", "S04", "S05", "S11"}
+SUPPLIER_SCORE_PASS = 10   # ≥ 10/12 + critical OK → Loại A
+SUPPLIER_SCORE_WARN = 8    # 8–9/12 → Loại B
+
 # ── CSS ────────────────────────────────────────────────────────────────────────
 def inject_css():
     st.markdown("""
@@ -3861,13 +3933,14 @@ def tab_history(role: str = "", school_filter: str = ""):
             unsafe_allow_html=True,
         )
 
-    # Metric xu hướng — trực quan, không số
+    # Metric xu hướng — icon + text trong cùng 1 metric-num để giữ chiều cao bằng 4 ô còn lại
     k5.markdown(
         f'<div class="metric-box" style="text-align:center;background:{trend_bg};'
         f'border:1px solid {trend_tc}">'
         f'<div class="metric-lbl">Xu hướng</div>'
-        f'<div class="metric-num" style="font-size:1.8rem;color:{trend_tc}">{trend_icon}</div>'
-        f'<div style="font-size:0.78rem;font-weight:700;color:{trend_tc}">{trend_text}</div>'
+        f'<div class="metric-num" style="font-size:1.5rem;color:{trend_tc};line-height:1.2">'
+        f'{trend_icon}<br>'
+        f'<span style="font-size:0.75rem;font-weight:700">{trend_text}</span></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -4278,6 +4351,359 @@ def tab_history(role: str = "", school_filter: str = ""):
                     st.rerun()
 
 
+def tab_supplier(api_key: str = ""):
+    """G4: Checklist kiểm tra nhà cung cấp suất ăn 12 điểm."""
+    st.markdown("""<div class="sf-card">
+        <div class="sf-card-title">🏭 Kiểm tra Nhà Cung Cấp Suất Ăn</div>
+        <div class="sf-card-body">
+            Checklist 12 điểm theo Luật ATTP 55/2010, NĐ 15/2018 và QĐ 3958/QĐ-BYT 2025 ·
+            6 mục bắt buộc (*) — vi phạm bất kỳ mục nào → báo cáo ngay Ban Giám Hiệu
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Thông tin chung ────────────────────────────────────────────────────────
+    c1, c2 = st.columns(2)
+    sup_school   = c1.text_input("🏫 Tên trường", placeholder="VD: TH Nguyễn Du",
+                                  key="sup_school", max_chars=100)
+    sup_name     = c2.text_input("🏭 Tên nhà cung cấp", placeholder="VD: Công ty TNHH Bếp Xanh",
+                                  key="sup_name", max_chars=100)
+    c3, c4 = st.columns(2)
+    sup_inspector = c3.text_input("👤 Người kiểm tra", placeholder="Họ và tên",
+                                   key="sup_inspector", max_chars=80)
+    sup_date      = c4.date_input("📅 Ngày kiểm tra", value=now_vn().date(), key="sup_date")
+    sup_contract  = st.text_input("📃 Số hợp đồng cung cấp (nếu có)", placeholder="VD: HĐ-2025-001",
+                                   key="sup_contract", max_chars=50)
+
+    if not hasattr(st.session_state, "sup_r"):
+        st.session_state.sup_r = {}
+    if not hasattr(st.session_state, "sup_notes"):
+        st.session_state.sup_notes = {}
+
+    # ── Checklist 12 điểm ─────────────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">📋 Checklist 12 điểm kiểm tra</div>', unsafe_allow_html=True)
+
+    pass_count = fail_count = 0
+    for item in SUPPLIER_ITEMS:
+        code = item["code"]
+        is_crit = item["critical"]
+        crit_badge = ' <span style="color:#DC2626;font-weight:700">*</span>' if is_crit else ""
+
+        st.markdown(
+            f'<div style="background:{"#FFF5F5" if is_crit else "white"};border:1px solid '
+            f'{"#FCA5A5" if is_crit else "#E8ECF0"};border-radius:8px;padding:10px 14px;margin:4px 0">'
+            f'<div style="font-size:0.85rem;font-weight:600;color:#1E293B">'
+            f'{item["icon"]} [{code}]{crit_badge} {item["desc"]}</div>'
+            f'<div style="font-size:0.75rem;color:#64748B;margin-top:2px">'
+            f'💡 {item["hint"]} · 📖 {item["law"]}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        cols = st.columns([2, 1])
+        result = cols[0].radio(
+            "Kết quả", ["✅ Đạt", "❌ Không Đạt", "⬜ Không kiểm tra được"],
+            key=f"sup_r_{code}", horizontal=True, label_visibility="collapsed",
+        )
+        note = cols[1].text_input("Ghi chú", key=f"sup_n_{code}", placeholder="tuỳ chọn",
+                                   label_visibility="collapsed")
+        st.session_state.sup_r[code]     = result
+        st.session_state.sup_notes[code] = note
+
+        if result == "✅ Đạt":
+            pass_count += 1
+        elif result == "❌ Không Đạt":
+            fail_count += 1
+
+    total_checked = pass_count + fail_count
+
+    # ── KPI realtime ──────────────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    m1, m2, m3, m4 = st.columns(4)
+    pct = round(pass_count / max(total_checked, 1) * 100)
+    crit_fails = [c for c, v in st.session_state.sup_r.items()
+                  if v == "❌ Không Đạt" and c in SUPPLIER_CRITICAL]
+    if crit_fails:
+        alert_key, rating = "CRITICAL", "C"
+    elif pass_count < SUPPLIER_SCORE_WARN:
+        alert_key, rating = "MAJOR", "C"
+    elif pass_count < SUPPLIER_SCORE_PASS:
+        alert_key, rating = "MINOR", "B"
+    else:
+        alert_key, rating = "OK", "A"
+
+    rating_color = {"A": "#16A34A", "B": "#F59E0B", "C": "#DC2626"}[rating]
+
+    m1.markdown(f'<div class="metric-box"><div class="metric-lbl">Đã kiểm tra</div>'
+                f'<div class="metric-num c-blue">{total_checked}</div>'
+                f'<div class="metric-lbl">/ {len(SUPPLIER_ITEMS)} điểm</div></div>',
+                unsafe_allow_html=True)
+    m2.markdown(f'<div class="metric-box"><div class="metric-lbl">✅ Đạt</div>'
+                f'<div class="metric-num c-green">{pass_count}</div>'
+                f'<div class="metric-lbl">điểm</div></div>',
+                unsafe_allow_html=True)
+    m3.markdown(f'<div class="metric-box"><div class="metric-lbl">❌ Không đạt</div>'
+                f'<div class="metric-num c-red">{fail_count}</div>'
+                f'<div class="metric-lbl">điểm</div></div>',
+                unsafe_allow_html=True)
+    m4.markdown(f'<div class="metric-box"><div class="metric-lbl">Xếp loại</div>'
+                f'<div class="metric-num" style="color:{rating_color}">Loại {rating}</div>'
+                f'<div class="metric-lbl">{pct}% đạt</div></div>',
+                unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Hiện cảnh báo mục bắt buộc vi phạm
+    if crit_fails:
+        fail_descs = [f'[{c}] ' + next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
+                      for c in crit_fails]
+        st.markdown(
+            f'<div class="alert-critical">'
+            f'<div class="alert-title">🔴 VI PHẠM MỤC BẮT BUỘC — BÁO BAN GIÁM HIỆU NGAY</div>'
+            f'<div class="alert-body">{"<br>".join(f"• {d}" for d in fail_descs)}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    elif alert_key == "MAJOR":
+        st.markdown(
+            '<div class="alert-major"><div class="alert-title">🟠 Nhà cung cấp chưa đạt — '
+            'yêu cầu khắc phục trước bữa tiếp theo</div></div>',
+            unsafe_allow_html=True,
+        )
+    elif alert_key == "MINOR":
+        st.markdown(
+            '<div class="alert-minor"><div class="alert-title">🟡 Cần cải thiện — '
+            'thông báo nhà cung cấp trong 24h</div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="alert-ok"><div class="alert-title">✅ Nhà cung cấp đạt chuẩn — '
+            'lưu hồ sơ</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Validate trước khi submit ─────────────────────────────────────────────
+    can_submit = (
+        bool(sup_school.strip()) and
+        bool(sup_name.strip()) and
+        bool(sup_inspector.strip()) and
+        total_checked == len(SUPPLIER_ITEMS)
+    )
+
+    col_btn, col_ai = st.columns([1, 1])
+
+    # ── Tạo báo cáo Word + lưu DB ─────────────────────────────────────────────
+    if col_btn.button("📄 Tạo báo cáo Word & Lưu DB", type="primary",
+                      disabled=not can_submit, use_container_width=True):
+        guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
+        if st.session_state.get(guard_key):
+            st.info("Đã lưu rồi — tải lại Word bên dưới.")
+        else:
+            # Lưu DB
+            if db_ok():
+                results_dict = {c: ("Đạt" if v == "✅ Đạt" else "Không Đạt" if v == "❌ Không Đạt" else "Không KT")
+                                for c, v in st.session_state.sup_r.items()}
+                notes_dict = st.session_state.sup_notes.copy()
+                extra = {"contract": sup_contract, "supplier": sup_name}
+                sess_id = db_save_checklist(
+                    school=sup_school, date_str=str(sup_date),
+                    inspector=sup_inspector, menu=f"Nhà CC: {sup_name}",
+                    level="—", results=results_dict, notes=notes_dict,
+                    alert_level=alert_key, pass_count=pass_count, fail_count=fail_count,
+                    ai_narrative=f"Xếp loại {rating}", extra_results=extra,
+                )
+                if sess_id:
+                    st.session_state[guard_key] = True
+                    st.success("✅ Đã lưu vào database!")
+                else:
+                    st.warning("Không lưu được DB — kiểm tra kết nối Supabase.")
+            else:
+                st.warning("Database chưa kết nối — báo cáo chỉ được tạo file, không lưu DB.")
+
+            # Tạo Word
+            try:
+                from docx import Document
+                from docx.shared import Pt, Cm, RGBColor
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                from io import BytesIO
+
+                doc = Document()
+                style = doc.styles["Normal"]
+                style.font.name = "Times New Roman"
+                style.font.size = Pt(13)
+
+                for s in doc.sections:
+                    s.top_margin = Cm(2.5); s.bottom_margin = Cm(2.5)
+                    s.left_margin = Cm(3.0); s.right_margin = Cm(2.0)
+
+                # Quốc hiệu
+                p = doc.add_paragraph("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(13); r.bold = True
+
+                p = doc.add_paragraph("Độc lập – Tự do – Hạnh phúc")
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(13); r.bold = True
+
+                doc.add_paragraph("")
+
+                # Tiêu đề
+                p = doc.add_paragraph("BIÊN BẢN KIỂM TRA NHÀ CUNG CẤP SUẤT ĂN HỌC ĐƯỜNG")
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r = p.runs[0]; r.font.name = "Times New Roman"; r.font.size = Pt(14); r.bold = True
+
+                p = doc.add_paragraph(
+                    f"Ngày kiểm tra: {sup_date.strftime('%d/%m/%Y')} | "
+                    f"Nhà cung cấp: {sup_name} | Trường: {sup_school}"
+                )
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in p.runs: run.font.name = "Times New Roman"; run.font.size = Pt(13)
+
+                doc.add_paragraph("")
+
+                # Thông tin kiểm tra
+                info_pairs = [
+                    ("Tên trường", sup_school),
+                    ("Nhà cung cấp", sup_name),
+                    ("Người kiểm tra", sup_inspector),
+                    ("Ngày kiểm tra", sup_date.strftime("%d/%m/%Y")),
+                    ("Số hợp đồng", sup_contract or "—"),
+                    ("Xếp loại tổng thể", f"Loại {rating} ({pct}% đạt)"),
+                ]
+                for label, val in info_pairs:
+                    p = doc.add_paragraph()
+                    r = p.add_run(f"{label}: "); r.bold = True
+                    r.font.name = "Times New Roman"; r.font.size = Pt(13)
+                    r = p.add_run(val)
+                    r.font.name = "Times New Roman"; r.font.size = Pt(13)
+
+                doc.add_paragraph("")
+                p = doc.add_paragraph("KẾT QUẢ KIỂM TRA CHI TIẾT (12 ĐIỂM)")
+                r = p.runs[0]; r.bold = True
+                r.font.name = "Times New Roman"; r.font.size = Pt(13)
+
+                # Bảng kết quả
+                tbl = doc.add_table(rows=1, cols=4)
+                tbl.style = "Table Grid"
+                hdr = tbl.rows[0].cells
+                for i, h in enumerate(["Mã", "Nội dung kiểm tra", "Kết quả", "Ghi chú"]):
+                    hdr[i].text = h
+                    for para in hdr[i].paragraphs:
+                        for run in para.runs:
+                            run.bold = True
+                            run.font.name = "Times New Roman"
+                            run.font.size = Pt(12)
+
+                for item in SUPPLIER_ITEMS:
+                    code = item["code"]
+                    row = tbl.add_row().cells
+                    crit_mark = " (*)" if item["critical"] else ""
+                    row[0].text = f"{code}{crit_mark}"
+                    row[1].text = item["desc"]
+                    res_raw = st.session_state.sup_r.get(code, "")
+                    row[2].text = "Đạt" if "Đạt" in res_raw and "Không" not in res_raw else (
+                        "Không Đạt" if "Không Đạt" in res_raw else "Không KT")
+                    row[3].text = st.session_state.sup_notes.get(code, "")
+                    for cell in row:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.name = "Times New Roman"
+                                run.font.size = Pt(12)
+
+                doc.add_paragraph("")
+
+                # Kết luận
+                conclusion_text = {
+                    "A": f"Nhà cung cấp {sup_name} ĐẠT chuẩn kiểm tra — Loại A. "
+                         f"Tiếp tục hợp đồng cung cấp bình thường.",
+                    "B": f"Nhà cung cấp {sup_name} xếp Loại B — Cần cải thiện. "
+                         f"Thông báo khắc phục trong vòng 24 giờ.",
+                    "C": f"Nhà cung cấp {sup_name} KHÔNG ĐẠT chuẩn — Loại C. "
+                         f"Báo cáo ngay Ban Giám Hiệu. Xem xét tạm dừng hợp đồng.",
+                }
+                p = doc.add_paragraph("KẾT LUẬN: ")
+                r = p.runs[0]; r.bold = True
+                r.font.name = "Times New Roman"; r.font.size = Pt(13)
+                r = p.add_run(conclusion_text[rating])
+                r.font.name = "Times New Roman"; r.font.size = Pt(13)
+                if crit_fails:
+                    r2 = p.add_run(f"\n⚠️ Vi phạm mục bắt buộc: {', '.join(crit_fails)}")
+                    r2.font.name = "Times New Roman"; r2.font.size = Pt(13)
+                    r2.font.color.rgb = RGBColor(0xDC, 0x26, 0x26)
+
+                doc.add_paragraph("")
+                p = doc.add_paragraph(
+                    f"......., ngày {sup_date.strftime('%d')} tháng "
+                    f"{sup_date.strftime('%m')} năm {sup_date.strftime('%Y')}"
+                )
+                p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                for run in p.runs: run.font.name = "Times New Roman"; run.font.size = Pt(13)
+
+                sig1, sig2 = doc.add_table(rows=1, cols=2).rows[0].cells
+                sig1.text = "NGƯỜI KIỂM TRA\n(Ký, ghi rõ họ tên)"
+                sig2.text = "ĐẠI DIỆN NHÀ CUNG CẤP\n(Ký, ghi rõ họ tên)"
+                for cell in [sig1, sig2]:
+                    for para in cell.paragraphs:
+                        para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        for run in para.runs:
+                            run.bold = True
+                            run.font.name = "Times New Roman"; run.font.size = Pt(13)
+
+                buf = BytesIO()
+                doc.save(buf)
+                buf.seek(0)
+
+                fn = f"KiemTraNCC_{sup_name.replace(' ', '_')}_{sup_date.strftime('%Y%m%d')}.docx"
+                st.download_button(
+                    "⬇️ Tải báo cáo Word (.docx)",
+                    data=buf.getvalue(), file_name=fn,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.error(f"Lỗi tạo Word: {e}")
+
+    # ── AI phân tích (tuỳ chọn) ──────────────────────────────────────────────
+    if col_ai.button("🤖 AI phân tích rủi ro", disabled=(not api_key or total_checked < 6),
+                     use_container_width=True):
+        fail_list = [
+            next(x["desc"] for x in SUPPLIER_ITEMS if x["code"] == c)
+            for c, v in st.session_state.sup_r.items() if v == "❌ Không Đạt"
+        ]
+        prompt = (
+            f"Tôi vừa kiểm tra nhà cung cấp suất ăn học đường '{sup_name}' cho trường '{sup_school}'. "
+            f"Kết quả: {pass_count}/{len(SUPPLIER_ITEMS)} điểm đạt, xếp loại {rating}. "
+            + (f"Các vi phạm: {'; '.join(fail_list)}. " if fail_list else "Không có vi phạm. ")
+            + "Hãy phân tích rủi ro ngộ độc thực phẩm và đề xuất biện pháp khắc phục cụ thể theo luật Việt Nam, "
+            + "viết ngắn gọn khoảng 150 từ bằng tiếng Việt."
+        )
+        try:
+            client = anthropic.Anthropic(api_key=api_key)
+            with st.spinner("AI đang phân tích..."):
+                msg = client.messages.create(
+                    model=MODEL,
+                    max_tokens=600,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            ai_text = msg.content[0].text if msg.content else ""
+            st.markdown(
+                f'<div class="sf-card" style="border-left:3px solid #7C3AED">'
+                f'<div class="sf-card-title">🤖 Phân tích AI</div>'
+                f'<div class="sf-card-body">{ai_text}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        except Exception as e:
+            st.error(f"Lỗi AI: {e}")
+
+    if not can_submit:
+        missing = []
+        if not sup_school.strip(): missing.append("Tên trường")
+        if not sup_name.strip(): missing.append("Tên nhà cung cấp")
+        if not sup_inspector.strip(): missing.append("Người kiểm tra")
+        if total_checked < len(SUPPLIER_ITEMS): missing.append(f"Chưa chấm đủ {len(SUPPLIER_ITEMS)} điểm")
+        st.caption(f"⚠️ Cần điền đủ: {', '.join(missing)}")
+
+
 def tab_about():
     st.markdown("""<div class="sf-card">
         <div class="sf-card-title">Về SchoolFood AI</div>
@@ -4488,7 +4914,9 @@ def main():
         any(s.get("alert_level")=="CRITICAL"
             for s in db_get_sessions(limit=5)) else "")
 
-    t1, t2, t3, t4, t5, t6, t7 = st.tabs([
+    # Tab Nhà Cung Cấp chỉ dành cho Ban Giám Sát và Ban Giám Hiệu
+    _show_supplier = role in ("Ban Giám Sát (Đại Diện PHHS)", "Ban Giám Hiệu")
+    _tab_labels = [
         "💬 Hỏi đáp AI",
         tab2_label,
         _hist_label,
@@ -4496,7 +4924,17 @@ def main():
         "🚨 Khẩn cấp",
         "📖 Hướng dẫn",
         "ℹ️ Về ứng dụng",
-    ])
+    ]
+    if _show_supplier:
+        _tab_labels.insert(3, "🏭 Nhà Cung Cấp")
+
+    _tabs = st.tabs(_tab_labels)
+    t1, t2, t3 = _tabs[0], _tabs[1], _tabs[2]
+    if _show_supplier:
+        t_sup, t4, t5, t6, t7 = _tabs[3], _tabs[4], _tabs[5], _tabs[6], _tabs[7]
+    else:
+        t4, t5, t6, t7 = _tabs[3], _tabs[4], _tabs[5], _tabs[6]
+
     with t1: tab_chat(api_key, role, level, loc)
     with t2:
         if role == "Phụ Huynh":
@@ -4505,7 +4943,9 @@ def main():
             tab_kiem_thuc(api_key, level)
         else:
             tab_checklist(api_key)
-    with t3: tab_history(role=role)     # G1: Lịch sử database
+    with t3: tab_history(role=role)
+    if _show_supplier:
+        with t_sup: tab_supplier(api_key)
     with t4: tab_schedule()
     with t5: tab_emergency(api_key)
     with t6: tab_guide()
