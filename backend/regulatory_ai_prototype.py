@@ -4135,7 +4135,12 @@ def tab_history(role: str = "", school_filter: str = ""):
                 fig_bar = px.bar(wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
                                  color_discrete_map=_CMAP, barmode="stack", text="Số lần",
                                  category_orders={"Tuần": _wk_labels})
-                fig_bar.update_traces(textposition="inside", textfont_size=12)
+                fig_bar.update_traces(
+                    textposition="inside",
+                    insidetextanchor="middle",   # canh giữa trong mỗi segment
+                    textfont_size=12,
+                    textfont_color="white",
+                )
                 fig_bar.update_layout(
                     **{**_CHART_LAYOUT, "margin": dict(l=16, r=130, t=40, b=16)},
                     height=300, title="📊 Số lần kiểm tra bữa ăn theo tuần",
@@ -4160,9 +4165,12 @@ def tab_history(role: str = "", school_filter: str = ""):
                 orientation="h",
                 marker_color=["#16A34A" if v >= 90 else "#F59E0B" if v >= 80 else "#F97316"
                               for v in type_stats["avg_pct"]],
+                # Text đặt TRONG bar, canh giữa — tránh bị cắt khi bar gần 100%
                 text=[f"{v:.0f}%  ({c} lần)"
                       for v, c in zip(type_stats["avg_pct"], type_stats["count"])],
-                textposition="outside", textfont=dict(size=12, color="#1E293B"),
+                textposition="inside",
+                insidetextanchor="middle",
+                textfont=dict(size=12, color="white"),
                 hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
             ))
             fig_type.add_vline(x=90, line_dash="dot", line_color="#DC2626", line_width=1.5,
@@ -4170,9 +4178,9 @@ def tab_history(role: str = "", school_filter: str = ""):
                                annotation_font=dict(size=11, color="#DC2626"),
                                annotation_position="top")
             fig_type.update_layout(
-                **{**_CHART_LAYOUT, "margin": dict(l=10, r=90, t=40, b=16)},
+                **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
                 height=300, title="🔍 Tỷ lệ đạt TB theo loại kiểm tra",
-                xaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 120],
+                xaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 105],
                            ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
                 yaxis=dict(title="", showgrid=False, automargin=True),
                 showlegend=False,
@@ -4311,7 +4319,8 @@ def tab_history(role: str = "", school_filter: str = ""):
                                   for v in ncc_perf["avg_pct"]],
                     text=[f"{v:.0f}%  ({c} lần)"
                           for v, c in zip(ncc_perf["avg_pct"], ncc_perf["count"])],
-                    textposition="outside", textfont=dict(size=12, color="#1E293B"),
+                    textposition="inside", insidetextanchor="middle",
+                    textfont=dict(size=12, color="white"),
                     hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
                 ))
                 fig_ncc.add_vline(x=83, line_dash="dot", line_color="#16A34A", line_width=1.5,
@@ -4323,10 +4332,10 @@ def tab_history(role: str = "", school_filter: str = ""):
                                   annotation_font=dict(size=10, color="#F59E0B"),
                                   annotation_position="bottom")
                 fig_ncc.update_layout(
-                    **{**_CHART_LAYOUT, "margin": dict(l=10, r=100, t=40, b=16)},
+                    **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
                     height=max(280, len(ncc_perf) * 52),
                     title="🏭 Hiệu suất ATTP theo nhà cung cấp",
-                    xaxis=dict(title="Tỷ lệ đạt TB (%)", range=[0, 120],
+                    xaxis=dict(title="Tỷ lệ đạt TB (%)", range=[0, 105],
                                ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
                     yaxis=dict(showgrid=False, automargin=True, tickfont=dict(size=11)),
                     showlegend=False,
@@ -4348,7 +4357,10 @@ def tab_history(role: str = "", school_filter: str = ""):
                 barmode="stack", text="Số lần",
                 category_orders={"Xếp loại": ["Loại A", "Loại B", "Loại C"]},
             )
-            fig_ncc_trend.update_traces(textposition="inside", textfont_size=11)
+            fig_ncc_trend.update_traces(
+                textposition="inside", insidetextanchor="middle",
+                textfont_size=11, textfont_color="white",
+            )
             fig_ncc_trend.update_layout(
                 **{**_CHART_LAYOUT, "margin": dict(l=16, r=110, t=40, b=16)},
                 height=max(280, len(ncc_perf) * 52) if "ncc_perf" in dir() else 280,
