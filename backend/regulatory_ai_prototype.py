@@ -17,22 +17,60 @@ import anthropic
 import streamlit as st
 
 # ── G1: Database Layer — Supabase ────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
+# Không dùng @cache_resource để tránh cache None từ trước khi có secrets
+_sb_client = None
+_sb_error  = ""
+
 def _get_sb():
-    """Kết nối Supabase. Trả về None nếu chưa cấu hình — app vẫn chạy bình thường."""
+    """Kết nối Supabase — lazy init, không cache để đảm bảo luôn đọc secrets mới nhất."""
+    global _sb_client, _sb_error
+
+    # Đã kết nối rồi thì trả về luôn
+    if _sb_client is not None:
+        return _sb_client
+
     try:
-        from supabase import create_client
-        url = st.secrets.get("SUPABASE_URL", "")
-        key = st.secrets.get("SUPABASE_ANON_KEY", "")
-        if url and key and url.startswith("https://"):
-            return create_client(url, key)
-    except Exception:
-        pass
+        from supabase import create_client  # type: ignore
+
+        # Thử đọc secrets theo nhiều cách
+        url = ""
+        key = ""
+        try:
+            url = st.secrets["SUPABASE_URL"]
+            key = st.secrets["SUPABASE_ANON_KEY"]
+        except (KeyError, FileNotFoundError):
+            try:
+                url = st.secrets.get("SUPABASE_URL", "")
+                key = st.secrets.get("SUPABASE_ANON_KEY", "")
+            except Exception:
+                pass
+
+        if not url or not key:
+            _sb_error = "SUPABASE_URL hoặc SUPABASE_ANON_KEY chưa được thêm vào Secrets"
+            return None
+
+        if not url.startswith("https://"):
+            _sb_error = f"SUPABASE_URL không hợp lệ: {url[:30]}..."
+            return None
+
+        _sb_client = create_client(str(url), str(key))
+        _sb_error  = ""
+        return _sb_client
+
+    except ImportError:
+        _sb_error = "Package 'supabase' chưa được cài (kiểm tra requirements.txt)"
+    except Exception as e:
+        _sb_error = f"Lỗi kết nối: {str(e)[:100]}"
+
     return None
 
 def db_ok() -> bool:
     """Kiểm tra database có sẵn sàng không."""
     return _get_sb() is not None
+
+def db_error_msg() -> str:
+    """Trả về thông báo lỗi kết nối (nếu có)."""
+    return _sb_error
 
 def db_save_checklist(school: str, date_str: str, inspector: str, menu: str,
                       level: str, results: dict, notes: dict,
@@ -3707,23 +3745,37 @@ def tab_history(role: str = "", school_filter: str = ""):
         </div>
     </div>""", unsafe_allow_html=True)
 
+    # Thử kết nối và hiện lỗi cụ thể
+    _get_sb()  # Trigger kết nối để lấy error message
     if not db_ok():
-        st.markdown("""
-        <div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;
-                    padding:20px 24px;text-align:center">
-            <div style="font-size:1.1rem;font-weight:700;color:#9A3412;margin-bottom:8px">
-                📦 Database chưa được kết nối
-            </div>
-            <div style="font-size:0.9rem;color:#7C2D12;line-height:1.7">
-                Để bật tính năng lưu lịch sử, thêm 2 dòng vào <b>Streamlit Secrets</b>:<br>
-                <code style="background:#FED7AA;padding:2px 8px;border-radius:4px">
-                SUPABASE_URL = "https://xxx.supabase.co"</code><br>
-                <code style="background:#FED7AA;padding:2px 8px;border-radius:4px">
-                SUPABASE_ANON_KEY = "eyJ..."</code><br><br>
-                Xem hướng dẫn chi tiết: <b>04_Development/HUONG_DAN_DEPLOY.md</b>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        err = db_error_msg()
+        # Kiểm tra xem secrets có tồn tại không
+        has_url = bool(st.secrets.get("SUPABASE_URL", "") if hasattr(st, "secrets") else "")
+        has_key = bool(st.secrets.get("SUPABASE_ANON_KEY", "") if hasattr(st, "secrets") else "")
+        diag = []
+        if not has_url: diag.append("❌ SUPABASE_URL chưa có trong Secrets")
+        if not has_key: diag.append("❌ SUPABASE_ANON_KEY chưa có trong Secrets")
+        if has_url and has_key: diag.append("✅ Secrets có đủ 2 key — nhưng kết nối thất bại")
+        diag_html = "<br>".join(diag)
+
+        st.markdown(
+            f'<div style="background:#FFF7ED;border:2px solid #FB923C;border-radius:12px;'
+            f'padding:20px 24px">'
+            f'<div style="font-size:1.1rem;font-weight:700;color:#9A3412;margin-bottom:8px">'
+            f'📦 Database chưa được kết nối</div>'
+            f'<div style="font-size:0.88rem;color:#7C2D12;line-height:1.9">'
+            f'{diag_html}<br>'
+            f'{"<b>Lỗi chi tiết:</b> " + err if err else ""}'
+            f'</div>'
+            f'<div style="margin-top:12px;font-size:0.82rem;color:#92400E">'
+            f'Thêm vào Streamlit Secrets (Settings → Secrets):<br>'
+            f'<code style="background:#FED7AA;padding:2px 8px;border-radius:4px;display:block;margin:4px 0">'
+            f'SUPABASE_URL = "https://vmvensiremofatkylcuw.supabase.co"</code>'
+            f'<code style="background:#FED7AA;padding:2px 8px;border-radius:4px;display:block;margin:4px 0">'
+            f'SUPABASE_ANON_KEY = "eyJhbGci..."</code>'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
         return
 
     # Lọc theo trường
