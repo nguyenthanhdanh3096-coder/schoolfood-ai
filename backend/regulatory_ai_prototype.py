@@ -4397,43 +4397,74 @@ def tab_supplier(api_key: str = ""):
     for item in SUPPLIER_ITEMS:
         code     = item["code"]
         is_crit  = item["critical"]
-        crit_lbl = ' <span style="color:#DC2626;font-weight:700">(*)</span>' if is_crit else ""
 
-        # Trạng thái hiện tại
-        cur_result = st.session_state.sup_r.get(code, "")
-        is_fail    = (cur_result == "❌ Không Đạt")
-        has_img    = code in st.session_state.sup_imgs
-        has_note   = len(st.session_state.sup_notes.get(code, "").strip()) >= 10
-        need_evid  = is_fail and not has_img and not has_note  # thiếu bằng chứng khi Không Đạt
+        # Trạng thái hiện tại (None = chưa chọn)
+        cur = st.session_state.sup_r.get(code)
+        is_fail   = (cur == "❌ Không Đạt")
+        has_img   = code in st.session_state.sup_imgs
+        has_note  = len(st.session_state.sup_notes.get(code, "").strip()) >= 10
+        need_evid = is_fail and not has_img and not has_note
 
-        # Màu viền theo trạng thái
-        _bdr = "#F97316" if need_evid else ("#FCA5A5" if is_crit else "#E8ECF0")
-        _bg  = "#FFF7ED" if need_evid else ("#FFF5F5" if is_crit else "white")
+        # Màu theo trạng thái — giống hệt checklist tab
+        if cur == "✅ Đạt":
+            row_left = "#16A34A"; row_bg = "#F0FDF4"
+            code_icon = "✅"
+            state_lbl = '<span style="font-size:0.7rem;font-weight:700;color:#16A34A;margin-left:6px">ĐẠT</span>'
+        elif cur == "❌ Không Đạt":
+            row_left = "#F97316" if need_evid else "#DC2626"
+            row_bg   = "#FFF7ED" if need_evid else "#FFF5F5"
+            code_icon = "❌"
+            state_lbl = '<span style="font-size:0.7rem;font-weight:700;color:#DC2626;margin-left:6px">KHÔNG ĐẠT</span>'
+        else:  # None — chưa chọn
+            row_left = "#F59E0B"; row_bg = "#FFFBEB"
+            code_icon = "○"
+            state_lbl = '<span style="font-size:0.7rem;color:#D97706;margin-left:6px">chưa chấm</span>'
 
-        st.markdown(
-            f'<div style="background:{_bg};border:1.5px solid {_bdr};border-radius:9px;'
-            f'padding:11px 15px;margin:8px 0">'
-            f'<div style="font-size:0.87rem;font-weight:600;color:#1E293B">'
-            f'{item["icon"]} [{code}]{crit_lbl}&nbsp; {item["desc"]}</div>'
-            f'<div style="font-size:0.75rem;color:#64748B;margin-top:3px">💡 {item["hint"]}</div>'
-            f'<div style="font-size:0.72rem;color:#94A3B8">📖 {item["law"]}</div>'
-            + (f'<div style="font-size:0.75rem;color:#EA580C;margin-top:4px;font-weight:600">'
-               f'⚠️ Cần bổ sung ghi chú hoặc ảnh minh chứng cho mục Không Đạt này</div>'
-               if need_evid else '')
-            + '</div>',
-            unsafe_allow_html=True,
-        )
+        crit_badge = (
+            '<span style="background:#FEE2E2;color:#991B1B;font-size:0.65rem;font-weight:700;'
+            'padding:1px 6px;border-radius:8px;margin-left:6px;border:1px solid #FECACA">BẮT BUỘC</span>'
+        ) if is_crit else ""
 
-        # Radio: chỉ 2 lựa chọn (bỏ "Không kiểm tra được")
-        result = st.radio(
-            "Kết quả", ["✅ Đạt", "❌ Không Đạt"],
-            key=f"sup_r_{code}", horizontal=True, label_visibility="collapsed",
-        )
-        st.session_state.sup_r[code] = result
+        col_desc, col_ctrl = st.columns([0.60, 0.40])
+
+        with col_desc:
+            st.markdown(
+                f'<div style="background:{row_bg};border-left:3px solid {row_left};'
+                f'border-radius:0 8px 8px 0;padding:10px 14px;margin:4px 0;'
+                f'transition:background 0.4s ease,border-color 0.4s ease">'
+                f'<div style="margin-bottom:4px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'
+                f'<span style="font-size:0.75rem;font-weight:800;color:{row_left}">'
+                f'{code_icon} {code}</span>'
+                f'{crit_badge}{state_lbl}'
+                + (f'<span style="font-size:0.68rem;color:#EA580C;font-weight:600;margin-left:8px">'
+                   f'⚠️ Cần bổ sung ghi chú/ảnh</span>' if need_evid else '')
+                + f'</div>'
+                f'<div style="font-size:0.87rem;font-weight:500;color:#1E293B;line-height:1.55">'
+                f'{item["icon"]} {item["desc"]}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            with st.expander("🔍 Hướng dẫn & tiêu chuẩn"):
+                st.markdown(
+                    f"**💡 Thực hiện:** {item['hint']}  \n"
+                    f"**✅ Đạt khi:** {item['pass_std']}  \n"
+                    f"**❌ Không đạt khi:** {item['fail_std']}  \n"
+                    f"**📖 Căn cứ pháp lý:** {item['law']}"
+                )
+
+        with col_ctrl:
+            st.segmented_control(
+                label=code,
+                options=["✅ Đạt", "❌ Không Đạt"],
+                key=f"sup_seg_{code}",
+                label_visibility="collapsed",
+            )
+            result = st.session_state.get(f"sup_seg_{code}")
+            st.session_state.sup_r[code] = result
 
         if result == "✅ Đạt":
             pass_count += 1
-        else:
+        elif result == "❌ Không Đạt":
             fail_count += 1
 
         # Ghi chú — bắt buộc nếu Không Đạt và không có ảnh
@@ -4525,12 +4556,15 @@ def tab_supplier(api_key: str = ""):
         st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
 
     # ── KPI realtime ──────────────────────────────────────────────────────────
+    _checked = pass_count + fail_count  # số mục đã chọn (không tính None)
     st.markdown("<br>", unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
-    pct = round(pass_count / max(len(SUPPLIER_ITEMS), 1) * 100)
+    pct = round(pass_count / max(_checked, 1) * 100) if _checked else 0
     crit_fails = [c for c, v in st.session_state.sup_r.items()
                   if v == "❌ Không Đạt" and c in SUPPLIER_CRITICAL]
-    if crit_fails:
+    if _checked < len(SUPPLIER_ITEMS):
+        alert_key, rating = "OK", "—"   # chưa chấm xong → chưa xếp loại
+    elif crit_fails:
         alert_key, rating = "CRITICAL", "C"
     elif pass_count < SUPPLIER_SCORE_WARN:
         alert_key, rating = "MAJOR", "C"
@@ -4539,11 +4573,11 @@ def tab_supplier(api_key: str = ""):
     else:
         alert_key, rating = "OK", "A"
 
-    rating_color = {"A": "#16A34A", "B": "#F59E0B", "C": "#DC2626"}[rating]
+    rating_color = {"A": "#16A34A", "B": "#F59E0B", "C": "#DC2626", "—": "#64748B"}[rating]
 
     m1.markdown(f'<div class="metric-box"><div class="metric-lbl">Đã kiểm tra</div>'
-                f'<div class="metric-num c-blue">{len(SUPPLIER_ITEMS)}</div>'
-                f'<div class="metric-lbl">/ {len(SUPPLIER_ITEMS)} điểm</div></div>',
+                f'<div class="metric-num c-blue">{_checked}</div>'
+                f'<div class="metric-lbl">/ {len(SUPPLIER_ITEMS)} mục</div></div>',
                 unsafe_allow_html=True)
     m2.markdown(f'<div class="metric-box"><div class="metric-lbl">✅ Đạt</div>'
                 f'<div class="metric-num c-green">{pass_count}</div>'
@@ -4660,7 +4694,10 @@ def tab_supplier(api_key: str = ""):
         st.caption("✅ Kết quả AI đã được lưu — sẽ được đính kèm vào báo cáo Word khi tạo.")
 
     # ── Validate ─────────────────────────────────────────────────────────────
-    # Kiểm tra mục Không Đạt thiếu bằng chứng
+    # Mục chưa chọn (None = chưa chấm)
+    _unselected = [item["code"] for item in SUPPLIER_ITEMS
+                   if st.session_state.sup_r.get(item["code"]) is None]
+    # Mục Không Đạt thiếu bằng chứng
     _missing_evid = [
         item["code"] for item in SUPPLIER_ITEMS
         if st.session_state.sup_r.get(item["code"]) == "❌ Không Đạt"
@@ -4671,6 +4708,7 @@ def tab_supplier(api_key: str = ""):
         bool(sup_school.strip()) and
         bool(sup_name.strip()) and
         bool(sup_inspector.strip()) and
+        len(_unselected) == 0 and
         len(_missing_evid) == 0
     )
 
@@ -4682,8 +4720,10 @@ def tab_supplier(api_key: str = ""):
         if not sup_school.strip():    _miss.append("Tên trường")
         if not sup_name.strip():      _miss.append("Tên nhà cung cấp")
         if not sup_inspector.strip(): _miss.append("Người kiểm tra")
+        if _unselected:
+            _miss.append(f"Chưa chấm {len(_unselected)} mục: {', '.join(_unselected)}")
         if _missing_evid:
-            _miss.append(f"Mục Không Đạt chưa có bằng chứng: {', '.join(_missing_evid)}")
+            _miss.append(f"Mục Không Đạt chưa có ghi chú/ảnh: {', '.join(_missing_evid)}")
         st.warning("⚠️ Chưa đủ điều kiện tạo báo cáo: " + " · ".join(_miss))
 
     if st.button("📄 Tạo báo cáo Word & Lưu DB", type="primary",
