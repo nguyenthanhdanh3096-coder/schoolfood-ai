@@ -4374,7 +4374,8 @@ def tab_supplier(api_key: str = ""):
     c3, c4 = st.columns(2)
     sup_inspector = c3.text_input("👤 Người kiểm tra", placeholder="Họ và tên",
                                    key="sup_inspector", max_chars=80)
-    sup_date      = c4.date_input("📅 Ngày kiểm tra", value=now_vn().date(), key="sup_date")
+    sup_date      = c4.date_input("📅 Ngày kiểm tra", value=now_vn().date(),
+                                   key="sup_date", format="DD/MM/YYYY")
     sup_contract  = st.text_input("📃 Số hợp đồng cung cấp (nếu có)", placeholder="VD: HĐ-2025-001",
                                    key="sup_contract", max_chars=50)
 
