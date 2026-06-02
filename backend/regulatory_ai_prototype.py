@@ -3734,14 +3734,16 @@ def generate_manual_docx() -> bytes:
 
 
 def tab_history(role: str = "", school_filter: str = ""):
-    """Tab lịch sử & dashboard — hiển thị kết quả các lần kiểm tra đã lưu."""
+    """Live dashboard chuyên nghiệp — biểu đồ cột, tròn, đường, phân bố."""
     import pandas as pd
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from io import BytesIO
 
     st.markdown("""<div class="sf-card">
-        <div class="sf-card-title">📊 Lịch sử & Dashboard</div>
+        <div class="sf-card-title">📊 Live Dashboard — Lịch sử kiểm tra ATTP</div>
         <div class="sf-card-body">
-            Toàn bộ kết quả kiểm tra đã được lưu vào database. Dùng để phân tích
-            xu hướng, phát hiện điểm yếu lặp lại và báo cáo định kỳ.
+            Dữ liệu realtime từ database · Biểu đồ tương tác · Xuất Excel chuẩn
         </div>
     </div>""", unsafe_allow_html=True)
 
@@ -3788,90 +3790,239 @@ def tab_history(role: str = "", school_filter: str = ""):
         "Tất cả", "ban_giam_sat", "kiem_thuc_3_buoc"
     ])
 
-    sessions = db_get_sessions(school=school_input.strip(), limit=50)
+    sessions = db_get_sessions(school=school_input.strip(), limit=100)
     if check_type != "Tất cả":
         sessions = [s for s in sessions if s.get("check_type") == check_type]
 
     if not sessions:
-        st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu để bắt đầu tích lũy.")
+        st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu.")
         return
 
-    # ── Stats tổng quan ───────────────────────────────────────────────────────
-    total   = len(sessions)
-    crit_ct = sum(1 for s in sessions if s.get("alert_level") == "CRITICAL")
-    avg_pct = sum(
-        s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
-        for s in sessions
-    ) / total if total else 0
+    # ── Chuẩn bị dataframe ────────────────────────────────────────────────────
+    ALERT_VN = {"OK":"Đạt chuẩn","MINOR":"Cần cải thiện","MAJOR":"Không đạt","CRITICAL":"Nguy hiểm"}
+    TYPE_VN  = {"ban_giam_sat":"Ban Giám Sát","kiem_thuc_3_buoc":"Y Tế (3 bước)","nha_cung_cap":"Nhà cung cấp"}
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Tổng lần kiểm tra</div>
-        <div class="metric-num c-blue">{total}</div>
-    </div>""", unsafe_allow_html=True)
-    m2.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Trung bình đạt</div>
-        <div class="metric-num {'c-green' if avg_pct>=90 else 'c-orange' if avg_pct>=75 else 'c-red'}">{avg_pct:.0f}%</div>
-    </div>""", unsafe_allow_html=True)
-    m3.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">🔴 CRITICAL</div>
-        <div class="metric-num {'c-red' if crit_ct>0 else 'c-green'}">{crit_ct}</div>
-        <div class="metric-lbl">lần</div>
-    </div>""", unsafe_allow_html=True)
-    m4.markdown(f"""<div class="metric-box">
-        <div class="metric-lbl">Lần kiểm tra gần nhất</div>
-        <div class="metric-num" style="font-size:1.1rem;color:#1E293B">
-            {sessions[0].get("check_date","—")}
-        </div>
-    </div>""", unsafe_allow_html=True)
-
-    # ── Biểu đồ xu hướng ─────────────────────────────────────────────────────
-    if len(sessions) >= 3:
-        st.markdown('<div class="sec-hdr" style="margin-top:16px">Xu hướng tỷ lệ đạt (%)</div>',
-                    unsafe_allow_html=True)
-        chart_data = []
-        for s in reversed(sessions[-20:]):  # 20 lần gần nhất, sắp xếp theo thời gian
-            pct = s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
-            chart_data.append({"Ngày": s.get("check_date",""), "Tỷ lệ đạt (%)": round(pct, 1)})
-        df_chart = pd.DataFrame(chart_data).set_index("Ngày")
-        st.line_chart(df_chart)
-
-    # ── Bảng lịch sử ─────────────────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">Chi tiết các lần kiểm tra</div>', unsafe_allow_html=True)
-    ALERT_VN = {
-        "OK":       "✅ Đạt chuẩn",
-        "MINOR":    "🟡 Cần cải thiện",
-        "MAJOR":    "🟠 Không đạt",
-        "CRITICAL": "🔴 Nguy hiểm",
-    }
-    TYPE_VN = {
-        "ban_giam_sat":    "Ban Giám Sát",
-        "kiem_thuc_3_buoc": "Y Tế (3 bước)",
-        "nha_cung_cap":    "Nhà cung cấp",
-    }
     rows = []
     for s in sessions:
-        pct = s.get("pass_count", 0) / max(s.get("total_items", 20), 1) * 100
+        pct = s.get("pass_count",0) / max(s.get("total_items",20),1) * 100
         rows.append({
-            "Ngày":          s.get("check_date", ""),
-            "Trường":        s.get("school_name", ""),
-            "Người kiểm tra": s.get("inspector_name", ""),
-            "Loại":          TYPE_VN.get(s.get("check_type",""), s.get("check_type","")),
-            "Tỷ lệ đạt":    f"{pct:.0f}%",
-            "Đánh giá":     ALERT_VN.get(s.get("alert_level",""), s.get("alert_level","")),
+            "Ngày":           s.get("check_date",""),
+            "Trường":         s.get("school_name",""),
+            "Người kiểm tra": s.get("inspector_name",""),
+            "Loại kiểm tra":  TYPE_VN.get(s.get("check_type",""),s.get("check_type","")),
+            "Tỷ lệ đạt (%)":  round(pct,1),
+            "Điểm đạt":       s.get("pass_count",0),
+            "Điểm không đạt": s.get("fail_count",0),
+            "Tổng điểm":      s.get("total_items",20),
+            "Cấp cảnh báo":   s.get("alert_level",""),
+            "Đánh giá":       ALERT_VN.get(s.get("alert_level",""), s.get("alert_level","")),
         })
-
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
 
-    # ── Feedback Phụ Huynh (nếu là Ban Giám Hiệu) ───────────────────────────
+    # ── KPI Cards ─────────────────────────────────────────────────────────────
+    total     = len(df)
+    avg_pct   = df["Tỷ lệ đạt (%)"].mean()
+    crit_ct   = (df["Cấp cảnh báo"] == "CRITICAL").sum()
+    ok_ct     = (df["Cấp cảnh báo"] == "OK").sum()
+    trend_dir = "📈" if len(df) >= 2 and df["Tỷ lệ đạt (%)"].iloc[0] > df["Tỷ lệ đạt (%)"].iloc[-1] else "📉"
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    for col, val, lbl, clr in [
+        (k1, total,          "Tổng lần kiểm tra", "c-blue"),
+        (k2, f"{avg_pct:.0f}%", "Trung bình đạt",  "c-green" if avg_pct>=90 else "c-orange"),
+        (k3, crit_ct,        "🔴 CRITICAL",      "c-red" if crit_ct>0 else "c-green"),
+        (k4, ok_ct,          "✅ Đạt chuẩn",     "c-green"),
+        (k5, trend_dir,      "Xu hướng",          "c-blue"),
+    ]:
+        col.markdown(
+            f'<div class="metric-box"><div class="metric-lbl">{lbl}</div>'
+            f'<div class="metric-num {clr}">{val}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Hàng 1: Biểu đồ đường + Biểu đồ tròn ────────────────────────────────
+    ch1, ch2 = st.columns([3, 2])
+
+    with ch1:
+        st.markdown('<div class="sec-hdr">📈 Xu hướng tỷ lệ đạt theo thời gian</div>',
+                    unsafe_allow_html=True)
+        df_trend = df.sort_values("Ngày").tail(30).copy()
+        df_trend["Ngưỡng đạt chuẩn (90%)"] = 90
+        fig_line = px.line(
+            df_trend, x="Ngày", y=["Tỷ lệ đạt (%)", "Ngưỡng đạt chuẩn (90%)"],
+            color_discrete_map={
+                "Tỷ lệ đạt (%)":       "#2563EB",
+                "Ngưỡng đạt chuẩn (90%)": "#DC2626",
+            },
+            markers=True,
+        )
+        fig_line.update_layout(
+            height=300, margin=dict(l=10,r=10,t=10,b=10),
+            legend=dict(orientation="h", y=-0.2),
+            yaxis=dict(range=[0,105], ticksuffix="%"),
+            plot_bgcolor="white", paper_bgcolor="white",
+            font=dict(family="Inter"),
+        )
+        fig_line.update_traces(line_width=2.5)
+        st.plotly_chart(fig_line, use_container_width=True)
+
+    with ch2:
+        st.markdown('<div class="sec-hdr">🥧 Phân bố mức cảnh báo</div>',
+                    unsafe_allow_html=True)
+        alert_counts = df["Đánh giá"].value_counts().reset_index()
+        alert_counts.columns = ["Mức","Số lần"]
+        fig_pie = px.pie(
+            alert_counts, names="Mức", values="Số lần",
+            color="Mức",
+            color_discrete_map={
+                "Đạt chuẩn":      "#16A34A",
+                "Cần cải thiện":  "#CA8A04",
+                "Không đạt":      "#D97706",
+                "Nguy hiểm":      "#DC2626",
+            },
+            hole=0.4,
+        )
+        fig_pie.update_layout(
+            height=300, margin=dict(l=10,r=10,t=10,b=10),
+            legend=dict(orientation="h", y=-0.15),
+            font=dict(family="Inter"),
+            annotations=[dict(text=f"<b>{total}</b><br>lần", x=0.5, y=0.5,
+                              showarrow=False, font_size=14)]
+        )
+        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # ── Hàng 2: Biểu đồ cột + Phân phối ──────────────────────────────────────
+    ch3, ch4 = st.columns([3, 2])
+
+    with ch3:
+        st.markdown('<div class="sec-hdr">📊 Số lần kiểm tra theo tuần</div>',
+                    unsafe_allow_html=True)
+        try:
+            df_wk = df.copy()
+            df_wk["Tuần"] = pd.to_datetime(df_wk["Ngày"]).dt.to_period("W").astype(str)
+            wk_cnt = df_wk.groupby(["Tuần","Đánh giá"]).size().reset_index(name="Số lần")
+            fig_bar = px.bar(
+                wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
+                color_discrete_map={
+                    "Đạt chuẩn":      "#16A34A",
+                    "Cần cải thiện":  "#CA8A04",
+                    "Không đạt":      "#D97706",
+                    "Nguy hiểm":      "#DC2626",
+                },
+                barmode="stack",
+            )
+            fig_bar.update_layout(
+                height=300, margin=dict(l=10,r=10,t=10,b=10),
+                legend=dict(orientation="h", y=-0.25),
+                xaxis_tickangle=-45,
+                plot_bgcolor="white", paper_bgcolor="white",
+                font=dict(family="Inter"),
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+        except Exception:
+            st.info("Cần ít nhất 2 tuần dữ liệu để hiển thị biểu đồ này.")
+
+    with ch4:
+        st.markdown('<div class="sec-hdr">📐 Phân phối tỷ lệ đạt (%)</div>',
+                    unsafe_allow_html=True)
+        fig_hist = px.histogram(
+            df, x="Tỷ lệ đạt (%)", nbins=10,
+            color_discrete_sequence=["#2563EB"],
+            opacity=0.8,
+        )
+        fig_hist.add_vline(
+            x=avg_pct, line_dash="dash", line_color="#DC2626",
+            annotation_text=f"TB: {avg_pct:.0f}%",
+            annotation_position="top right",
+        )
+        fig_hist.update_layout(
+            height=300, margin=dict(l=10,r=10,t=10,b=10),
+            xaxis=dict(ticksuffix="%"),
+            plot_bgcolor="white", paper_bgcolor="white",
+            font=dict(family="Inter"),
+            bargap=0.05,
+        )
+        st.plotly_chart(fig_hist, use_container_width=True)
+
+    # ── Hàng 3: Biểu đồ điểm FAIL nhiều nhất (nếu có data chi tiết) ──────────
+    try:
+        sb = _get_sb()
+        if sb:
+            items_raw = sb.table("checklist_results")\
+                .select("item_code,result")\
+                .eq("result","Không Đạt")\
+                .limit(500).execute().data or []
+            if items_raw:
+                df_items = pd.DataFrame(items_raw)
+                top_fail = df_items["item_code"].value_counts().head(10).reset_index()
+                top_fail.columns = ["Mã điểm","Số lần không đạt"]
+                st.markdown('<div class="sec-hdr">🔴 Top 10 điểm kiểm tra hay không đạt nhất</div>',
+                            unsafe_allow_html=True)
+                fig_hbar = px.bar(
+                    top_fail.sort_values("Số lần không đạt"),
+                    x="Số lần không đạt", y="Mã điểm",
+                    orientation="h",
+                    color="Số lần không đạt",
+                    color_continuous_scale=["#FEE2E2","#DC2626"],
+                )
+                fig_hbar.update_layout(
+                    height=320, margin=dict(l=10,r=10,t=10,b=10),
+                    showlegend=False, coloraxis_showscale=False,
+                    plot_bgcolor="white", paper_bgcolor="white",
+                    font=dict(family="Inter"),
+                )
+                st.plotly_chart(fig_hbar, use_container_width=True)
+    except Exception:
+        pass
+
+    # ── Bảng chi tiết + Xuất Excel (fix lỗi CSV dồn cột) ─────────────────────
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Xuất Excel</div>', unsafe_allow_html=True)
+
+    df_display = df.drop(columns=["Cấp cảnh báo"], errors="ignore")
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    # Export Excel (.xlsx) — không bị lỗi dồn cột như CSV
+    exp1, exp2 = st.columns(2)
+    with exp1:
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df_display.to_excel(writer, index=False, sheet_name="Lịch sử kiểm tra")
+            # Format cột rộng ra cho dễ đọc
+            ws = writer.sheets["Lịch sử kiểm tra"]
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        buf.seek(0)
+        st.download_button(
+            "⬇️ Xuất Excel (.xlsx) — mở được ngay trong Excel",
+            data=buf.getvalue(),
+            file_name=f"LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True, type="primary",
+        )
+    with exp2:
+        # CSV với BOM để Excel nhận đúng UTF-8 tiếng Việt
+        csv_bytes = df_display.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+        st.download_button(
+            "⬇️ Xuất CSV (UTF-8 BOM — Excel đọc đúng cột)",
+            data=csv_bytes,
+            file_name=f"LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.csv",
+            mime="text/csv; charset=utf-8-sig",
+            use_container_width=True,
+        )
+
+    # ── Feedback Phụ Huynh ────────────────────────────────────────────────────
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)"):
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
         st.markdown('<div class="sec-hdr">📬 Feedback Phụ Huynh chưa xử lý</div>',
                     unsafe_allow_html=True)
         feedbacks = db_get_feedback(school=school_input.strip())
         if not feedbacks:
-            st.info("Không có feedback mới.")
+            st.info("Không có feedback mới từ Phụ Huynh.")
         else:
             for fb in feedbacks:
                 col_fb, col_btn = st.columns([5, 1])
@@ -3880,8 +4031,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                     f'<span style="font-size:0.75rem;color:#64748B">'
                     f'{fb.get("created_at","")[:10]} · {fb.get("category","")}</span><br>'
                     f'<span style="font-size:0.9rem;color:#1E293B">{fb.get("content","")}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
+                    f'</div>', unsafe_allow_html=True,
                 )
                 if col_btn.button("✅ Đã xử lý", key=f"fb_{fb['id']}",
                                   use_container_width=True):
