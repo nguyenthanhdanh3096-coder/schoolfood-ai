@@ -4329,103 +4329,146 @@ def tab_history(role: str = "", school_filter: str = ""):
         _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
         st.dataframe(_dn, use_container_width=True, hide_index=True)
 
-    # Dùng cho Excel export bên dưới
-    df_display = pd.concat([
-        (df_meal.drop(columns=["Cấp cảnh báo"], errors="ignore") if show_meal and not df_meal.empty
-         else pd.DataFrame()),
-        (df_ncc.drop(columns=["Cấp cảnh báo", "Đánh giá"], errors="ignore") if show_ncc and not df_ncc.empty
-         else pd.DataFrame()),
-    ], ignore_index=True)
-    _parsed2 = pd.to_datetime(df_display.get("Ngày", pd.Series(dtype=str)), errors="coerce")
-    df_display["Ngày"] = _parsed2.dt.strftime("%d/%m/%Y").where(_parsed2.notna(), df_display.get("Ngày", ""))
-    total    = len(df_display)
-    avg_pct  = df_display["Tỷ lệ đạt (%)"].mean() if "Tỷ lệ đạt (%)" in df_display.columns else 0
+    st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo</div>', unsafe_allow_html=True)
-
-    # Tạo Excel với định dạng chuyên nghiệp Times New Roman 13
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font as XFont, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
 
-        wb  = Workbook()
-        ws  = wb.active
-        ws.title = "Lịch sử kiểm tra ATTP"
+        wb = Workbook()
+        wb.remove(wb.active)  # xoá sheet mặc định, tự tạo 2 sheet riêng
 
-        # Quốc hiệu
-        ws.merge_cells(f"A1:{get_column_letter(len(df_display.columns))}1")
-        c = ws["A1"]
-        c.value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM — Độc lập – Tự do – Hạnh phúc"
-        c.font      = XFont(name="Times New Roman", size=11, bold=True)
-        c.alignment = Alignment(horizontal="center")
-        ws.row_dimensions[1].height = 18
-
-        # Tiêu đề
-        ws.merge_cells(f"A2:{get_column_letter(len(df_display.columns))}2")
-        c = ws["A2"]
-        c.value = "BÁO CÁO LỊCH SỬ KIỂM TRA AN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG"
-        c.font      = XFont(name="Times New Roman", size=15, bold=True, color="1B3B6F")
-        c.alignment = Alignment(horizontal="center")
-        ws.row_dimensions[2].height = 28
-
-        # Subtitle
-        ws.merge_cells(f"A3:{get_column_letter(len(df_display.columns))}3")
-        c = ws["A3"]
-        c.value = (f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')} | "
-                   f"Tổng: {total} lần kiểm tra | Trung bình đạt: {avg_pct:.0f}%")
-        c.font      = XFont(name="Times New Roman", size=11, italic=True, color="475569")
-        c.alignment = Alignment(horizontal="center")
-        ws.row_dimensions[3].height = 16
-
-        # Header row
-        HDR_FILL = PatternFill("solid", fgColor="1B3B6F")
-        HDR_FONT = XFont(name="Times New Roman", size=13, bold=True, color="FFFFFF")
+        # Styles dùng chung
+        THIN    = Side(style="thin", color="CBD5E1")
+        BORDER  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+        HDR_FILL_MEAL = PatternFill("solid", fgColor="1B3B6F")   # xanh navy — bữa ăn
+        HDR_FILL_NCC  = PatternFill("solid", fgColor="4C1D95")   # tím — NCC
+        HDR_FONT  = XFont(name="Times New Roman", size=13, bold=True, color="FFFFFF")
         HDR_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        THIN_SIDE = Side(style="thin", color="CBD5E1")
-        BORDER    = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
 
-        for ci, col_name in enumerate(df_display.columns, 1):
-            c = ws.cell(row=4, column=ci, value=col_name)
-            c.font = HDR_FONT; c.fill = HDR_FILL
-            c.alignment = HDR_ALIGN; c.border = BORDER
-        ws.row_dimensions[4].height = 22
-
-        # Data rows
-        ALERT_COLORS = {
+        ALERT_BG = {
             "Nguy hiểm":     "FEE2E2",
             "Không đạt":     "FEF9C3",
             "Cần cải thiện": "FEFCE8",
         }
+        RATING_BG = {"Loại A": "DCFCE7", "Loại B": "FEF9C3", "Loại C": "FEE2E2"}
 
-        for ri, row_data in enumerate(df_display.itertuples(index=False), 5):
-            row_vals = list(row_data)
-            alert_val = str(row_vals[-1]) if row_vals else ""
-            bg = ALERT_COLORS.get(alert_val, "EFF6FF" if ri%2==0 else "FFFFFF")
-            fill = PatternFill("solid", fgColor=bg)
-            for ci, val in enumerate(row_vals, 1):
-                c = ws.cell(row=ri, column=ci, value=val)
-                c.font      = XFont(name="Times New Roman", size=13)
-                c.fill      = fill
-                c.border    = BORDER
-                c.alignment = Alignment(vertical="center",
-                                        horizontal="center" if ci > 4 else "left")
-            ws.row_dimensions[ri].height = 18
+        def _write_sheet(ws, df_ws, title_txt, subtitle_txt, hdr_fill, rating_col=None):
+            """Ghi dữ liệu vào worksheet với header chuyên nghiệp."""
+            if df_ws.empty:
+                ws.cell(row=1, column=1, value="Chưa có dữ liệu.")
+                return
+            ncols = len(df_ws.columns)
+            col_last = get_column_letter(ncols)
 
-        # Auto-width cột
-        for ci, col_name in enumerate(df_display.columns, 1):
-            max_w = max(len(str(col_name)),
-                        max((len(str(ws.cell(row=r, column=ci).value or ""))
-                             for r in range(4, len(df_display)+5)), default=0))
-            ws.column_dimensions[get_column_letter(ci)].width = min(max_w+3, 38)
+            # Quốc hiệu
+            ws.merge_cells(f"A1:{col_last}1")
+            _c = ws["A1"]
+            _c.value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM — Độc lập – Tự do – Hạnh phúc"
+            _c.font = XFont(name="Times New Roman", size=11, bold=True)
+            _c.alignment = Alignment(horizontal="center")
+            ws.row_dimensions[1].height = 18
 
-        ws.freeze_panes = "A5"
+            # Tiêu đề
+            ws.merge_cells(f"A2:{col_last}2")
+            _c = ws["A2"]
+            _c.value = title_txt
+            _c.font = XFont(name="Times New Roman", size=14, bold=True, color="1B3B6F")
+            _c.alignment = Alignment(horizontal="center")
+            ws.row_dimensions[2].height = 26
+
+            # Subtitle
+            ws.merge_cells(f"A3:{col_last}3")
+            _c = ws["A3"]
+            _c.value = subtitle_txt
+            _c.font = XFont(name="Times New Roman", size=11, italic=True, color="475569")
+            _c.alignment = Alignment(horizontal="center")
+            ws.row_dimensions[3].height = 15
+
+            # Header cột
+            for ci, cname in enumerate(df_ws.columns, 1):
+                _c = ws.cell(row=4, column=ci, value=cname)
+                _c.font = HDR_FONT; _c.fill = hdr_fill
+                _c.alignment = HDR_ALIGN; _c.border = BORDER
+            ws.row_dimensions[4].height = 22
+
+            # Dữ liệu
+            for ri, row_data in enumerate(df_ws.itertuples(index=False), 5):
+                row_vals = list(row_data)
+                # Chọn màu nền theo loại sheet
+                if rating_col is not None and rating_col < len(row_vals):
+                    bg = RATING_BG.get(str(row_vals[rating_col]), "EFF6FF" if ri % 2 == 0 else "FFFFFF")
+                else:
+                    last_val = str(row_vals[-1]) if row_vals else ""
+                    bg = ALERT_BG.get(last_val, "EFF6FF" if ri % 2 == 0 else "FFFFFF")
+                fill = PatternFill("solid", fgColor=bg)
+                for ci, val in enumerate(row_vals, 1):
+                    _c = ws.cell(row=ri, column=ci, value=val)
+                    _c.font = XFont(name="Times New Roman", size=13)
+                    _c.fill = fill; _c.border = BORDER
+                    _c.alignment = Alignment(vertical="center",
+                                             horizontal="left" if ci <= 3 else "center")
+                ws.row_dimensions[ri].height = 18
+
+            # Auto-width
+            for ci, cname in enumerate(df_ws.columns, 1):
+                mx = max(len(str(cname)),
+                         max((len(str(ws.cell(row=r, column=ci).value or ""))
+                              for r in range(4, len(df_ws) + 5)), default=0))
+                ws.column_dimensions[get_column_letter(ci)].width = min(mx + 3, 42)
+            ws.freeze_panes = "A5"
+
+        # ── Sheet 1: Bữa ăn ──────────────────────────────────────────────────
+        ws_meal = wb.create_sheet("🍱 Bữa Ăn")
+        if show_meal and not df_meal.empty:
+            _dm_xl = df_meal.drop(columns=["Cấp cảnh báo"], errors="ignore").copy()
+            _dm_xl["Ngày"] = (pd.to_datetime(_dm_xl["Ngày"], errors="coerce")
+                              .dt.strftime("%d/%m/%Y").fillna(_dm_xl["Ngày"]))
+            meal_avg = _dm_xl["Tỷ lệ đạt (%)"].mean() if "Tỷ lệ đạt (%)" in _dm_xl.columns else 0
+            _write_sheet(
+                ws_meal, _dm_xl,
+                title_txt="KẾT QUẢ KIỂM TRA AN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG",
+                subtitle_txt=(f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')} | "
+                              f"Tổng: {len(_dm_xl)} lần | Trung bình đạt: {meal_avg:.0f}%"),
+                hdr_fill=HDR_FILL_MEAL,
+            )
+        else:
+            ws_meal.cell(row=1, column=1, value="Không có dữ liệu bữa ăn trong bộ lọc hiện tại.")
+
+        # ── Sheet 2: Nhà Cung Cấp ────────────────────────────────────────────
+        ws_ncc = wb.create_sheet("🏭 Nhà Cung Cấp")
+        if show_ncc and not df_ncc.empty:
+            _dn_xl = df_ncc.drop(columns=["Cấp cảnh báo", "Đánh giá"], errors="ignore").copy()
+            _dn_xl["Ngày"] = (pd.to_datetime(_dn_xl["Ngày"], errors="coerce")
+                              .dt.strftime("%d/%m/%Y").fillna(_dn_xl["Ngày"]))
+            # Sắp xếp cột hợp lý
+            _ncc_cols = ["Ngày", "Trường", "Nhà Cung Cấp", "Người kiểm tra",
+                         "Xếp loại", "Tỷ lệ đạt (%)", "Điểm đạt", "Điểm không đạt", "Tổng điểm"]
+            _dn_xl = _dn_xl[[col for col in _ncc_cols if col in _dn_xl.columns]]
+            # Tìm vị trí cột "Xếp loại" để tô màu A/B/C
+            _rating_idx = list(_dn_xl.columns).index("Xếp loại") if "Xếp loại" in _dn_xl.columns else None
+            ncc_avg = _dn_xl["Tỷ lệ đạt (%)"].mean() if "Tỷ lệ đạt (%)" in _dn_xl.columns else 0
+            ncc_a = (_dn_xl["Xếp loại"] == "Loại A").sum() if "Xếp loại" in _dn_xl.columns else 0
+            ncc_b = (_dn_xl["Xếp loại"] == "Loại B").sum() if "Xếp loại" in _dn_xl.columns else 0
+            ncc_c = (_dn_xl["Xếp loại"] == "Loại C").sum() if "Xếp loại" in _dn_xl.columns else 0
+            _write_sheet(
+                ws_ncc, _dn_xl,
+                title_txt="KẾT QUẢ ĐÁNH GIÁ NHÀ CUNG CẤP SUẤT ĂN HỌC ĐƯỜNG",
+                subtitle_txt=(f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')} | "
+                              f"Tổng: {len(_dn_xl)} lần | TB đạt: {ncc_avg:.0f}% | "
+                              f"Loại A: {ncc_a} · Loại B: {ncc_b} · Loại C: {ncc_c}"),
+                hdr_fill=HDR_FILL_NCC,
+                rating_col=_rating_idx,
+            )
+        else:
+            ws_ncc.cell(row=1, column=1, value="Không có dữ liệu nhà cung cấp trong bộ lọc hiện tại.")
 
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
-            "⬇️ Tải báo cáo Excel (.xlsx)",
+            "⬇️ Tải báo cáo Excel 2 sheet (.xlsx)",
             data=buf.getvalue(),
-            file_name=f"BaoCao_LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
+            file_name=f"BaoCao_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True, type="primary",
         )
