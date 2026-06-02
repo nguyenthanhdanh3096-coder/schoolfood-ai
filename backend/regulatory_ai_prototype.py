@@ -108,14 +108,14 @@ def db_save_checklist(school: str, date_str: str, inspector: str, menu: str,
              "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
              "note": notes.get(k, ""),
              "is_critical": k in CRITICAL_ITEMS}
-            for k, v in results.items() if v != "Chưa chấm"
+            for k, v in results.items() if v is not None
         ]
         if extra_results:
             items += [
                 {"session_id": sid, "item_code": k,
                  "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
                  "note": "", "is_critical": False}
-                for k, v in extra_results.items() if v != "Chưa kiểm tra"
+                for k, v in extra_results.items() if v is not None
             ]
         if items:
             sb.table("checklist_results").insert(items).execute()
@@ -155,7 +155,7 @@ def db_save_kiem_thuc(school: str, date_str: str, yte_name: str, menu: str,
              "result": v.replace("✅ Đạt", "Đạt").replace("❌ Không Đạt", "Không Đạt"),
              "note": all_notes.get(k, ""),
              "is_critical": k in {"B3_05"}}
-            for k, v in all_results.items() if v != "Chưa kiểm tra"
+            for k, v in all_results.items() if v is not None
         ]
         if items:
             sb.table("checklist_results").insert(items).execute()
@@ -1226,7 +1226,7 @@ def validate_checklist(results: dict, photos: dict) -> list[str]:
     """Trả về danh sách lỗi. Rỗng = hợp lệ, được phép xuất báo cáo."""
     errors = []
 
-    unanswered = sorted(c for c, v in results.items() if v == "Chưa chấm")
+    unanswered = sorted(c for c, v in results.items() if v is None)
     if unanswered:
         errors.append(
             f"Còn {len(unanswered)} mục chưa được đánh giá: "
@@ -1927,17 +1927,11 @@ def tab_checklist(api_key: str = ""):
     cl = get_checklist(level_key)
 
     # ── FIX: Pre-initialize TRƯỚC KHI render để tránh reset state khi rerun ──
-    # Streamlit đọc session_state[key] để khôi phục giá trị widget.
-    # Nếu key chưa tồn tại, widget dùng `default`. Nhưng nếu `default` được
-    # truyền vào mỗi lần render, nó xung đột với giá trị đã lưu → bug reset.
-    # Giải pháp: tạo key với "Chưa chấm" một lần duy nhất, không truyền default.
+    # Đồng bộ cl_r từ widget state — nguồn sự thật là session_state[seg_{code}]
+    # Không pre-init "Chưa chấm" → segmented_control bắt đầu với None (chưa chọn)
     for _, grp_items in cl:
         for item_code, *_ in grp_items:
-            seg_key = f"seg_{item_code}"
-            if seg_key not in st.session_state:
-                st.session_state[seg_key] = "Chưa chấm"
-            # Đồng bộ cl_r với widget state (nguồn sự thật là session_state[seg_key])
-            st.session_state.cl_r[item_code] = st.session_state[seg_key]
+            st.session_state.cl_r[item_code] = st.session_state.get(f"seg_{item_code}")
 
     pass_count = fail_count = 0
 
@@ -1961,8 +1955,8 @@ def tab_checklist(api_key: str = ""):
         )
 
         for (code, is_critical, desc, how, pass_cond, fail_cond) in items:
-            # Đọc trạng thái hiện tại của item → màu row thay đổi realtime
-            cur_state = st.session_state.cl_r.get(code, "Chưa chấm")
+            # Đọc TRỰC TIẾP từ widget key → không lag, chuyển màu ngay lần bấm đầu tiên
+            cur_state = st.session_state.get(f"seg_{code}")
             if cur_state == "✅ Đạt":
                 row_left = "#16A34A"; row_bg = "#F0FDF4"
                 code_clr = "#166534"; code_icon = "✅"
@@ -1971,7 +1965,7 @@ def tab_checklist(api_key: str = ""):
                 row_left = "#DC2626"; row_bg = "#FFF5F5"
                 code_clr = "#991B1B"; code_icon = "❌"
                 state_label = '<span style="font-size:0.7rem;font-weight:700;color:#DC2626;margin-left:6px">KHÔNG ĐẠT</span>'
-            else:
+            else:  # None — chưa chọn
                 row_left = "#F59E0B"; row_bg = "#FFFBEB"
                 code_clr = "#D97706"; code_icon = "○"
                 state_label = '<span style="font-size:0.7rem;color:#D97706;margin-left:6px">chưa chấm</span>'
@@ -2007,15 +2001,13 @@ def tab_checklist(api_key: str = ""):
                     )
 
             with col_ctrl:
-                # Không truyền default= — giá trị được khôi phục từ session_state
                 st.segmented_control(
                     label=code,
-                    options=["Chưa chấm", "✅ Đạt", "❌ Không Đạt"],
+                    options=["✅ Đạt", "❌ Không Đạt"],
                     key=f"seg_{code}",
                     label_visibility="collapsed",
                 )
-                # Đọc lại từ session_state sau khi widget render
-                result = st.session_state.get(f"seg_{code}", "Chưa chấm")
+                result = st.session_state.get(f"seg_{code}")  # None nếu chưa chọn
                 st.session_state.cl_r[code] = result
 
                 note = st.text_input(
@@ -2187,7 +2179,7 @@ def tab_checklist(api_key: str = ""):
 
     # ── Thanh tiến độ hoàn thành ─────────────────────────────────────────────
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    answered_count = sum(1 for v in st.session_state.cl_r.values() if v != "Chưa chấm")
+    answered_count = sum(1 for v in st.session_state.cl_r.values() if v is not None)
     pct_done = int(answered_count / TOTAL_ITEMS * 100)
     bar_color = "#16A34A" if pct_done == 100 else "#2563EB" if pct_done >= 50 else "#F59E0B"
     remaining  = TOTAL_ITEMS - answered_count
@@ -2236,19 +2228,31 @@ def tab_checklist(api_key: str = ""):
             desc = item.get("desc", "")
             ingr = item.get("ingredient", "")
             why  = item.get("why", "")
+            seg_key = f"seg_extra_{code}"
+            # Đọc trực tiếp từ widget key để màu cập nhật ngay
+            _ex_cur = st.session_state.get(seg_key)
+            if _ex_cur == "✅ Đạt":
+                _ex_left, _ex_bg, _ex_icon = "#16A34A", "#F0FDF4", "✅"
+                _ex_lbl = '<span style="font-size:0.7rem;font-weight:700;color:#16A34A;margin-left:6px">ĐẠT</span>'
+            elif _ex_cur == "❌ Không Đạt":
+                _ex_left, _ex_bg, _ex_icon = "#DC2626", "#FFF5F5", "❌"
+                _ex_lbl = '<span style="font-size:0.7rem;font-weight:700;color:#DC2626;margin-left:6px">KHÔNG ĐẠT</span>'
+            else:
+                _ex_left, _ex_bg, _ex_icon = "#2563EB", "#EFF6FF", "🤖"
+                _ex_lbl = '<span style="font-size:0.7rem;color:#2563EB;margin-left:6px">chưa chấm</span>'
             col_d, col_c = st.columns([0.65, 0.35])
             with col_d:
                 st.markdown(
-                    f'<div style="background:#EFF6FF;border-left:3px solid #2563EB;'
+                    f'<div style="background:{_ex_bg};border-left:3px solid {_ex_left};'
                     f'border-radius:0 8px 8px 0;padding:8px 14px;margin:3px 0">'
-                    f'<span style="font-size:0.7rem;font-weight:800;color:#2563EB">'
-                    f'🤖 {code}</span>'
-                    f'<span style="font-size:0.72rem;color:#1D4ED8;margin-left:6px;'
-                    f'background:#DBEAFE;padding:1px 6px;border-radius:8px">{ingr}</span>'
-                    f'<div style="font-size:0.88rem;font-weight:500;color:#1E293B;'
-                    f'margin-top:4px">{desc}</div>'
-                    f'{"<div style=font-size:0.75rem;color:#64748B;margin-top:2px>" + why + "</div>" if why else ""}'
-                    f'</div>', unsafe_allow_html=True,
+                    f'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+                    f'<span style="font-size:0.7rem;font-weight:800;color:{_ex_left}">{_ex_icon} {code}</span>'
+                    f'<span style="font-size:0.72rem;color:#1D4ED8;background:#DBEAFE;'
+                    f'padding:1px 6px;border-radius:8px">{ingr}</span>'
+                    f'{_ex_lbl}</div>'
+                    f'<div style="font-size:0.88rem;font-weight:500;color:#1E293B">{desc}</div>'
+                    + (f'<div style="font-size:0.75rem;color:#64748B;margin-top:2px">{why}</div>' if why else '')
+                    + '</div>', unsafe_allow_html=True,
                 )
                 with st.expander("Hướng dẫn"):
                     st.markdown(
@@ -2257,15 +2261,11 @@ def tab_checklist(api_key: str = ""):
                         f"**❌ Không đạt:** {item.get('fail','')}"
                     )
             with col_c:
-                seg_key = f"seg_extra_{code}"
-                if seg_key not in st.session_state:
-                    st.session_state[seg_key] = "Chưa chấm"
                 st.segmented_control(
-                    code, ["Chưa chấm", "✅ Đạt", "❌ Không Đạt"],
+                    code, ["✅ Đạt", "❌ Không Đạt"],
                     key=seg_key, label_visibility="collapsed",
                 )
-                st.session_state.cl_extra_r[code] = \
-                    st.session_state.get(seg_key, "Chưa chấm")
+                st.session_state.cl_extra_r[code] = st.session_state.get(seg_key)
         if st.button("🗑️ Xoá câu hỏi AI", use_container_width=True):
             st.session_state.cl_extra = []
             st.rerun()
@@ -2829,13 +2829,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
         if f"kt_b{b}_n" not in st.session_state: st.session_state[f"kt_b{b}_n"] = {}
         if f"kt_b{b}_done" not in st.session_state: st.session_state[f"kt_b{b}_done"] = None
         if f"kt_b{b}_photos" not in st.session_state: st.session_state[f"kt_b{b}_photos"] = {}
-        # Pre-init segmented control keys
-        for step in KIEM_THUC:
-            if step["buoc"] == b:
-                for code, *_ in step["items"]:
-                    k = f"kt_seg_{code}"
-                    if k not in st.session_state:
-                        st.session_state[k] = "Chưa kiểm tra"
+        # Không pre-init kt_seg_* → segmented_control bắt đầu None (chưa chọn)
 
     # ── Render từng bước ──────────────────────────────────────────────────────
     for step in KIEM_THUC:
@@ -2867,14 +2861,15 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
 
         # 5 câu hỏi của bước này
         for (code, desc, how, pass_cond, fail_cond, legal) in step["items"]:
-            cur = st.session_state.get(f"kt_seg_{code}", "Chưa kiểm tra")
+            # Đọc trực tiếp từ widget key → màu đổi ngay lần bấm đầu tiên
+            cur = st.session_state.get(f"kt_seg_{code}")
             if cur == "✅ Đạt":
                 row_bg, row_left = "#F0FDF4", "#16A34A"
                 code_clr, code_icon, lbl = "#166534", "✅", "ĐẠT"
             elif cur == "❌ Không Đạt":
                 row_bg, row_left = "#FFF5F5", "#DC2626"
                 code_clr, code_icon, lbl = "#991B1B", "❌", "KHÔNG ĐẠT"
-            else:
+            else:  # None — chưa chọn
                 row_bg, row_left = "#FFFBEB", "#F59E0B"
                 code_clr, code_icon, lbl = "#D97706", "○", "chưa kiểm tra"
 
@@ -2906,11 +2901,11 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
                     )
             with col_c:
                 st.segmented_control(
-                    code, ["Chưa kiểm tra", "✅ Đạt", "❌ Không Đạt"],
+                    code, ["✅ Đạt", "❌ Không Đạt"],
                     key=f"kt_seg_{code}", label_visibility="collapsed",
                 )
                 st.session_state[f"kt_b{b}_r"][code] = \
-                    st.session_state.get(f"kt_seg_{code}", "Chưa kiểm tra")
+                    st.session_state.get(f"kt_seg_{code}")
                 note = st.text_input(
                     f"ghi chú {code}", label_visibility="collapsed",
                     placeholder="Ghi chú...", key=f"kt_note_{code}",
@@ -2983,7 +2978,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
 
         # Nút xác nhận hoàn thành bước
         b_results = st.session_state.get(f"kt_b{b}_r", {})
-        b_answered = sum(1 for v in b_results.values() if v != "Chưa kiểm tra")
+        b_answered = sum(1 for v in b_results.values() if v is not None)
         b_total    = len(step["items"])
         b_fail     = sum(1 for v in b_results.values() if v == "❌ Không Đạt")
 
@@ -3082,12 +3077,11 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
                         )
             with col_c:
                 seg_key = f"kt_seg_extra_{code}"
-                if seg_key not in st.session_state: st.session_state[seg_key] = "Chưa kiểm tra"
                 st.segmented_control(
-                    code, ["Chưa kiểm tra", "✅ Đạt", "❌ Không Đạt"],
+                    code, ["✅ Đạt", "❌ Không Đạt"],
                     key=seg_key, label_visibility="collapsed",
                 )
-                st.session_state.kt_extra_r[code] = st.session_state.get(seg_key, "Chưa kiểm tra")
+                st.session_state.kt_extra_r[code] = st.session_state.get(seg_key)
         if st.button("🗑️ Xoá câu hỏi AI", use_container_width=True, key="kt_del_extra"):
             st.session_state.kt_extra = []; st.rerun()
 
@@ -3099,7 +3093,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     for b in [1, 2, 3]:
         all_results.update(st.session_state.get(f"kt_b{b}_r", {}))
     total_items  = sum(len(s["items"]) for s in KIEM_THUC)
-    total_done   = sum(1 for v in all_results.values() if v != "Chưa kiểm tra")
+    total_done   = sum(1 for v in all_results.values() if v is not None)
     total_pass   = sum(1 for v in all_results.values() if v == "✅ Đạt")
     total_fail   = sum(1 for v in all_results.values() if v == "❌ Không Đạt")
     steps_done   = sum(1 for b in [1, 2, 3]
@@ -4398,8 +4392,8 @@ def tab_supplier(api_key: str = ""):
         code     = item["code"]
         is_crit  = item["critical"]
 
-        # Trạng thái hiện tại (None = chưa chọn)
-        cur = st.session_state.sup_r.get(code)
+        # Đọc TRỰC TIẾP từ widget key → màu đổi ngay lần bấm đầu tiên (không lag)
+        cur = st.session_state.get(f"sup_seg_{code}")
         is_fail   = (cur == "❌ Không Đạt")
         has_img   = code in st.session_state.sup_imgs
         has_note  = len(st.session_state.sup_notes.get(code, "").strip()) >= 10
