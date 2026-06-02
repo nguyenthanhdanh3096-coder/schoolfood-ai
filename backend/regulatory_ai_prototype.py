@@ -4151,63 +4151,79 @@ def tab_history(role: str = "", school_filter: str = ""):
             )
             st.plotly_chart(fig_type, use_container_width=True)
 
-        # Top 10 fail bữa ăn
+        # Top 10 fail bữa ăn — lọc theo session IDs của trường đã chọn
         st.markdown('<div class="sec-hdr">🔴 Top 10 điểm không đạt nhiều nhất (bữa ăn)</div>',
                     unsafe_allow_html=True)
         try:
             sb = _get_sb()
             if sb:
-                _resp = sb.table("checklist_results")\
-                    .select("item_code,result")\
-                    .in_("result", ["Không Đạt", "❌ Không Đạt"])\
-                    .limit(500).execute()
-                items_raw = _resp.data or []
-                if items_raw:
-                    _KW = {
-                        "C01":"Tem kiểm dịch thịt/cá","C02":"Hóa đơn nguồn gốc rau củ",
-                        "C03":"Hạn sử dụng nguyên liệu","C04":"Hóa đơn mua hàng ngày",
-                        "C05":"Nhiệt độ tủ lạnh < 5°C","C06":"Tách biệt thực phẩm sống/chín",
-                        "C07":"Nhiệt độ nhận hàng ≥ 60°C","C08":"Thùng vận chuyển kín, sạch",
-                        "C09":"Nhiệt độ chia ăn đúng chuẩn","C10":"Thời gian nấu → phục vụ < 2h",
-                        "C11":"Màu sắc & mùi vị thức ăn","C12":"Khẩu phần thịt/cá đủ định mức",
-                        "C13":"Khẩu phần rau xanh đủ định mức","C14":"Dụng cụ ăn sạch, khô ráo",
-                        "C15":"Đeo khẩu trang & găng tay","C16":"Không ho/hắt hơi vào thức ăn",
-                        "C17":"Khu vực chia cơm sạch","C18":"Sổ kiểm thực 3 bước đủ chữ ký",
-                        "C19":"Thực đơn khớp đăng ký","C20":"Mẫu lưu thức ăn 24h đủ nhãn",
-                        "B1_01":"Tem kiểm dịch (B1)","B1_02":"Hóa đơn rau củ (B1)",
-                        "B1_03":"Hạn sử dụng (B1)","B1_04":"Nhiệt độ tủ lạnh (B1)",
-                        "B1_05":"Tách biệt sống/chín (B1)","B2_01":"Nấu chín ≥ 70°C (B2)",
-                        "B2_02":"Bảo hộ lao động (B2)","B2_03":"Dao thớt riêng sống/chín (B2)",
-                        "B2_04":"Dụng cụ nấu sạch (B2)","B2_05":"Bếp sạch (B2)",
-                        "B3_01":"Nhiệt độ chia đúng chuẩn (B3)","B3_02":"Thời gian nấu→chia (B3)",
-                        "B3_03":"Màu sắc & mùi vị (B3)","B3_04":"Khẩu phần đủ định mức (B3)",
-                        "B3_05":"Mẫu lưu 24h đủ nhãn (B3)",
-                    }
-                    df_it = pd.DataFrame(items_raw)
-                    # Chỉ hiện điểm bữa ăn (C* và B*), không phải S* (NCC)
-                    df_it = df_it[df_it["item_code"].str.startswith(("C", "B"))]
-                    df_it["Tên điểm"] = df_it["item_code"].map(lambda c: _KW.get(c, c))
-                    top_fail = (df_it.groupby("Tên điểm").size()
-                                .reset_index(name="Số lần")
-                                .sort_values("Số lần").tail(10))
-                    n = len(top_fail)
-                    fig_hbar = go.Figure(go.Bar(
-                        x=top_fail["Số lần"], y=top_fail["Tên điểm"], orientation="h",
-                        marker_color=[f"rgba(220,38,38,{0.25+0.75*i/max(n-1,1)})" for i in range(n)],
-                        text=top_fail["Số lần"], textposition="outside",
-                        textfont=dict(size=12),
-                        hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
-                    ))
-                    fig_hbar.update_layout(
-                        **{**_CHART_LAYOUT, "margin": dict(l=10, r=60, t=20, b=16)},
-                        height=max(280, n * 50),
-                        xaxis=dict(title="Số lần không đạt", showgrid=True,
-                                   gridcolor="#E2E8F0", dtick=1),
-                        yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
-                    )
-                    st.plotly_chart(fig_hbar, use_container_width=True)
-                else:
+                # Lấy session IDs của bữa ăn đã được lọc theo trường
+                _meal_ids = [s["id"] for s in sessions
+                             if s.get("check_type") in ("ban_giam_sat", "kiem_thuc_3_buoc")
+                             and s.get("id")]
+                if not _meal_ids:
                     st.info("Chưa có dữ liệu điểm không đạt.")
+                else:
+                    # Chia nhỏ thành batch ≤ 100 IDs (giới hạn Supabase .in_())
+                    _all_items: list = []
+                    for _i in range(0, len(_meal_ids), 100):
+                        _batch = _meal_ids[_i:_i+100]
+                        _r = sb.table("checklist_results")\
+                            .select("item_code,result")\
+                            .in_("session_id", _batch)\
+                            .in_("result", ["Không Đạt", "❌ Không Đạt"])\
+                            .execute()
+                        _all_items += (_r.data or [])
+
+                    if not _all_items:
+                        st.info("Chưa có điểm không đạt cho trường / bộ lọc đã chọn.")
+                    else:
+                        _KW = {
+                            "C01":"Tem kiểm dịch thịt/cá","C02":"Hóa đơn nguồn gốc rau củ",
+                            "C03":"Hạn sử dụng nguyên liệu","C04":"Hóa đơn mua hàng ngày",
+                            "C05":"Nhiệt độ tủ lạnh < 5°C","C06":"Tách biệt thực phẩm sống/chín",
+                            "C07":"Nhiệt độ nhận hàng ≥ 60°C","C08":"Thùng vận chuyển kín, sạch",
+                            "C09":"Nhiệt độ chia ăn đúng chuẩn","C10":"Thời gian nấu → phục vụ < 2h",
+                            "C11":"Màu sắc & mùi vị thức ăn","C12":"Khẩu phần thịt/cá đủ định mức",
+                            "C13":"Khẩu phần rau xanh đủ định mức","C14":"Dụng cụ ăn sạch, khô ráo",
+                            "C15":"Đeo khẩu trang & găng tay","C16":"Không ho/hắt hơi vào thức ăn",
+                            "C17":"Khu vực chia cơm sạch","C18":"Sổ kiểm thực 3 bước đủ chữ ký",
+                            "C19":"Thực đơn khớp đăng ký","C20":"Mẫu lưu thức ăn 24h đủ nhãn",
+                            "B1_01":"Tem kiểm dịch (B1)","B1_02":"Hóa đơn rau củ (B1)",
+                            "B1_03":"Hạn sử dụng (B1)","B1_04":"Nhiệt độ tủ lạnh (B1)",
+                            "B1_05":"Tách biệt sống/chín (B1)","B2_01":"Nấu chín ≥ 70°C (B2)",
+                            "B2_02":"Bảo hộ lao động (B2)","B2_03":"Dao thớt riêng sống/chín (B2)",
+                            "B2_04":"Dụng cụ nấu sạch (B2)","B2_05":"Bếp sạch (B2)",
+                            "B3_01":"Nhiệt độ chia đúng chuẩn (B3)","B3_02":"Thời gian nấu→chia (B3)",
+                            "B3_03":"Màu sắc & mùi vị (B3)","B3_04":"Khẩu phần đủ định mức (B3)",
+                            "B3_05":"Mẫu lưu 24h đủ nhãn (B3)",
+                        }
+                        df_it = pd.DataFrame(_all_items)
+                        df_it = df_it[df_it["item_code"].str.startswith(("C", "B"))]
+                        df_it["Tên điểm"] = df_it["item_code"].map(lambda c: _KW.get(c, c))
+                        top_fail = (df_it.groupby("Tên điểm").size()
+                                    .reset_index(name="Số lần")
+                                    .sort_values("Số lần").tail(10))
+                        n = len(top_fail)
+                        fig_hbar = go.Figure(go.Bar(
+                            x=top_fail["Số lần"], y=top_fail["Tên điểm"], orientation="h",
+                            marker_color=[f"rgba(220,38,38,{0.25+0.75*i/max(n-1,1)})"
+                                          for i in range(n)],
+                            text=top_fail["Số lần"], textposition="outside",
+                            textfont=dict(size=12),
+                            hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
+                        ))
+                        fig_hbar.update_layout(
+                            plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                            font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+                            title=None,   # bỏ title trong chart, đã có sec-hdr bên ngoài
+                            margin=dict(l=10, r=60, t=10, b=16),
+                            height=max(280, n * 50),
+                            xaxis=dict(title="Số lần không đạt", showgrid=True,
+                                       gridcolor="#E2E8F0", dtick=1),
+                            yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
+                        )
+                        st.plotly_chart(fig_hbar, use_container_width=True)
         except Exception as _e:
             st.warning(f"Không thể tải top fail: {_e}")
 
@@ -5272,22 +5288,25 @@ def main():
         with _tabs[3]: tab_guide()
 
     elif role == "Y Tế Học Đường":
-        # Y Tế: nhiệm vụ chính là kiểm thực 3 bước mỗi ngày + xem lịch sử
+        # Y Tế: kiểm thực 3 bước + kiểm tra NCC (Bước 1 yêu cầu check nguyên liệu đầu vào)
+        # TTLT 13/2016 Điều 9 khoản a: Y tế kiểm tra nguồn gốc nguyên liệu → cần tab NCC
         _tabs = st.tabs([
             "💬 Hỏi đáp AI",
             "🏥 Kiểm thực 3 bước",
+            "🏭 Nhà Cung Cấp",
             _hist_label,
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_kiem_thuc(api_key, level)
-        with _tabs[2]: tab_history(role=role)
-        with _tabs[3]: tab_emergency(api_key)
-        with _tabs[4]: tab_guide()
+        with _tabs[2]: tab_supplier(api_key)
+        with _tabs[3]: tab_history(role=role)
+        with _tabs[4]: tab_emergency(api_key)
+        with _tabs[5]: tab_guide()
 
     elif role == "Ban Giám Sát (Đại Diện PHHS)":
-        # BGS: checklist + kiểm tra NCC + lịch sử + lịch kiểm tra
+        # BGS: checklist + NCC + lịch sử + lịch chuẩn mực + hướng dẫn
         _tabs = st.tabs([
             "💬 Hỏi đáp AI",
             "✅ Checklist kiểm tra",
@@ -5295,6 +5314,7 @@ def main():
             _hist_label,
             "📅 Lịch & Chuẩn mực",
             "🚨 Khẩn cấp",
+            "📖 Hướng dẫn",
         ])
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_checklist(api_key)
@@ -5302,6 +5322,7 @@ def main():
         with _tabs[3]: tab_history(role=role)
         with _tabs[4]: tab_schedule()
         with _tabs[5]: tab_emergency(api_key)
+        with _tabs[6]: tab_guide()
 
     else:  # Ban Giám Hiệu
         # BGH: duyệt tổng quan + lịch chuẩn mực, không cần form checklist hàng ngày
