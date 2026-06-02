@@ -4015,56 +4015,46 @@ def tab_history(role: str = "", school_filter: str = ""):
             st.info(f"Cần thêm dữ liệu để hiển thị biểu đồ theo tuần. ({_e})")
 
     with ch4:
-        _ALERT_CLR = {
-            "Đạt chuẩn":     "#16A34A",
-            "Cần cải thiện": "#F59E0B",
-            "Không đạt":     "#F97316",
-            "Nguy hiểm":     "#DC2626",
-        }
-        df_sess = df.copy()
-        df_sess["_dt"] = pd.to_datetime(df_sess["Ngày"], errors="coerce")
-        df_sess = df_sess.sort_values("_dt").tail(20).reset_index(drop=True)
-        df_sess["Ngày_fmt"] = df_sess["_dt"].dt.strftime("%d/%m/%Y").where(
-            df_sess["_dt"].notna(), df_sess["Ngày"]
+        # So sánh tỷ lệ đạt trung bình theo loại kiểm tra
+        type_stats = (
+            df.groupby("Loại kiểm tra")
+            .agg(avg_pct=("Tỷ lệ đạt (%)", "mean"),
+                 count=("Tỷ lệ đạt (%)", "count"))
+            .reset_index()
+            .sort_values("avg_pct", ascending=True)
         )
-        _clrs = [_ALERT_CLR.get(v, "#64748B") for v in df_sess["Đánh giá"]]
-        _labels = [f"#{i+1}" for i in range(len(df_sess))]
-
-        fig_sess = go.Figure(go.Bar(
-            x=_labels,
-            y=df_sess["Tỷ lệ đạt (%)"],
-            marker_color=_clrs,
-            text=[f"{v:.0f}%" for v in df_sess["Tỷ lệ đạt (%)"]],
+        _t_clrs = [
+            "#16A34A" if v >= 90 else "#F59E0B" if v >= 80 else "#F97316"
+            for v in type_stats["avg_pct"]
+        ]
+        fig_type = go.Figure(go.Bar(
+            x=type_stats["avg_pct"].round(1),
+            y=type_stats["Loại kiểm tra"],
+            orientation="h",
+            marker_color=_t_clrs,
+            text=[f"{v:.0f}%  ({c} lần)"
+                  for v, c in zip(type_stats["avg_pct"], type_stats["count"])],
             textposition="outside",
-            textfont=dict(size=11, color="#1E293B"),
-            customdata=list(zip(
-                df_sess["Trường"].fillna("—"),
-                df_sess["Ngày_fmt"],
-                df_sess["Đánh giá"],
-            )),
-            hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
-                "Ngày: %{customdata[1]}<br>"
-                "Kết quả: %{customdata[2]}<br>"
-                "Tỷ lệ đạt: <b>%{y:.1f}%</b><extra></extra>"
-            ),
+            textfont=dict(size=12, color="#1E293B"),
+            hovertemplate="<b>%{y}</b><br>Tỷ lệ đạt TB: <b>%{x:.1f}%</b><extra></extra>",
         ))
-        fig_sess.add_hline(
-            y=90, line_dash="dot", line_color="#DC2626", line_width=1.5,
+        fig_type.add_vline(
+            x=90, line_dash="dot", line_color="#DC2626", line_width=1.5,
             annotation_text=" Chuẩn 90%",
             annotation_font=dict(size=11, color="#DC2626"),
-            annotation_position="bottom right",
+            annotation_position="top",
         )
-        fig_sess.update_layout(
-            **_CHART_LAYOUT, height=320,
-            title="📋 Tỷ lệ đạt từng lần kiểm tra gần đây",
-            xaxis=dict(title="Lần kiểm tra", showgrid=False,
-                       tickfont=dict(size=11)),
-            yaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 115],
+        fig_type.update_layout(
+            **{**_CHART_LAYOUT, "margin": dict(l=10, r=90, t=40, b=16)},
+            height=320,
+            title="🔍 Tỷ lệ đạt TB theo loại kiểm tra",
+            xaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 120],
                        ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
+            yaxis=dict(title="", showgrid=False,
+                       tickfont=dict(size=12), automargin=True),
             showlegend=False,
         )
-        st.plotly_chart(fig_sess, use_container_width=True)
+        st.plotly_chart(fig_type, use_container_width=True)
 
     # ── Hàng 3: Điểm FAIL nhiều nhất ─────────────────────────────────────────
     st.markdown('<div class="sec-hdr">🔴 Top 10 điểm không đạt nhiều nhất</div>',
