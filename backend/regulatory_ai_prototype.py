@@ -3820,200 +3820,281 @@ def tab_history(role: str = "", school_filter: str = ""):
     df = pd.DataFrame(rows)
 
     # ── KPI Cards ─────────────────────────────────────────────────────────────
-    total     = len(df)
-    avg_pct   = df["Tỷ lệ đạt (%)"].mean()
-    crit_ct   = (df["Cấp cảnh báo"] == "CRITICAL").sum()
-    ok_ct     = (df["Cấp cảnh báo"] == "OK").sum()
-    trend_dir = "📈" if len(df) >= 2 and df["Tỷ lệ đạt (%)"].iloc[0] > df["Tỷ lệ đạt (%)"].iloc[-1] else "📉"
+    total   = len(df)
+    avg_pct = df["Tỷ lệ đạt (%)"].mean()
+    crit_ct = (df["Cấp cảnh báo"] == "CRITICAL").sum()
+    ok_ct   = (df["Cấp cảnh báo"] == "OK").sum()
 
+    # Tính xu hướng thực tế: so sánh 30% gần nhất vs 30% đầu
+    n_split = max(1, len(df) // 3)
+    recent_avg = df.head(n_split)["Tỷ lệ đạt (%)"].mean()
+    older_avg  = df.tail(n_split)["Tỷ lệ đạt (%)"].mean()
+    delta      = recent_avg - older_avg
+    if abs(delta) < 1:
+        trend_val, trend_clr, trend_lbl = "→ Ổn định", "c-blue",   "Xu hướng"
+    elif delta > 0:
+        trend_val, trend_clr, trend_lbl = f"↑ +{delta:.0f}%", "c-green",  "Xu hướng"
+    else:
+        trend_val, trend_clr, trend_lbl = f"↓ {delta:.0f}%",  "c-red",    "Xu hướng"
+
+    # ── KPI Cards ─────────────────────────────────────────────────────────────
     k1, k2, k3, k4, k5 = st.columns(5)
-    for col, val, lbl, clr in [
-        (k1, total,          "Tổng lần kiểm tra", "c-blue"),
-        (k2, f"{avg_pct:.0f}%", "Trung bình đạt",  "c-green" if avg_pct>=90 else "c-orange"),
-        (k3, crit_ct,        "🔴 CRITICAL",      "c-red" if crit_ct>0 else "c-green"),
-        (k4, ok_ct,          "✅ Đạt chuẩn",     "c-green"),
-        (k5, trend_dir,      "Xu hướng",          "c-blue"),
-    ]:
+    kpi_data = [
+        (k1, str(total),        "Tổng lần kiểm tra",    "c-blue"),
+        (k2, f"{avg_pct:.0f}%", "Trung bình đạt",       "c-green" if avg_pct>=90 else "c-orange"),
+        (k3, str(crit_ct),      "CRITICAL",              "c-red"   if crit_ct>0 else "c-green"),
+        (k4, str(ok_ct),        "Đạt chuẩn",            "c-green"),
+        (k5, trend_val,         trend_lbl,               trend_clr),
+    ]
+    for col, val, lbl, clr in kpi_data:
         col.markdown(
             f'<div class="metric-box"><div class="metric-lbl">{lbl}</div>'
-            f'<div class="metric-num {clr}">{val}</div></div>',
+            f'<div class="metric-num {clr}" style="font-size:1.5rem">{val}</div></div>',
             unsafe_allow_html=True,
         )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Hàng 1: Biểu đồ đường + Biểu đồ tròn ────────────────────────────────
+    # ── Hàng 1: Xu hướng + Phân bố ───────────────────────────────────────────
+    _CHART_LAYOUT = dict(
+        plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+        font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+        title_font=dict(size=14, color="#1B3B6F", family="Inter"),
+        margin=dict(l=16, r=16, t=40, b=16),
+    )
     ch1, ch2 = st.columns([3, 2])
 
     with ch1:
-        st.markdown('<div class="sec-hdr">📈 Xu hướng tỷ lệ đạt theo thời gian</div>',
-                    unsafe_allow_html=True)
         df_trend = df.sort_values("Ngày").tail(30).copy()
-        df_trend["Ngưỡng đạt chuẩn (90%)"] = 90
-        fig_line = px.line(
-            df_trend, x="Ngày", y=["Tỷ lệ đạt (%)", "Ngưỡng đạt chuẩn (90%)"],
-            color_discrete_map={
-                "Tỷ lệ đạt (%)":       "#2563EB",
-                "Ngưỡng đạt chuẩn (90%)": "#DC2626",
-            },
-            markers=True,
+        fig_line = go.Figure()
+        fig_line.add_trace(go.Scatter(
+            x=df_trend["Ngày"], y=df_trend["Tỷ lệ đạt (%)"],
+            mode="lines+markers+text",
+            name="Tỷ lệ đạt (%)",
+            line=dict(color="#2563EB", width=3),
+            marker=dict(size=8, color="#2563EB", line=dict(width=2, color="white")),
+            text=[f"{v:.0f}%" for v in df_trend["Tỷ lệ đạt (%)"]],
+            textposition="top center",
+            textfont=dict(size=11, color="#1E293B"),
+        ))
+        fig_line.add_hline(
+            y=90, line_dash="dash", line_color="#DC2626", line_width=1.5,
+            annotation_text="Ngưỡng chuẩn 90%",
+            annotation_font=dict(color="#DC2626", size=11),
+            annotation_position="bottom right",
         )
         fig_line.update_layout(
-            height=300, margin=dict(l=10,r=10,t=10,b=10),
-            legend=dict(orientation="h", y=-0.2),
-            yaxis=dict(range=[0,105], ticksuffix="%"),
-            plot_bgcolor="white", paper_bgcolor="white",
-            font=dict(family="Inter"),
+            **_CHART_LAYOUT, height=320,
+            title="📈 Xu hướng tỷ lệ đạt theo thời gian",
+            xaxis=dict(title="Ngày kiểm tra", showgrid=False, tickangle=-30),
+            yaxis=dict(title="Tỷ lệ đạt (%)", range=[0,110], ticksuffix="%",
+                       showgrid=True, gridcolor="#E2E8F0"),
+            showlegend=False,
         )
-        fig_line.update_traces(line_width=2.5)
         st.plotly_chart(fig_line, use_container_width=True)
 
     with ch2:
-        st.markdown('<div class="sec-hdr">🥧 Phân bố mức cảnh báo</div>',
-                    unsafe_allow_html=True)
         alert_counts = df["Đánh giá"].value_counts().reset_index()
-        alert_counts.columns = ["Mức","Số lần"]
-        fig_pie = px.pie(
-            alert_counts, names="Mức", values="Số lần",
-            color="Mức",
-            color_discrete_map={
-                "Đạt chuẩn":      "#16A34A",
-                "Cần cải thiện":  "#CA8A04",
-                "Không đạt":      "#D97706",
-                "Nguy hiểm":      "#DC2626",
-            },
-            hole=0.4,
-        )
+        alert_counts.columns = ["Mức", "Số lần"]
+        fig_pie = go.Figure(go.Pie(
+            labels=alert_counts["Mức"], values=alert_counts["Số lần"],
+            hole=0.45,
+            marker_colors=[
+                {"Đạt chuẩn":"#16A34A","Cần cải thiện":"#F59E0B",
+                 "Không đạt":"#D97706","Nguy hiểm":"#DC2626"}.get(m,"#64748B")
+                for m in alert_counts["Mức"]
+            ],
+            textfont_size=13,
+            textinfo="percent+label",
+            hovertemplate="%{label}<br>%{value} lần (%{percent})<extra></extra>",
+        ))
         fig_pie.update_layout(
-            height=300, margin=dict(l=10,r=10,t=10,b=10),
-            legend=dict(orientation="h", y=-0.15),
-            font=dict(family="Inter"),
-            annotations=[dict(text=f"<b>{total}</b><br>lần", x=0.5, y=0.5,
-                              showarrow=False, font_size=14)]
+            **_CHART_LAYOUT, height=320,
+            title="🥧 Phân bố mức cảnh báo",
+            showlegend=False,
+            annotations=[dict(text=f"<b>{total}</b><br><span style='font-size:11px'>lần KT</span>",
+                              x=0.5, y=0.5, showarrow=False, font_size=15, font_color="#1E293B")],
         )
-        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # ── Hàng 2: Biểu đồ cột + Phân phối ──────────────────────────────────────
+    # ── Hàng 2: Cột theo tuần + Histogram ────────────────────────────────────
     ch3, ch4 = st.columns([3, 2])
 
     with ch3:
-        st.markdown('<div class="sec-hdr">📊 Số lần kiểm tra theo tuần</div>',
-                    unsafe_allow_html=True)
         try:
             df_wk = df.copy()
-            df_wk["Tuần"] = pd.to_datetime(df_wk["Ngày"]).dt.to_period("W").astype(str)
+            df_wk["Tuần"] = pd.to_datetime(df_wk["Ngày"], errors="coerce").dt.to_period("W").astype(str)
             wk_cnt = df_wk.groupby(["Tuần","Đánh giá"]).size().reset_index(name="Số lần")
             fig_bar = px.bar(
                 wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
                 color_discrete_map={
-                    "Đạt chuẩn":      "#16A34A",
-                    "Cần cải thiện":  "#CA8A04",
-                    "Không đạt":      "#D97706",
-                    "Nguy hiểm":      "#DC2626",
+                    "Đạt chuẩn":"#16A34A","Cần cải thiện":"#F59E0B",
+                    "Không đạt":"#D97706","Nguy hiểm":"#DC2626",
                 },
-                barmode="stack",
+                barmode="stack", text="Số lần",
             )
+            fig_bar.update_traces(textposition="inside", textfont_size=12)
             fig_bar.update_layout(
-                height=300, margin=dict(l=10,r=10,t=10,b=10),
-                legend=dict(orientation="h", y=-0.25),
-                xaxis_tickangle=-45,
-                plot_bgcolor="white", paper_bgcolor="white",
-                font=dict(family="Inter"),
+                **_CHART_LAYOUT, height=320,
+                title="📊 Số lần kiểm tra theo tuần",
+                xaxis=dict(title="Tuần", tickangle=-30, showgrid=False),
+                yaxis=dict(title="Số lần kiểm tra", showgrid=True, gridcolor="#E2E8F0"),
+                legend=dict(orientation="h", y=-0.25, title_text=""),
             )
             st.plotly_chart(fig_bar, use_container_width=True)
         except Exception:
-            st.info("Cần ít nhất 2 tuần dữ liệu để hiển thị biểu đồ này.")
+            st.info("Cần thêm dữ liệu để hiển thị biểu đồ theo tuần.")
 
     with ch4:
-        st.markdown('<div class="sec-hdr">📐 Phân phối tỷ lệ đạt (%)</div>',
-                    unsafe_allow_html=True)
-        fig_hist = px.histogram(
-            df, x="Tỷ lệ đạt (%)", nbins=10,
-            color_discrete_sequence=["#2563EB"],
-            opacity=0.8,
-        )
+        fig_hist = go.Figure(go.Histogram(
+            x=df["Tỷ lệ đạt (%)"], nbinsx=8,
+            marker_color="#2563EB", opacity=0.75,
+            hovertemplate="Khoảng %{x}%<br>Số lần: %{y}<extra></extra>",
+        ))
         fig_hist.add_vline(
-            x=avg_pct, line_dash="dash", line_color="#DC2626",
-            annotation_text=f"TB: {avg_pct:.0f}%",
+            x=avg_pct, line_dash="dot", line_color="#DC2626", line_width=2,
+            annotation_text=f" Trung bình: {avg_pct:.0f}%",
+            annotation_font=dict(size=12, color="#DC2626"),
             annotation_position="top right",
         )
         fig_hist.update_layout(
-            height=300, margin=dict(l=10,r=10,t=10,b=10),
-            xaxis=dict(ticksuffix="%"),
-            plot_bgcolor="white", paper_bgcolor="white",
-            font=dict(family="Inter"),
-            bargap=0.05,
+            **_CHART_LAYOUT, height=320,
+            title="📐 Phân phối tỷ lệ đạt",
+            xaxis=dict(title="Tỷ lệ đạt (%)", ticksuffix="%", showgrid=False),
+            yaxis=dict(title="Số lần", showgrid=True, gridcolor="#E2E8F0"),
+            bargap=0.08,
         )
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    # ── Hàng 3: Biểu đồ điểm FAIL nhiều nhất (nếu có data chi tiết) ──────────
+    # ── Hàng 3: Điểm FAIL nhiều nhất ─────────────────────────────────────────
     try:
         sb = _get_sb()
         if sb:
             items_raw = sb.table("checklist_results")\
                 .select("item_code,result")\
-                .eq("result","Không Đạt")\
-                .limit(500).execute().data or []
+                .eq("result","Không Đạt").limit(500).execute().data or []
             if items_raw:
-                df_items = pd.DataFrame(items_raw)
-                top_fail = df_items["item_code"].value_counts().head(10).reset_index()
+                df_it = pd.DataFrame(items_raw)
+                top_fail = df_it["item_code"].value_counts().head(10).reset_index()
                 top_fail.columns = ["Mã điểm","Số lần không đạt"]
-                st.markdown('<div class="sec-hdr">🔴 Top 10 điểm kiểm tra hay không đạt nhất</div>',
-                            unsafe_allow_html=True)
-                fig_hbar = px.bar(
-                    top_fail.sort_values("Số lần không đạt"),
-                    x="Số lần không đạt", y="Mã điểm",
+                top_fail = top_fail.sort_values("Số lần không đạt")
+                colors = [f"rgba(220,38,38,{0.4 + 0.6*i/len(top_fail)})"
+                          for i in range(len(top_fail))]
+                fig_hbar = go.Figure(go.Bar(
+                    x=top_fail["Số lần không đạt"],
+                    y=top_fail["Mã điểm"],
                     orientation="h",
-                    color="Số lần không đạt",
-                    color_continuous_scale=["#FEE2E2","#DC2626"],
-                )
+                    marker_color=colors,
+                    text=top_fail["Số lần không đạt"],
+                    textposition="outside",
+                    hovertemplate="%{y}: %{x} lần không đạt<extra></extra>",
+                ))
                 fig_hbar.update_layout(
-                    height=320, margin=dict(l=10,r=10,t=10,b=10),
-                    showlegend=False, coloraxis_showscale=False,
-                    plot_bgcolor="white", paper_bgcolor="white",
-                    font=dict(family="Inter"),
+                    **_CHART_LAYOUT, height=max(280, len(top_fail)*38),
+                    title="🔴 Top 10 điểm kiểm tra hay không đạt nhất",
+                    xaxis=dict(title="Số lần không đạt", showgrid=True, gridcolor="#E2E8F0"),
+                    yaxis=dict(title="", showgrid=False),
                 )
                 st.plotly_chart(fig_hbar, use_container_width=True)
     except Exception:
         pass
 
-    # ── Bảng chi tiết + Xuất Excel (fix lỗi CSV dồn cột) ─────────────────────
+    # ── Bảng chi tiết + Xuất Excel chuẩn (Times New Roman, cỡ 13) ────────────
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Xuất Excel</div>', unsafe_allow_html=True)
-
+    st.markdown('<div class="sec-hdr">📋 Bảng chi tiết</div>', unsafe_allow_html=True)
     df_display = df.drop(columns=["Cấp cảnh báo"], errors="ignore")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-    # Export Excel (.xlsx) — không bị lỗi dồn cột như CSV
-    exp1, exp2 = st.columns(2)
-    with exp1:
-        buf = BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df_display.to_excel(writer, index=False, sheet_name="Lịch sử kiểm tra")
-            # Format cột rộng ra cho dễ đọc
-            ws = writer.sheets["Lịch sử kiểm tra"]
-            for col in ws.columns:
-                max_len = max(len(str(cell.value or "")) for cell in col)
-                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
-        buf.seek(0)
+    st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo</div>', unsafe_allow_html=True)
+
+    # Tạo Excel với định dạng chuyên nghiệp Times New Roman 13
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font as XFont, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        wb  = Workbook()
+        ws  = wb.active
+        ws.title = "Lịch sử kiểm tra ATTP"
+
+        # Quốc hiệu
+        ws.merge_cells(f"A1:{get_column_letter(len(df_display.columns))}1")
+        c = ws["A1"]
+        c.value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM — Độc lập – Tự do – Hạnh phúc"
+        c.font      = XFont(name="Times New Roman", size=11, bold=True)
+        c.alignment = Alignment(horizontal="center")
+        ws.row_dimensions[1].height = 18
+
+        # Tiêu đề
+        ws.merge_cells(f"A2:{get_column_letter(len(df_display.columns))}2")
+        c = ws["A2"]
+        c.value = "BÁO CÁO LỊCH SỬ KIỂM TRA AN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG"
+        c.font      = XFont(name="Times New Roman", size=15, bold=True, color="1B3B6F")
+        c.alignment = Alignment(horizontal="center")
+        ws.row_dimensions[2].height = 28
+
+        # Subtitle
+        ws.merge_cells(f"A3:{get_column_letter(len(df_display.columns))}3")
+        c = ws["A3"]
+        c.value = (f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')} | "
+                   f"Tổng: {total} lần kiểm tra | Trung bình đạt: {avg_pct:.0f}%")
+        c.font      = XFont(name="Times New Roman", size=11, italic=True, color="475569")
+        c.alignment = Alignment(horizontal="center")
+        ws.row_dimensions[3].height = 16
+
+        # Header row
+        HDR_FILL = PatternFill("solid", fgColor="1B3B6F")
+        HDR_FONT = XFont(name="Times New Roman", size=13, bold=True, color="FFFFFF")
+        HDR_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        THIN_SIDE = Side(style="thin", color="CBD5E1")
+        BORDER    = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
+
+        for ci, col_name in enumerate(df_display.columns, 1):
+            c = ws.cell(row=4, column=ci, value=col_name)
+            c.font = HDR_FONT; c.fill = HDR_FILL
+            c.alignment = HDR_ALIGN; c.border = BORDER
+        ws.row_dimensions[4].height = 22
+
+        # Data rows
+        ALERT_COLORS = {
+            "Nguy hiểm":     "FEE2E2",
+            "Không đạt":     "FEF9C3",
+            "Cần cải thiện": "FEFCE8",
+        }
+
+        for ri, row_data in enumerate(df_display.itertuples(index=False), 5):
+            row_vals = list(row_data)
+            alert_val = str(row_vals[-1]) if row_vals else ""
+            bg = ALERT_COLORS.get(alert_val, "EFF6FF" if ri%2==0 else "FFFFFF")
+            fill = PatternFill("solid", fgColor=bg)
+            for ci, val in enumerate(row_vals, 1):
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.font      = XFont(name="Times New Roman", size=13)
+                c.fill      = fill
+                c.border    = BORDER
+                c.alignment = Alignment(vertical="center",
+                                        horizontal="center" if ci > 4 else "left")
+            ws.row_dimensions[ri].height = 18
+
+        # Auto-width cột
+        for ci, col_name in enumerate(df_display.columns, 1):
+            max_w = max(len(str(col_name)),
+                        max((len(str(ws.cell(row=r, column=ci).value or ""))
+                             for r in range(4, len(df_display)+5)), default=0))
+            ws.column_dimensions[get_column_letter(ci)].width = min(max_w+3, 38)
+
+        ws.freeze_panes = "A5"
+
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
-            "⬇️ Xuất Excel (.xlsx) — mở được ngay trong Excel",
+            "⬇️ Tải báo cáo Excel (.xlsx) — Times New Roman 13, định dạng chuyên nghiệp",
             data=buf.getvalue(),
-            file_name=f"LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
+            file_name=f"BaoCao_LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True, type="primary",
         )
-    with exp2:
-        # CSV với BOM để Excel nhận đúng UTF-8 tiếng Việt
-        csv_bytes = df_display.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-        st.download_button(
-            "⬇️ Xuất CSV (UTF-8 BOM — Excel đọc đúng cột)",
-            data=csv_bytes,
-            file_name=f"LichSu_ATTP_{now_vn().strftime('%d-%m-%Y')}.csv",
-            mime="text/csv; charset=utf-8-sig",
-            use_container_width=True,
-        )
+    except Exception as e:
+        st.error(f"Lỗi xuất Excel: {e}")
 
     # ── Feedback Phụ Huynh ────────────────────────────────────────────────────
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)"):
