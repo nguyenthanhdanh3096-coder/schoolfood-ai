@@ -2162,6 +2162,11 @@ def tab_checklist(api_key: str = ""):
 
     # ── Nút tạo báo cáo ──────────────────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # Guard chống duplicate save: mỗi tổ hợp (trường + ngày + người kt) chỉ lưu 1 lần
+    _save_guard_key = f"cl_saved_{school}_{date}_{insp}"
+    _already_saved  = st.session_state.get(_save_guard_key, False)
+
     if st.button(
         "📄 Tạo báo cáo kiểm tra" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
         type="primary" if can_submit else "secondary",
@@ -2201,19 +2206,23 @@ def tab_checklist(api_key: str = ""):
             st.info(f"📷 Kèm {photo_count} ảnh + "
                     f"{len(st.session_state.photo_analysis)} kết quả phân tích AI")
 
-        # ── G1: Auto-save vào Supabase ────────────────────────────────────────
-        extra_r = st.session_state.get("cl_extra_r", {})
-        session_id = db_save_checklist(
-            school, date_vn, insp, menu, level_key,
-            st.session_state.cl_r, st.session_state.cl_n,
-            alert_key, pass_count, fail_count,
-            ai_narrative=narrative,
-            extra_results=extra_r or None,
-        )
-        if session_id:
-            st.success(f"💾 Đã lưu vào database (ID: `{session_id[:8]}...`)")
-        elif db_ok():
-            st.warning("⚠️ Lưu database thất bại — báo cáo vẫn tải được bình thường")
+        # ── G1: Auto-save vào Supabase (guard chống duplicate) ───────────────
+        if not _already_saved:
+            extra_r    = st.session_state.get("cl_extra_r", {})
+            session_id = db_save_checklist(
+                school, date_vn, insp, menu, level_key,
+                st.session_state.cl_r, st.session_state.cl_n,
+                alert_key, pass_count, fail_count,
+                ai_narrative=narrative,
+                extra_results=extra_r or None,
+            )
+            if session_id:
+                st.session_state[_save_guard_key] = True   # Đánh dấu đã lưu
+                st.success(f"💾 Đã lưu vào database (ID: `{session_id[:8]}...`)")
+            elif db_ok():
+                st.warning("⚠️ Lưu database thất bại — báo cáo vẫn tải được bình thường")
+        else:
+            st.info("💾 Báo cáo này đã được lưu trước đó.")
 
         # ── Tải báo cáo Word (.docx) ─────────────────────────────────────────
         with st.spinner("⚙️ Đang tạo file Word..."):
@@ -3050,15 +3059,20 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     )
 
     if can_export:
-        # G1: Auto-save kiểm thực vào Supabase
-        date_vn_kt = kt_date.strftime("%d/%m/%Y")
-        sid_kt = db_save_kiem_thuc(
-            kt_school, date_vn_kt, kt_name, kt_menu,
-            all_results, all_notes, timestamps,
-            total_pass, total_fail,
-        )
-        if sid_kt:
-            st.success(f"💾 Đã lưu vào database (ID: `{sid_kt[:8]}...`)")
+        # G1: Auto-save kiểm thực — guard chống duplicate
+        date_vn_kt    = kt_date.strftime("%d/%m/%Y")
+        _kt_guard_key = f"kt_saved_{kt_school}_{date_vn_kt}_{kt_name}"
+        if not st.session_state.get(_kt_guard_key, False):
+            sid_kt = db_save_kiem_thuc(
+                kt_school, date_vn_kt, kt_name, kt_menu,
+                all_results, all_notes, timestamps,
+                total_pass, total_fail,
+            )
+            if sid_kt:
+                st.session_state[_kt_guard_key] = True
+                st.success(f"💾 Đã lưu vào database (ID: `{sid_kt[:8]}...`)")
+        else:
+            st.info("💾 Sổ kiểm thực này đã được lưu trước đó.")
 
         with st.spinner("Đang tạo sổ kiểm thực..."):
             docx_bytes = generate_so_kiem_thuc_docx(
