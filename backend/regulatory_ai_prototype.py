@@ -3825,33 +3825,51 @@ def tab_history(role: str = "", school_filter: str = ""):
     crit_ct = (df["Cấp cảnh báo"] == "CRITICAL").sum()
     ok_ct   = (df["Cấp cảnh báo"] == "OK").sum()
 
-    # Tính xu hướng thực tế: so sánh 30% gần nhất vs 30% đầu
-    n_split = max(1, len(df) // 3)
+    # ── Tính trạng thái xu hướng (trực quan, không dùng số %) ───────────────
+    n_split    = max(1, len(df) // 3)
     recent_avg = df.head(n_split)["Tỷ lệ đạt (%)"].mean()
     older_avg  = df.tail(n_split)["Tỷ lệ đạt (%)"].mean()
     delta      = recent_avg - older_avg
+
     if abs(delta) < 1:
-        trend_val, trend_clr, trend_lbl = "→ Ổn định", "c-blue",   "Xu hướng"
+        if avg_pct >= 90:
+            trend_icon, trend_text, trend_bg, trend_tc = "✅", "Đang tốt",       "#DCFCE7", "#16A34A"
+        else:
+            trend_icon, trend_text, trend_bg, trend_tc = "⚠️", "Cần theo dõi",   "#FEF9C3", "#CA8A04"
     elif delta > 0:
-        trend_val, trend_clr, trend_lbl = f"↑ +{delta:.0f}%", "c-green",  "Xu hướng"
+        trend_icon, trend_text, trend_bg, trend_tc     = "📈", "Đang cải thiện", "#DBEAFE", "#2563EB"
     else:
-        trend_val, trend_clr, trend_lbl = f"↓ {delta:.0f}%",  "c-red",    "Xu hướng"
+        trend_icon, trend_text, trend_bg, trend_tc     = "📉", "Đang giảm",      "#FEE2E2", "#DC2626"
 
     # ── KPI Cards ─────────────────────────────────────────────────────────────
     k1, k2, k3, k4, k5 = st.columns(5)
-    kpi_data = [
-        (k1, str(total),        "Tổng lần kiểm tra",    "c-blue"),
-        (k2, f"{avg_pct:.0f}%", "Trung bình đạt",       "c-green" if avg_pct>=90 else "c-orange"),
-        (k3, str(crit_ct),      "CRITICAL",              "c-red"   if crit_ct>0 else "c-green"),
-        (k4, str(ok_ct),        "Đạt chuẩn",            "c-green"),
-        (k5, trend_val,         trend_lbl,               trend_clr),
-    ]
-    for col, val, lbl, clr in kpi_data:
+
+    # 4 metric số liệu bình thường
+    for col, val, lbl, clr in [
+        (k1, str(total),          "Tổng lần kiểm tra",    "c-blue"),
+        (k2, f"{avg_pct:.0f}%",   "Trung bình đạt",       "c-green" if avg_pct>=90 else "c-orange"),
+        (k3, str(crit_ct),        "Mức độ CRITICAL",      "c-red" if crit_ct>0 else "c-green"),
+        (k4, str(ok_ct),          "Đạt chuẩn",            "c-green"),
+    ]:
         col.markdown(
-            f'<div class="metric-box"><div class="metric-lbl">{lbl}</div>'
-            f'<div class="metric-num {clr}" style="font-size:1.5rem">{val}</div></div>',
+            f'<div class="metric-box" style="text-align:center">'
+            f'<div class="metric-lbl">{lbl}</div>'
+            f'<div class="metric-num {clr}" style="font-size:2rem;text-align:center">{val}</div>'
+            f'</div>',
             unsafe_allow_html=True,
         )
+
+    # Metric xu hướng — trực quan, không số
+    k5.markdown(
+        f'<div class="metric-box" style="text-align:center;background:{trend_bg};'
+        f'border:2px solid {trend_tc}">'
+        f'<div class="metric-lbl">Xu hướng</div>'
+        f'<div style="font-size:2rem;text-align:center;margin:4px 0">{trend_icon}</div>'
+        f'<div style="font-size:0.85rem;font-weight:700;color:{trend_tc};text-align:center">'
+        f'{trend_text}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -3865,30 +3883,52 @@ def tab_history(role: str = "", school_filter: str = ""):
     ch1, ch2 = st.columns([3, 2])
 
     with ch1:
-        df_trend = df.sort_values("Ngày").tail(30).copy()
+        # Tổng hợp theo ngày: 1 điểm/ngày (trung bình tất cả trường trong ngày đó)
+        df_agg = (
+            df.groupby("Ngày")["Tỷ lệ đạt (%)"]
+            .mean()
+            .reset_index()
+            .sort_values("Ngày")
+            .tail(30)
+        )
+        # Đảm bảo định dạng ngày là dd/mm/yyyy (tránh hiển thị timestamp)
+        try:
+            df_agg["Ngày_fmt"] = pd.to_datetime(df_agg["Ngày"]).dt.strftime("%d/%m")
+        except Exception:
+            df_agg["Ngày_fmt"] = df_agg["Ngày"]
+
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(
-            x=df_trend["Ngày"], y=df_trend["Tỷ lệ đạt (%)"],
+            x=df_agg["Ngày_fmt"],
+            y=df_agg["Tỷ lệ đạt (%)"].round(1),
             mode="lines+markers+text",
-            name="Tỷ lệ đạt (%)",
-            line=dict(color="#2563EB", width=3),
-            marker=dict(size=8, color="#2563EB", line=dict(width=2, color="white")),
-            text=[f"{v:.0f}%" for v in df_trend["Tỷ lệ đạt (%)"]],
+            line=dict(color="#2563EB", width=3, shape="spline"),
+            marker=dict(size=10, color="#2563EB",
+                        line=dict(width=2.5, color="white")),
+            text=[f"{v:.0f}%" for v in df_agg["Tỷ lệ đạt (%)"]],
             textposition="top center",
-            textfont=dict(size=11, color="#1E293B"),
+            textfont=dict(size=12, color="#1E293B", family="Inter"),
+            hovertemplate="Ngày %{x}<br>Tỷ lệ đạt: <b>%{y:.1f}%</b><extra></extra>",
         ))
         fig_line.add_hline(
-            y=90, line_dash="dash", line_color="#DC2626", line_width=1.5,
-            annotation_text="Ngưỡng chuẩn 90%",
-            annotation_font=dict(color="#DC2626", size=11),
+            y=90, line_dash="dot", line_color="#DC2626", line_width=2,
+            annotation_text=" Ngưỡng chuẩn 90%",
+            annotation_font=dict(color="#DC2626", size=11, family="Inter"),
             annotation_position="bottom right",
+        )
+        # Tô vùng đạt chuẩn (>90%) màu xanh nhạt
+        fig_line.add_hrect(
+            y0=90, y1=110, fillcolor="#DCFCE7", opacity=0.15,
+            layer="below", line_width=0,
         )
         fig_line.update_layout(
             **_CHART_LAYOUT, height=320,
-            title="📈 Xu hướng tỷ lệ đạt theo thời gian",
-            xaxis=dict(title="Ngày kiểm tra", showgrid=False, tickangle=-30),
+            title="📈 Xu hướng tỷ lệ đạt theo ngày (điểm trung bình/ngày)",
+            xaxis=dict(title="Ngày kiểm tra", showgrid=False,
+                       tickangle=0 if len(df_agg) <= 10 else -30,
+                       tickfont=dict(size=11)),
             yaxis=dict(title="Tỷ lệ đạt (%)", range=[0,110], ticksuffix="%",
-                       showgrid=True, gridcolor="#E2E8F0"),
+                       showgrid=True, gridcolor="#E2E8F0", dtick=20),
             showlegend=False,
         )
         st.plotly_chart(fig_line, use_container_width=True)
@@ -3912,7 +3952,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             **_CHART_LAYOUT, height=320,
             title="🥧 Phân bố mức cảnh báo",
             showlegend=False,
-            annotations=[dict(text=f"<b>{total}</b><br><span style='font-size:11px'>lần KT</span>",
+            annotations=[dict(text=f"<b>{total}</b><br><span style='font-size:11px'>lần</span>",
                               x=0.5, y=0.5, showarrow=False, font_size=15, font_color="#1E293B")],
         )
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -3971,29 +4011,67 @@ def tab_history(role: str = "", school_filter: str = ""):
         sb = _get_sb()
         if sb:
             items_raw = sb.table("checklist_results")\
-                .select("item_code,result")\
+                .select("item_code,result,item_desc")\
                 .eq("result","Không Đạt").limit(500).execute().data or []
             if items_raw:
                 df_it = pd.DataFrame(items_raw)
-                top_fail = df_it["item_code"].value_counts().head(10).reset_index()
-                top_fail.columns = ["Mã điểm","Số lần không đạt"]
-                top_fail = top_fail.sort_values("Số lần không đạt")
-                colors = [f"rgba(220,38,38,{0.4 + 0.6*i/len(top_fail)})"
-                          for i in range(len(top_fail))]
+
+                # Build mapping code → mô tả ngắn (chuẩn hoá từ ngữ)
+                _desc_map: dict = {}
+                # Từ checklist Ban Giám Sát
+                try:
+                    for _, grp_items in get_checklist("Tiểu Học (6–11 tuổi)"):
+                        for code, _, desc, *_ in grp_items:
+                            # Rút ngắn còn 45 ký tự, viết thường phần sau
+                            short = desc[:45] + ("..." if len(desc)>45 else "")
+                            _desc_map[code] = f"{code} — {short}"
+                except Exception:
+                    pass
+                # Từ kiểm thực 3 bước
+                for step in KIEM_THUC:
+                    for code, desc, *_ in step["items"]:
+                        short = desc[:45] + ("..." if len(desc)>45 else "")
+                        _desc_map[code] = f"{code} — {short}"
+
+                # Nếu DB đã lưu item_desc thì dùng, nếu không thì tra bảng
+                def get_label(row):
+                    if row.get("item_desc"):
+                        s = str(row["item_desc"])[:50]
+                        return f"{row['item_code']} — {s}"
+                    return _desc_map.get(row["item_code"], row["item_code"])
+
+                df_it["Tên điểm"] = df_it.apply(get_label, axis=1)
+                top_fail = (
+                    df_it.groupby("Tên điểm")
+                    .size()
+                    .reset_index(name="Số lần không đạt")
+                    .sort_values("Số lần không đạt")
+                    .tail(10)
+                )
+                colors = [
+                    f"rgba(220,38,38,{0.3 + 0.7*i/max(len(top_fail)-1,1)})"
+                    for i in range(len(top_fail))
+                ]
                 fig_hbar = go.Figure(go.Bar(
                     x=top_fail["Số lần không đạt"],
-                    y=top_fail["Mã điểm"],
+                    y=top_fail["Tên điểm"],
                     orientation="h",
                     marker_color=colors,
                     text=top_fail["Số lần không đạt"],
                     textposition="outside",
-                    hovertemplate="%{y}: %{x} lần không đạt<extra></extra>",
+                    textfont=dict(size=12),
+                    hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
                 ))
                 fig_hbar.update_layout(
-                    **_CHART_LAYOUT, height=max(280, len(top_fail)*38),
-                    title="🔴 Top 10 điểm kiểm tra hay không đạt nhất",
-                    xaxis=dict(title="Số lần không đạt", showgrid=True, gridcolor="#E2E8F0"),
-                    yaxis=dict(title="", showgrid=False),
+                    **_CHART_LAYOUT,
+                    height=max(300, len(top_fail)*52),
+                    title="🔴 Điểm kiểm tra thường xuyên không đạt nhất",
+                    xaxis=dict(title="Số lần không đạt", showgrid=True,
+                               gridcolor="#E2E8F0", dtick=1),
+                    yaxis=dict(title="", showgrid=False,
+                               tickfont=dict(size=11),
+                               automargin=True),
+                    margin=dict(l=10, r=60, t=45, b=16),
                 )
                 st.plotly_chart(fig_hbar, use_container_width=True)
     except Exception:
