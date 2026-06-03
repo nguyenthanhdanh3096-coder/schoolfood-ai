@@ -4772,6 +4772,82 @@ def tab_history(role: str = "", school_filter: str = ""):
     school_input = "" if _school_sel == "Tất cả trường" else _school_sel
     sessions = db_get_sessions(school=school_input, limit=200)
 
+    # ── 🚨 ALERT BANNER — hiện ngay đầu trang cho BGH/Admin ──────────────────
+    # Tính nhanh từ sessions (không cần df_meal) để hiện trước mọi thứ
+    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok() and sessions:
+        import pandas as _pd_alert
+        _now_alert = _pd_alert.Timestamp(now_vn().date())
+        _quick_alerts = []
+
+        # BGS tần suất (lấy từ sessions)
+        _bgs_dates = sorted([s["check_date"] for s in sessions
+                             if s.get("check_type") == "ban_giam_sat" and s.get("check_date")],
+                            reverse=True)
+        if _bgs_dates:
+            _last_bgs_dt = _pd_alert.Timestamp(_bgs_dates[0])
+            _bgs_gap = (_now_alert - _last_bgs_dt).days
+            _bgs_7d = sum(1 for d in _bgs_dates
+                          if _pd_alert.Timestamp(d) >= _now_alert - _pd_alert.Timedelta(days=7))
+            if _bgs_gap > 7:
+                _quick_alerts.append(("🚨", f"BGS chưa kiểm tra {_bgs_gap} ngày — vi phạm NĐ 15/2018"))
+            elif _bgs_7d < 2:
+                _quick_alerts.append(("⏰", f"BGS chỉ kiểm tra {_bgs_7d} lần/tuần (yêu cầu ≥ 2)"))
+        else:
+            _quick_alerts.append(("🚨", "BGS chưa có lần kiểm tra nào — cần báo cáo ngay"))
+
+        # Y Tế tần suất
+        _yte_dates = sorted([s["check_date"] for s in sessions
+                             if s.get("check_type") == "kiem_thuc_3_buoc" and s.get("check_date")],
+                            reverse=True)
+        if _yte_dates:
+            _last_yte_dt = _pd_alert.Timestamp(_yte_dates[0])
+            _yte_gap = (_now_alert - _last_yte_dt).days
+            if _yte_gap > 3:
+                _quick_alerts.append(("🚨", f"Y Tế chưa kiểm thực {_yte_gap} ngày — vi phạm TTLT 13/2016 Điều 9"))
+        else:
+            _quick_alerts.append(("🚨", "Y Tế chưa có kiểm thực nào — vi phạm TTLT 13/2016"))
+
+        # Complaints quá hạn (> 2 ngày)
+        try:
+            _pending_fb_alert = db_get_feedback(school=school_input, status="pending")
+            _overdue_fb = 0
+            for _f in _pending_fb_alert:
+                try:
+                    _f_dt = __import__("datetime").datetime.fromisoformat(
+                        (_f.get("created_at",""))[:19]).replace(
+                        tzinfo=__import__("datetime").timezone.utc)
+                    if (now_vn() - _f_dt).days >= 2:
+                        _overdue_fb += 1
+                except Exception:
+                    pass
+            if _overdue_fb > 0:
+                _quick_alerts.append(("⏰", f"{_overdue_fb} phản hồi PH quá 2 ngày chưa xử lý"))
+        except Exception:
+            pass
+
+        if _quick_alerts:
+            _crit_cnt = sum(1 for lvl, _ in _quick_alerts if lvl == "🚨")
+            _warn_cnt = len(_quick_alerts) - _crit_cnt
+            _top_bg   = "#FEF2F2" if _crit_cnt > 0 else "#FFFBEB"
+            _top_bd   = "#FCA5A5" if _crit_cnt > 0 else "#FCD34D"
+            _top_tc   = "#991B1B" if _crit_cnt > 0 else "#78350F"
+            _alert_html = "".join(
+                f'<div style="margin:3px 0;font-size:0.85rem">{lvl} {msg}</div>'
+                for lvl, msg in _quick_alerts
+            )
+            st.markdown(
+                f'<div style="background:{_top_bg};border:2px solid {_top_bd};'
+                f'border-radius:12px;padding:14px 18px;margin-bottom:12px">'
+                f'<div style="font-weight:700;color:{_top_tc};margin-bottom:6px;font-size:0.92rem">'
+                f'{"🚨" if _crit_cnt > 0 else "⚠️"} '
+                f'{_crit_cnt} vấn đề nghiêm trọng · {_warn_cnt} cảnh báo — cần xử lý ngay</div>'
+                f'{_alert_html}'
+                f'<div style="font-size:0.75rem;color:{_top_tc};margin-top:6px;opacity:0.8">'
+                f'Chi tiết đầy đủ → xem mục 🔍 Phát hiện bất thường bên dưới</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
     # ── Feedback Phụ Huynh — luôn hiện TRƯỚC early return ────────────────────
     # ── Hệ thống Complaint — expandable, hiện TRƯỚC early return ─────────────
     # BGH: mở mặc định (họ cần xử lý) · BGS/Y Tế: đóng mặc định
@@ -5711,10 +5787,9 @@ def tab_history(role: str = "", school_filter: str = ""):
                     pass
 
             if _anomalies:
-                st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Cần chú ý</div>',
+                st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Chi tiết</div>',
                             unsafe_allow_html=True)
                 for _a in _anomalies:
-                    # Critical (🚨 BGH escalation) → đỏ; Warning (⏰) → vàng
                     _is_crit_a = _a.startswith("🚨")
                     _a_bg  = "#FEF2F2" if _is_crit_a else "#FFFBEB"
                     _a_bd  = "#FCA5A5" if _is_crit_a else "#FCD34D"
@@ -5726,6 +5801,64 @@ def tab_history(role: str = "", school_filter: str = ""):
                         f'{_a}</div>',
                         unsafe_allow_html=True,
                     )
+
+                # ── Claude AI phân tích tổng hợp bất thường ─────────────────
+                _api_key_hist = st.session_state.get("api_key_stored", "")
+                import os as _os_hist
+                _api_key_hist = (
+                    (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else "")
+                    or _os_hist.environ.get("ANTHROPIC_API_KEY","")
+                )
+                if _api_key_hist:
+                    st.markdown(
+                        '<div style="background:#F5F3FF;border:1px solid #DDD6FE;'
+                        'border-radius:8px;padding:10px 14px;margin-top:8px;'
+                        'font-size:0.8rem;color:#5B21B6">'
+                        '🤖 <b>AI Cross-Validation</b>: Claude phân tích tổng hợp tất cả bất thường, '
+                        'đánh giá mức độ rủi ro thực sự và đề xuất hành động ưu tiên.</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("🤖 Claude phân tích bất thường tổng hợp",
+                                 key="ai_anomaly_analysis", use_container_width=False):
+                        _anom_text = "\n".join(f"- {a}" for a in _anomalies)
+                        _stats_txt = ""
+                        if show_meal and not df_meal.empty:
+                            _stats_txt = (
+                                f"Tổng {len(df_meal)} lần kiểm tra · "
+                                f"Trung bình {df_meal['Tỷ lệ đạt (%)'].mean():.0f}% · "
+                                f"CRITICAL: {(df_meal['Cấp cảnh báo']=='CRITICAL').sum()} lần"
+                            )
+                        _ai_prompt = (
+                            f"Bạn là chuyên gia ATTP trường học Việt Nam. Dưới đây là các bất thường "
+                            f"phát hiện tự động trong hệ thống giám sát bữa ăn học đường:\n\n"
+                            f"{_anom_text}\n\n"
+                            f"Thống kê tổng hợp: {_stats_txt}\n\n"
+                            f"Hãy phân tích:\n"
+                            f"1. Đánh giá mức độ rủi ro thực sự (thấp/trung/cao/nguy hiểm)\n"
+                            f"2. Mối liên hệ giữa các bất thường (có phải cùng 1 nguyên nhân không)\n"
+                            f"3. 3 hành động ưu tiên nhất cần thực hiện ngay\n"
+                            f"4. Dấu hiệu nào cần giám sát thêm\n"
+                            f"Trả lời ngắn gọn, súc tích bằng tiếng Việt (~200 từ)."
+                        )
+                        try:
+                            with st.spinner("🤖 Claude đang phân tích..."):
+                                _ai_client = anthropic.Anthropic(api_key=_api_key_hist)
+                                _ai_resp = _ai_client.messages.create(
+                                    model=MODEL, max_tokens=600,
+                                    messages=[{"role": "user", "content": _ai_prompt}]
+                                )
+                            _ai_analysis = _ai_resp.content[0].text if _ai_resp.content else ""
+                            st.markdown(
+                                f'<div style="background:#F5F3FF;border:1px solid #7C3AED;'
+                                f'border-radius:10px;padding:14px 16px;margin-top:8px">'
+                                f'<div style="font-size:0.85rem;font-weight:700;color:#6D28D9;'
+                                f'margin-bottom:8px">🤖 Claude AI — Phân tích Cross-Validation</div>'
+                                f'<div style="font-size:0.85rem;color:#1E293B;line-height:1.7">'
+                                f'{_ai_analysis}</div></div>',
+                                unsafe_allow_html=True,
+                            )
+                        except Exception as _ae:
+                            st.error(f"Lỗi AI: {_ae}")
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
