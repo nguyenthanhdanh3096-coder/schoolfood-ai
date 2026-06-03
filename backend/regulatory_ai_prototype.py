@@ -2259,11 +2259,13 @@ def tab_checklist(api_key: str = ""):
                 result = st.session_state.get(f"seg_{code}")  # None nếu chưa chọn
                 st.session_state.cl_r[code] = result
 
-                note = st.text_input(
-                    label=f"ghi_chú_{code}", label_visibility="collapsed",
-                    placeholder="Ghi chú (nếu có)...", key=f"note_{code}",
-                )
-                st.session_state.cl_n[code] = note
+                # Ghi chú — mở khi Không Đạt, đóng khi Đạt/chưa chấm
+                with st.expander("📝 Ghi chú", expanded=(result == "❌ Không Đạt")):
+                    note = st.text_input(
+                        label=f"ghi_chú_{code}", label_visibility="collapsed",
+                        placeholder="Ghi chú (nếu có)...", key=f"note_{code}",
+                    )
+                    st.session_state.cl_n[code] = note
 
             if result == "✅ Đạt":
                 pass_count += 1
@@ -5016,220 +5018,221 @@ def tab_history(role: str = "", school_filter: str = ""):
             f'</div>', unsafe_allow_html=True,
         )
         st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("📊 Biểu đồ & Bảng chi tiết — Bữa ăn", expanded=False):
 
-        # Hàng 1: Xu hướng + Phân bố cảnh báo
-        ch1, ch2 = st.columns([3, 2])
-        with ch1:
-            df_agg = (df.groupby("Ngày")["Tỷ lệ đạt (%)"].mean()
-                      .reset_index().sort_values("Ngày").tail(30))
-            try:
-                df_agg["Ngày_fmt"] = pd.to_datetime(df_agg["Ngày"]).dt.strftime("%d/%m")
-            except Exception:
-                df_agg["Ngày_fmt"] = df_agg["Ngày"]
-            fig_line = go.Figure()
-            fig_line.add_trace(go.Scatter(
-                x=df_agg["Ngày_fmt"], y=df_agg["Tỷ lệ đạt (%)"].round(1),
-                mode="lines+markers+text",
-                line=dict(color="#2563EB", width=3, shape="spline"),
-                marker=dict(size=10, color="#2563EB", line=dict(width=2.5, color="white")),
-                text=[f"{v:.0f}%" for v in df_agg["Tỷ lệ đạt (%)"]],
-                textposition="top center",
-                textfont=dict(size=12, color="#1E293B", family="Inter"),
-                hovertemplate="Ngày %{x}<br>Tỷ lệ đạt: <b>%{y:.1f}%</b><extra></extra>",
-            ))
-            fig_line.add_hline(y=90, line_dash="dot", line_color="#DC2626", line_width=2,
-                               annotation_text=" Ngưỡng 90%",
-                               annotation_font=dict(color="#DC2626", size=11, family="Inter"),
-                               annotation_position="bottom right")
-            fig_line.add_hrect(y0=90, y1=110, fillcolor="#DCFCE7", opacity=0.15,
-                               layer="below", line_width=0)
-            fig_line.update_layout(
-                **_CHART_LAYOUT, height=300,
-                title="📈 Xu hướng tỷ lệ đạt bữa ăn theo ngày",
-                xaxis=dict(title="Ngày kiểm tra", showgrid=False,
-                           tickangle=0 if len(df_agg) <= 10 else -30),
-                yaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 110],
-                           ticksuffix="%", showgrid=True, gridcolor="#E2E8F0", dtick=20),
-                showlegend=False,
-            )
-            st.plotly_chart(fig_line, use_container_width=True)
+            # Hàng 1: Xu hướng + Phân bố cảnh báo
+            ch1, ch2 = st.columns([3, 2])
+            with ch1:
+                df_agg = (df.groupby("Ngày")["Tỷ lệ đạt (%)"].mean()
+                          .reset_index().sort_values("Ngày").tail(30))
+                try:
+                    df_agg["Ngày_fmt"] = pd.to_datetime(df_agg["Ngày"]).dt.strftime("%d/%m")
+                except Exception:
+                    df_agg["Ngày_fmt"] = df_agg["Ngày"]
+                fig_line = go.Figure()
+                fig_line.add_trace(go.Scatter(
+                    x=df_agg["Ngày_fmt"], y=df_agg["Tỷ lệ đạt (%)"].round(1),
+                    mode="lines+markers+text",
+                    line=dict(color="#2563EB", width=3, shape="spline"),
+                    marker=dict(size=10, color="#2563EB", line=dict(width=2.5, color="white")),
+                    text=[f"{v:.0f}%" for v in df_agg["Tỷ lệ đạt (%)"]],
+                    textposition="top center",
+                    textfont=dict(size=12, color="#1E293B", family="Inter"),
+                    hovertemplate="Ngày %{x}<br>Tỷ lệ đạt: <b>%{y:.1f}%</b><extra></extra>",
+                ))
+                fig_line.add_hline(y=90, line_dash="dot", line_color="#DC2626", line_width=2,
+                                   annotation_text=" Ngưỡng 90%",
+                                   annotation_font=dict(color="#DC2626", size=11, family="Inter"),
+                                   annotation_position="bottom right")
+                fig_line.add_hrect(y0=90, y1=110, fillcolor="#DCFCE7", opacity=0.15,
+                                   layer="below", line_width=0)
+                fig_line.update_layout(
+                    **_CHART_LAYOUT, height=300,
+                    title="📈 Xu hướng tỷ lệ đạt bữa ăn theo ngày",
+                    xaxis=dict(title="Ngày kiểm tra", showgrid=False,
+                               tickangle=0 if len(df_agg) <= 10 else -30),
+                    yaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 110],
+                               ticksuffix="%", showgrid=True, gridcolor="#E2E8F0", dtick=20),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_line, use_container_width=True)
 
-        with ch2:
-            alert_counts = df["Đánh giá"].value_counts().reset_index()
-            alert_counts.columns = ["Mức", "Số lần"]
-            fig_pie = go.Figure(go.Pie(
-                labels=alert_counts["Mức"], values=alert_counts["Số lần"],
-                hole=0.45,
-                marker_colors=[{"Đạt chuẩn": "#16A34A", "Cần cải thiện": "#F59E0B",
-                                "Không đạt": "#D97706", "Nguy hiểm": "#DC2626"
-                                }.get(m, "#64748B") for m in alert_counts["Mức"]],
-                textfont_size=13, textinfo="percent+label",
-                hovertemplate="%{label}<br>%{value} lần (%{percent})<extra></extra>",
-            ))
-            fig_pie.update_layout(
-                **_CHART_LAYOUT, height=300,
-                title="🥧 Phân bố mức cảnh báo bữa ăn",
-                showlegend=False,
-                annotations=[dict(text=f"<b>{total}</b><br>lần",
-                                  x=0.5, y=0.5, showarrow=False,
-                                  font_size=15, font_color="#1E293B")],
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            with ch2:
+                alert_counts = df["Đánh giá"].value_counts().reset_index()
+                alert_counts.columns = ["Mức", "Số lần"]
+                fig_pie = go.Figure(go.Pie(
+                    labels=alert_counts["Mức"], values=alert_counts["Số lần"],
+                    hole=0.45,
+                    marker_colors=[{"Đạt chuẩn": "#16A34A", "Cần cải thiện": "#F59E0B",
+                                    "Không đạt": "#D97706", "Nguy hiểm": "#DC2626"
+                                    }.get(m, "#64748B") for m in alert_counts["Mức"]],
+                    textfont_size=13, textinfo="percent+label",
+                    hovertemplate="%{label}<br>%{value} lần (%{percent})<extra></extra>",
+                ))
+                fig_pie.update_layout(
+                    **_CHART_LAYOUT, height=300,
+                    title="🥧 Phân bố mức cảnh báo bữa ăn",
+                    showlegend=False,
+                    annotations=[dict(text=f"<b>{total}</b><br>lần",
+                                      x=0.5, y=0.5, showarrow=False,
+                                      font_size=15, font_color="#1E293B")],
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-        # Hàng 2: Theo tuần + Theo loại kiểm tra
-        ch3, ch4 = st.columns([3, 2])
-        with ch3:
-            try:
-                df_wk = df.copy()
-                _wk_dt = pd.to_datetime(df_wk["Ngày"], errors="coerce")
-                _wk_periods = _wk_dt.dt.to_period("W")
-                df_wk["Tuần"] = _wk_periods.apply(
-                    lambda p: f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
-                    if pd.notna(p) else "?")
-                _wk_order  = _wk_periods.dropna().sort_values().unique()
-                _wk_labels = [f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
-                              for p in _wk_order]
-                wk_cnt = df_wk.groupby(["Tuần", "Đánh giá"]).size().reset_index(name="Số lần")
-                _CMAP = {"Đạt chuẩn": "#16A34A", "Cần cải thiện": "#F59E0B",
-                         "Không đạt": "#F97316", "Nguy hiểm": "#DC2626"}
-                fig_bar = px.bar(wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
-                                 color_discrete_map=_CMAP, barmode="stack", text="Số lần",
-                                 category_orders={"Tuần": _wk_labels})
-                fig_bar.update_traces(
+            # Hàng 2: Theo tuần + Theo loại kiểm tra
+            ch3, ch4 = st.columns([3, 2])
+            with ch3:
+                try:
+                    df_wk = df.copy()
+                    _wk_dt = pd.to_datetime(df_wk["Ngày"], errors="coerce")
+                    _wk_periods = _wk_dt.dt.to_period("W")
+                    df_wk["Tuần"] = _wk_periods.apply(
+                        lambda p: f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
+                        if pd.notna(p) else "?")
+                    _wk_order  = _wk_periods.dropna().sort_values().unique()
+                    _wk_labels = [f"{p.start_time.strftime('%d/%m')}-{p.end_time.strftime('%d/%m')}"
+                                  for p in _wk_order]
+                    wk_cnt = df_wk.groupby(["Tuần", "Đánh giá"]).size().reset_index(name="Số lần")
+                    _CMAP = {"Đạt chuẩn": "#16A34A", "Cần cải thiện": "#F59E0B",
+                             "Không đạt": "#F97316", "Nguy hiểm": "#DC2626"}
+                    fig_bar = px.bar(wk_cnt, x="Tuần", y="Số lần", color="Đánh giá",
+                                     color_discrete_map=_CMAP, barmode="stack", text="Số lần",
+                                     category_orders={"Tuần": _wk_labels})
+                    fig_bar.update_traces(
+                        textposition="inside",
+                        insidetextanchor="middle",   # canh giữa trong mỗi segment
+                        textfont_size=12,
+                        textfont_color="white",
+                    )
+                    fig_bar.update_layout(
+                        **{**_CHART_LAYOUT, "margin": dict(l=16, r=130, t=40, b=16)},
+                        height=300, title="📊 Số lần kiểm tra bữa ăn theo tuần",
+                        xaxis=dict(title="Tuần", tickangle=-20, showgrid=False),
+                        yaxis=dict(title="Số lần", showgrid=True, gridcolor="#E2E8F0"),
+                        legend=dict(orientation="v", x=1.02, y=0.5, xanchor="left",
+                                    yanchor="middle", title_text="Đánh giá",
+                                    bgcolor="rgba(255,255,255,0.8)",
+                                    bordercolor="#E2E8F0", borderwidth=1),
+                    )
+                    st.plotly_chart(fig_bar, use_container_width=True)
+                except Exception as _e:
+                    st.info(f"Cần thêm dữ liệu. ({_e})")
+
+            with ch4:
+                type_stats = (df.groupby("Loại")
+                              .agg(avg_pct=("Tỷ lệ đạt (%)", "mean"),
+                                   count=("Tỷ lệ đạt (%)", "count"))
+                              .reset_index().sort_values("avg_pct", ascending=True))
+                fig_type = go.Figure(go.Bar(
+                    x=type_stats["avg_pct"].round(1), y=type_stats["Loại"],
+                    orientation="h",
+                    marker_color=["#16A34A" if v >= 90 else "#F59E0B" if v >= 80 else "#F97316"
+                                  for v in type_stats["avg_pct"]],
+                    # Text đặt TRONG bar, canh giữa — tránh bị cắt khi bar gần 100%
+                    text=[f"{v:.0f}%  ({c} lần)"
+                          for v, c in zip(type_stats["avg_pct"], type_stats["count"])],
                     textposition="inside",
-                    insidetextanchor="middle",   # canh giữa trong mỗi segment
-                    textfont_size=12,
-                    textfont_color="white",
+                    insidetextanchor="middle",
+                    textfont=dict(size=12, color="white"),
+                    hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
+                ))
+                fig_type.add_vline(x=90, line_dash="dot", line_color="#DC2626", line_width=1.5,
+                                   annotation_text=" Chuẩn 90%",
+                                   annotation_font=dict(size=11, color="#DC2626"),
+                                   annotation_position="top")
+                fig_type.update_layout(
+                    **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
+                    height=300, title="🔍 Tỷ lệ đạt TB theo loại kiểm tra",
+                    xaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 105],
+                               ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
+                    yaxis=dict(title="", showgrid=False, automargin=True),
+                    showlegend=False,
                 )
-                fig_bar.update_layout(
-                    **{**_CHART_LAYOUT, "margin": dict(l=16, r=130, t=40, b=16)},
-                    height=300, title="📊 Số lần kiểm tra bữa ăn theo tuần",
-                    xaxis=dict(title="Tuần", tickangle=-20, showgrid=False),
-                    yaxis=dict(title="Số lần", showgrid=True, gridcolor="#E2E8F0"),
-                    legend=dict(orientation="v", x=1.02, y=0.5, xanchor="left",
-                                yanchor="middle", title_text="Đánh giá",
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="#E2E8F0", borderwidth=1),
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
-            except Exception as _e:
-                st.info(f"Cần thêm dữ liệu. ({_e})")
+                st.plotly_chart(fig_type, use_container_width=True)
 
-        with ch4:
-            type_stats = (df.groupby("Loại")
-                          .agg(avg_pct=("Tỷ lệ đạt (%)", "mean"),
-                               count=("Tỷ lệ đạt (%)", "count"))
-                          .reset_index().sort_values("avg_pct", ascending=True))
-            fig_type = go.Figure(go.Bar(
-                x=type_stats["avg_pct"].round(1), y=type_stats["Loại"],
-                orientation="h",
-                marker_color=["#16A34A" if v >= 90 else "#F59E0B" if v >= 80 else "#F97316"
-                              for v in type_stats["avg_pct"]],
-                # Text đặt TRONG bar, canh giữa — tránh bị cắt khi bar gần 100%
-                text=[f"{v:.0f}%  ({c} lần)"
-                      for v, c in zip(type_stats["avg_pct"], type_stats["count"])],
-                textposition="inside",
-                insidetextanchor="middle",
-                textfont=dict(size=12, color="white"),
-                hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
-            ))
-            fig_type.add_vline(x=90, line_dash="dot", line_color="#DC2626", line_width=1.5,
-                               annotation_text=" Chuẩn 90%",
-                               annotation_font=dict(size=11, color="#DC2626"),
-                               annotation_position="top")
-            fig_type.update_layout(
-                **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
-                height=300, title="🔍 Tỷ lệ đạt TB theo loại kiểm tra",
-                xaxis=dict(title="Tỷ lệ đạt (%)", range=[0, 105],
-                           ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
-                yaxis=dict(title="", showgrid=False, automargin=True),
-                showlegend=False,
-            )
-            st.plotly_chart(fig_type, use_container_width=True)
-
-        # Top 10 fail bữa ăn — lọc theo session IDs của trường đã chọn
-        st.markdown('<div class="sec-hdr">🔴 Top 10 điểm không đạt nhiều nhất (bữa ăn)</div>',
-                    unsafe_allow_html=True)
-        try:
-            sb = _get_sb()
-            if sb:
-                # Lấy session IDs của bữa ăn đã được lọc theo trường
-                _meal_ids = [s["id"] for s in sessions
-                             if s.get("check_type") in ("ban_giam_sat", "kiem_thuc_3_buoc")
-                             and s.get("id")]
-                if not _meal_ids:
-                    st.info("Chưa có dữ liệu điểm không đạt.")
-                else:
-                    # Chia nhỏ thành batch ≤ 100 IDs (giới hạn Supabase .in_())
-                    _all_items: list = []
-                    for _i in range(0, len(_meal_ids), 100):
-                        _batch = _meal_ids[_i:_i+100]
-                        _r = sb.table("checklist_results")\
-                            .select("item_code,result")\
-                            .in_("session_id", _batch)\
-                            .in_("result", ["Không Đạt", "❌ Không Đạt"])\
-                            .execute()
-                        _all_items += (_r.data or [])
-
-                    if not _all_items:
-                        st.info("Chưa có điểm không đạt cho trường / bộ lọc đã chọn.")
+            # Top 10 fail bữa ăn — lọc theo session IDs của trường đã chọn
+            st.markdown('<div class="sec-hdr">🔴 Top 10 điểm không đạt nhiều nhất (bữa ăn)</div>',
+                        unsafe_allow_html=True)
+            try:
+                sb = _get_sb()
+                if sb:
+                    # Lấy session IDs của bữa ăn đã được lọc theo trường
+                    _meal_ids = [s["id"] for s in sessions
+                                 if s.get("check_type") in ("ban_giam_sat", "kiem_thuc_3_buoc")
+                                 and s.get("id")]
+                    if not _meal_ids:
+                        st.info("Chưa có dữ liệu điểm không đạt.")
                     else:
-                        _KW = {
-                            "C01":"Tem kiểm dịch thịt/cá","C02":"Hóa đơn nguồn gốc rau củ",
-                            "C03":"Hạn sử dụng nguyên liệu","C04":"Hóa đơn mua hàng ngày",
-                            "C05":"Nhiệt độ tủ lạnh < 5°C","C06":"Tách biệt thực phẩm sống/chín",
-                            "C07":"Nhiệt độ nhận hàng ≥ 60°C","C08":"Thùng vận chuyển kín, sạch",
-                            "C09":"Nhiệt độ chia ăn đúng chuẩn","C10":"Thời gian nấu → phục vụ < 2h",
-                            "C11":"Màu sắc & mùi vị thức ăn","C12":"Khẩu phần thịt/cá đủ định mức",
-                            "C13":"Khẩu phần rau xanh đủ định mức","C14":"Dụng cụ ăn sạch, khô ráo",
-                            "C15":"Đeo khẩu trang & găng tay","C16":"Không ho/hắt hơi vào thức ăn",
-                            "C17":"Khu vực chia cơm sạch","C18":"Sổ kiểm thực 3 bước đủ chữ ký",
-                            "C19":"Thực đơn khớp đăng ký","C20":"Mẫu lưu thức ăn 24h đủ nhãn",
-                            "B1_01":"Tem kiểm dịch (B1)","B1_02":"Hóa đơn rau củ (B1)",
-                            "B1_03":"Hạn sử dụng (B1)","B1_04":"Nhiệt độ tủ lạnh (B1)",
-                            "B1_05":"Tách biệt sống/chín (B1)","B2_01":"Nấu chín ≥ 70°C (B2)",
-                            "B2_02":"Bảo hộ lao động (B2)","B2_03":"Dao thớt riêng sống/chín (B2)",
-                            "B2_04":"Dụng cụ nấu sạch (B2)","B2_05":"Bếp sạch (B2)",
-                            "B3_01":"Nhiệt độ chia đúng chuẩn (B3)","B3_02":"Thời gian nấu→chia (B3)",
-                            "B3_03":"Màu sắc & mùi vị (B3)","B3_04":"Khẩu phần đủ định mức (B3)",
-                            "B3_05":"Mẫu lưu 24h đủ nhãn (B3)",
-                        }
-                        df_it = pd.DataFrame(_all_items)
-                        df_it = df_it[df_it["item_code"].str.startswith(("C", "B"))]
-                        df_it["Tên điểm"] = df_it["item_code"].map(lambda c: _KW.get(c, c))
-                        top_fail = (df_it.groupby("Tên điểm").size()
-                                    .reset_index(name="Số lần")
-                                    .sort_values("Số lần").tail(10))
-                        n = len(top_fail)
-                        fig_hbar = go.Figure(go.Bar(
-                            x=top_fail["Số lần"], y=top_fail["Tên điểm"], orientation="h",
-                            marker_color=[f"rgba(220,38,38,{0.25+0.75*i/max(n-1,1)})"
-                                          for i in range(n)],
-                            text=top_fail["Số lần"], textposition="outside",
-                            textfont=dict(size=12),
-                            hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
-                        ))
-                        fig_hbar.update_layout(
-                            plot_bgcolor="white", paper_bgcolor="#F8FAFC",
-                            font=dict(family="Inter, sans-serif", size=12, color="#334155"),
-                            # Không set title key → Plotly không render chữ nào
-                            margin=dict(l=10, r=60, t=4, b=16),
-                            height=max(280, n * 50),
-                            xaxis=dict(title="Số lần không đạt", showgrid=True,
-                                       gridcolor="#E2E8F0", dtick=1),
-                            yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
-                        )
-                        st.plotly_chart(fig_hbar, use_container_width=True)
-        except Exception as _e:
-            st.warning(f"Không thể tải top fail: {_e}")
+                        # Chia nhỏ thành batch ≤ 100 IDs (giới hạn Supabase .in_())
+                        _all_items: list = []
+                        for _i in range(0, len(_meal_ids), 100):
+                            _batch = _meal_ids[_i:_i+100]
+                            _r = sb.table("checklist_results")\
+                                .select("item_code,result")\
+                                .in_("session_id", _batch)\
+                                .in_("result", ["Không Đạt", "❌ Không Đạt"])\
+                                .execute()
+                            _all_items += (_r.data or [])
 
-        # Bảng chi tiết bữa ăn
-        st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Bữa ăn</div>', unsafe_allow_html=True)
-        _dm = df_meal.drop(columns=["Cấp cảnh báo"], errors="ignore").copy()
-        _dm["Ngày"] = pd.to_datetime(_dm["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y").fillna(_dm["Ngày"])
-        st.dataframe(_dm, use_container_width=True, hide_index=True)
+                        if not _all_items:
+                            st.info("Chưa có điểm không đạt cho trường / bộ lọc đã chọn.")
+                        else:
+                            _KW = {
+                                "C01":"Tem kiểm dịch thịt/cá","C02":"Hóa đơn nguồn gốc rau củ",
+                                "C03":"Hạn sử dụng nguyên liệu","C04":"Hóa đơn mua hàng ngày",
+                                "C05":"Nhiệt độ tủ lạnh < 5°C","C06":"Tách biệt thực phẩm sống/chín",
+                                "C07":"Nhiệt độ nhận hàng ≥ 60°C","C08":"Thùng vận chuyển kín, sạch",
+                                "C09":"Nhiệt độ chia ăn đúng chuẩn","C10":"Thời gian nấu → phục vụ < 2h",
+                                "C11":"Màu sắc & mùi vị thức ăn","C12":"Khẩu phần thịt/cá đủ định mức",
+                                "C13":"Khẩu phần rau xanh đủ định mức","C14":"Dụng cụ ăn sạch, khô ráo",
+                                "C15":"Đeo khẩu trang & găng tay","C16":"Không ho/hắt hơi vào thức ăn",
+                                "C17":"Khu vực chia cơm sạch","C18":"Sổ kiểm thực 3 bước đủ chữ ký",
+                                "C19":"Thực đơn khớp đăng ký","C20":"Mẫu lưu thức ăn 24h đủ nhãn",
+                                "B1_01":"Tem kiểm dịch (B1)","B1_02":"Hóa đơn rau củ (B1)",
+                                "B1_03":"Hạn sử dụng (B1)","B1_04":"Nhiệt độ tủ lạnh (B1)",
+                                "B1_05":"Tách biệt sống/chín (B1)","B2_01":"Nấu chín ≥ 70°C (B2)",
+                                "B2_02":"Bảo hộ lao động (B2)","B2_03":"Dao thớt riêng sống/chín (B2)",
+                                "B2_04":"Dụng cụ nấu sạch (B2)","B2_05":"Bếp sạch (B2)",
+                                "B3_01":"Nhiệt độ chia đúng chuẩn (B3)","B3_02":"Thời gian nấu→chia (B3)",
+                                "B3_03":"Màu sắc & mùi vị (B3)","B3_04":"Khẩu phần đủ định mức (B3)",
+                                "B3_05":"Mẫu lưu 24h đủ nhãn (B3)",
+                            }
+                            df_it = pd.DataFrame(_all_items)
+                            df_it = df_it[df_it["item_code"].str.startswith(("C", "B"))]
+                            df_it["Tên điểm"] = df_it["item_code"].map(lambda c: _KW.get(c, c))
+                            top_fail = (df_it.groupby("Tên điểm").size()
+                                        .reset_index(name="Số lần")
+                                        .sort_values("Số lần").tail(10))
+                            n = len(top_fail)
+                            fig_hbar = go.Figure(go.Bar(
+                                x=top_fail["Số lần"], y=top_fail["Tên điểm"], orientation="h",
+                                marker_color=[f"rgba(220,38,38,{0.25+0.75*i/max(n-1,1)})"
+                                              for i in range(n)],
+                                text=top_fail["Số lần"], textposition="outside",
+                                textfont=dict(size=12),
+                                hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
+                            ))
+                            fig_hbar.update_layout(
+                                plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                                font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+                                # Không set title key → Plotly không render chữ nào
+                                margin=dict(l=10, r=60, t=4, b=16),
+                                height=max(280, n * 50),
+                                xaxis=dict(title="Số lần không đạt", showgrid=True,
+                                           gridcolor="#E2E8F0", dtick=1),
+                                yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
+                            )
+                            st.plotly_chart(fig_hbar, use_container_width=True)
+            except Exception as _e:
+                st.warning(f"Không thể tải top fail: {_e}")
 
-    # ══════════════════════════════════════════════════════════════════════════
+            # Bảng chi tiết bữa ăn
+            st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Bữa ăn</div>', unsafe_allow_html=True)
+            _dm = df_meal.drop(columns=["Cấp cảnh báo"], errors="ignore").copy()
+            _dm["Ngày"] = pd.to_datetime(_dm["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y").fillna(_dm["Ngày"])
+            st.dataframe(_dm, use_container_width=True, hide_index=True)
+
+        # ══════════════════════════════════════════════════════════════════════════
     # SECTION 2: NHÀ CUNG CẤP
     # ══════════════════════════════════════════════════════════════════════════
     if show_ncc:
@@ -5263,209 +5266,210 @@ def tab_history(role: str = "", school_filter: str = ""):
                 f'</div>', unsafe_allow_html=True,
             )
         st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("📊 Biểu đồ & Bảng chi tiết — Nhà Cung Cấp", expanded=False):
 
-        # Hàng: Hiệu suất NCC theo tên + Xu hướng theo thời gian
-        nc1, nc2 = st.columns([3, 2])
-        with nc1:
-            if "Nhà Cung Cấp" in df_ncc.columns and df_ncc["Nhà Cung Cấp"].nunique() > 0:
-                ncc_perf = (df_ncc.groupby("Nhà Cung Cấp")
-                            .agg(avg_pct=("Tỷ lệ đạt (%)", "mean"),
-                                 count=("Tỷ lệ đạt (%)", "count"))
-                            .reset_index().sort_values("avg_pct", ascending=True))
-                fig_ncc = go.Figure(go.Bar(
-                    x=ncc_perf["avg_pct"].round(1), y=ncc_perf["Nhà Cung Cấp"],
-                    orientation="h",
-                    marker_color=["#16A34A" if v >= 83 else "#F59E0B" if v >= 67 else "#DC2626"
-                                  for v in ncc_perf["avg_pct"]],
-                    text=[f"{v:.0f}%  ({c} lần)"
-                          for v, c in zip(ncc_perf["avg_pct"], ncc_perf["count"])],
+            # Hàng: Hiệu suất NCC theo tên + Xu hướng theo thời gian
+            nc1, nc2 = st.columns([3, 2])
+            with nc1:
+                if "Nhà Cung Cấp" in df_ncc.columns and df_ncc["Nhà Cung Cấp"].nunique() > 0:
+                    ncc_perf = (df_ncc.groupby("Nhà Cung Cấp")
+                                .agg(avg_pct=("Tỷ lệ đạt (%)", "mean"),
+                                     count=("Tỷ lệ đạt (%)", "count"))
+                                .reset_index().sort_values("avg_pct", ascending=True))
+                    fig_ncc = go.Figure(go.Bar(
+                        x=ncc_perf["avg_pct"].round(1), y=ncc_perf["Nhà Cung Cấp"],
+                        orientation="h",
+                        marker_color=["#16A34A" if v >= 83 else "#F59E0B" if v >= 67 else "#DC2626"
+                                      for v in ncc_perf["avg_pct"]],
+                        text=[f"{v:.0f}%  ({c} lần)"
+                              for v, c in zip(ncc_perf["avg_pct"], ncc_perf["count"])],
+                        textposition="inside", insidetextanchor="middle",
+                        textfont=dict(size=12, color="white"),
+                        hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
+                    ))
+                    fig_ncc.add_vline(x=83, line_dash="dot", line_color="#16A34A", line_width=1.5,
+                                      annotation_text=" Loại A (83%)",
+                                      annotation_font=dict(size=10, color="#16A34A"),
+                                      annotation_position="top")
+                    fig_ncc.add_vline(x=67, line_dash="dot", line_color="#F59E0B", line_width=1.5,
+                                      annotation_text=" Loại B (67%)",
+                                      annotation_font=dict(size=10, color="#F59E0B"),
+                                      annotation_position="bottom")
+                    fig_ncc.update_layout(
+                        **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
+                        height=max(280, len(ncc_perf) * 52),
+                        title="🏭 Hiệu suất ATTP theo nhà cung cấp",
+                        xaxis=dict(title="Tỷ lệ đạt TB (%)", range=[0, 105],
+                                   ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
+                        yaxis=dict(showgrid=False, automargin=True, tickfont=dict(size=11)),
+                        showlegend=False,
+                    )
+                    st.plotly_chart(fig_ncc, use_container_width=True)
+
+            with nc2:
+                # Xu hướng xếp loại NCC theo thời gian
+                ncc_trend = (df_ncc.groupby(["Ngày", "Xếp loại"])
+                             .size().reset_index(name="Số lần")
+                             .sort_values("Ngày"))
+                try:
+                    ncc_trend["Ngày_fmt"] = pd.to_datetime(ncc_trend["Ngày"]).dt.strftime("%d/%m")
+                except Exception:
+                    ncc_trend["Ngày_fmt"] = ncc_trend["Ngày"]
+                fig_ncc_trend = px.bar(
+                    ncc_trend, x="Ngày_fmt", y="Số lần", color="Xếp loại",
+                    color_discrete_map={"Loại A": "#16A34A", "Loại B": "#F59E0B", "Loại C": "#DC2626"},
+                    barmode="stack", text="Số lần",
+                    category_orders={"Xếp loại": ["Loại A", "Loại B", "Loại C"]},
+                )
+                fig_ncc_trend.update_traces(
                     textposition="inside", insidetextanchor="middle",
-                    textfont=dict(size=12, color="white"),
-                    hovertemplate="<b>%{y}</b><br>TB đạt: <b>%{x:.1f}%</b><extra></extra>",
-                ))
-                fig_ncc.add_vline(x=83, line_dash="dot", line_color="#16A34A", line_width=1.5,
-                                  annotation_text=" Loại A (83%)",
-                                  annotation_font=dict(size=10, color="#16A34A"),
-                                  annotation_position="top")
-                fig_ncc.add_vline(x=67, line_dash="dot", line_color="#F59E0B", line_width=1.5,
-                                  annotation_text=" Loại B (67%)",
-                                  annotation_font=dict(size=10, color="#F59E0B"),
-                                  annotation_position="bottom")
-                fig_ncc.update_layout(
-                    **{**_CHART_LAYOUT, "margin": dict(l=10, r=20, t=40, b=16)},
-                    height=max(280, len(ncc_perf) * 52),
-                    title="🏭 Hiệu suất ATTP theo nhà cung cấp",
-                    xaxis=dict(title="Tỷ lệ đạt TB (%)", range=[0, 105],
-                               ticksuffix="%", showgrid=True, gridcolor="#E2E8F0"),
-                    yaxis=dict(showgrid=False, automargin=True, tickfont=dict(size=11)),
-                    showlegend=False,
+                    textfont_size=11, textfont_color="white",
                 )
-                st.plotly_chart(fig_ncc, use_container_width=True)
-
-        with nc2:
-            # Xu hướng xếp loại NCC theo thời gian
-            ncc_trend = (df_ncc.groupby(["Ngày", "Xếp loại"])
-                         .size().reset_index(name="Số lần")
-                         .sort_values("Ngày"))
-            try:
-                ncc_trend["Ngày_fmt"] = pd.to_datetime(ncc_trend["Ngày"]).dt.strftime("%d/%m")
-            except Exception:
-                ncc_trend["Ngày_fmt"] = ncc_trend["Ngày"]
-            fig_ncc_trend = px.bar(
-                ncc_trend, x="Ngày_fmt", y="Số lần", color="Xếp loại",
-                color_discrete_map={"Loại A": "#16A34A", "Loại B": "#F59E0B", "Loại C": "#DC2626"},
-                barmode="stack", text="Số lần",
-                category_orders={"Xếp loại": ["Loại A", "Loại B", "Loại C"]},
-            )
-            fig_ncc_trend.update_traces(
-                textposition="inside", insidetextanchor="middle",
-                textfont_size=11, textfont_color="white",
-            )
-            fig_ncc_trend.update_layout(
-                **{**_CHART_LAYOUT, "margin": dict(l=16, r=110, t=40, b=16)},
-                height=max(280, len(ncc_perf) * 52) if "ncc_perf" in dir() else 280,
-                title="📅 Xếp loại NCC theo ngày kiểm tra",
-                xaxis=dict(title="Ngày", showgrid=False, tickangle=-20),
-                yaxis=dict(title="Số lần", showgrid=True, gridcolor="#E2E8F0"),
-                legend=dict(orientation="v", x=1.02, y=0.5, xanchor="left",
-                            yanchor="middle", title_text="Xếp loại",
-                            bgcolor="rgba(255,255,255,0.8)",
-                            bordercolor="#E2E8F0", borderwidth=1),
-            )
-            st.plotly_chart(fig_ncc_trend, use_container_width=True)
-
-        # Top 10 lỗi NCC nhiều nhất
-        st.markdown('<div class="sec-hdr">🟣 Top điểm không đạt nhiều nhất (Nhà Cung Cấp)</div>',
-                    unsafe_allow_html=True)
-        try:
-            sb = _get_sb()
-            if sb:
-                _ncc_ids = [s["id"] for s in sessions
-                            if s.get("check_type") == "nha_cung_cap" and s.get("id")]
-                if _ncc_ids:
-                    _ncc_items: list = []
-                    for _i in range(0, len(_ncc_ids), 100):
-                        _batch = _ncc_ids[_i:_i+100]
-                        _r = sb.table("checklist_results")\
-                            .select("item_code,result")\
-                            .in_("session_id", _batch)\
-                            .in_("result", ["Không Đạt", "❌ Không Đạt"])\
-                            .execute()
-                        _ncc_items += (_r.data or [])
-                    if _ncc_items:
-                        # Map S01-S12 từ SUPPLIER_ITEMS constant
-                        _NCC_KW = {it["code"]: f"{it['icon']} {it['desc']}"
-                                   for it in SUPPLIER_ITEMS}
-                        _NCC_KW.update({  # backward compat nếu desc dài
-                            "S01": "📄 Giấy phép CSSX/KDDV",
-                            "S02": "🏅 Chứng nhận ATTP cơ sở",
-                            "S03": "🚚 Xe/thùng vận chuyển",
-                            "S04": "🌡️ Nhiệt độ vận chuyển",
-                            "S05": "🧾 Hóa đơn nguồn gốc hôm nay",
-                            "S06": "🏷️ Nhãn mác thực phẩm",
-                            "S07": "📋 Thực đơn khớp đặt hàng",
-                            "S08": "⚖️ Khẩu phần đủ định mức",
-                            "S09": "👷 BHLĐ nhân viên giao hàng",
-                            "S10": "📦 Dụng cụ đựng thực phẩm",
-                            "S11": "🧫 Mẫu lưu thực phẩm 24h",
-                            "S12": "⏰ Thời gian giao hàng đúng lịch",
-                        })
-                        df_ncc_it = pd.DataFrame(_ncc_items)
-                        df_ncc_it = df_ncc_it[df_ncc_it["item_code"].str.startswith("S")]
-                        df_ncc_it["Tên điểm"] = df_ncc_it["item_code"].map(
-                            lambda c: _NCC_KW.get(c, c))
-                        top_ncc = (df_ncc_it.groupby("Tên điểm").size()
-                                   .reset_index(name="Số lần")
-                                   .sort_values("Số lần").tail(12))
-                        n_n = len(top_ncc)
-                        fig_ncc_fail = go.Figure(go.Bar(
-                            x=top_ncc["Số lần"], y=top_ncc["Tên điểm"], orientation="h",
-                            marker_color=[f"rgba(124,58,237,{0.25+0.75*i/max(n_n-1,1)})"
-                                          for i in range(n_n)],
-                            text=top_ncc["Số lần"], textposition="outside",
-                            textfont=dict(size=12),
-                            hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
-                        ))
-                        fig_ncc_fail.update_layout(
-                            plot_bgcolor="white", paper_bgcolor="#F8FAFC",
-                            font=dict(family="Inter, sans-serif", size=12, color="#334155"),
-                            margin=dict(l=10, r=60, t=4, b=16),
-                            height=max(280, n_n * 50),
-                            xaxis=dict(title="Số lần không đạt", showgrid=True,
-                                       gridcolor="#E2E8F0", dtick=1),
-                            yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
-                        )
-                        st.plotly_chart(fig_ncc_fail, use_container_width=True)
-                    else:
-                        st.info("Chưa có điểm không đạt nào từ nhà cung cấp.")
-                else:
-                    st.info("Chưa có dữ liệu kiểm tra nhà cung cấp.")
-        except Exception as _ne:
-            st.warning(f"Không thể tải top fail NCC: {_ne}")
-
-        # Bảng chi tiết NCC
-        st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Nhà Cung Cấp</div>',
-                    unsafe_allow_html=True)
-        _dn = df_ncc.drop(columns=["Cấp cảnh báo", "Đánh giá"], errors="ignore").copy()
-        _dn["Ngày"] = pd.to_datetime(_dn["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y").fillna(_dn["Ngày"])
-        # Sắp xếp cột hợp lý hơn
-        _dn_cols = ["Ngày", "Trường", "Nhà Cung Cấp", "Người kiểm tra",
-                    "Xếp loại", "Tỷ lệ đạt (%)", "Điểm đạt", "Điểm không đạt", "Tổng điểm"]
-        _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
-        st.dataframe(_dn, use_container_width=True, hide_index=True)
-
-    # ── Cross-validation & Anomaly Detection (chỉ hiện với BGH/Admin) ────────
-    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
-        _anomalies = []
-
-        # 1. Điểm quá đều trong 30 lần liên tiếp (≥ 19/20)
-        if show_meal and not df_meal.empty:
-            _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
-            if _streak_high >= 10 and len(df_meal) >= 10:
-                _anomalies.append(
-                    f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
-                    "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
+                fig_ncc_trend.update_layout(
+                    **{**_CHART_LAYOUT, "margin": dict(l=16, r=110, t=40, b=16)},
+                    height=max(280, len(ncc_perf) * 52) if "ncc_perf" in dir() else 280,
+                    title="📅 Xếp loại NCC theo ngày kiểm tra",
+                    xaxis=dict(title="Ngày", showgrid=False, tickangle=-20),
+                    yaxis=dict(title="Số lần", showgrid=True, gridcolor="#E2E8F0"),
+                    legend=dict(orientation="v", x=1.02, y=0.5, xanchor="left",
+                                yanchor="middle", title_text="Xếp loại",
+                                bgcolor="rgba(255,255,255,0.8)",
+                                bordercolor="#E2E8F0", borderwidth=1),
                 )
+                st.plotly_chart(fig_ncc_trend, use_container_width=True)
 
-        # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
-        if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
-            _bgs_df = df_meal[df_meal["Loại"] == "Ban Giám Sát"]
-            _yte_df = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"]
-            if not _bgs_df.empty and not _yte_df.empty:
-                _bgs_avg = _bgs_df["Tỷ lệ đạt (%)"].mean()
-                _yte_avg = _yte_df["Tỷ lệ đạt (%)"].mean()
-                if abs(_bgs_avg - _yte_avg) > 20:
-                    _anomalies.append(
-                        f"⚠️ <b>Chênh lệch BGS vs Y Tế</b>: BGS trung bình {_bgs_avg:.0f}% — "
-                        f"Y Tế {_yte_avg:.0f}% (chênh {abs(_bgs_avg-_yte_avg):.0f}%). "
-                        "Cần đối chiếu để đảm bảo tính trung thực."
-                    )
-
-        # 3. Feedback tăng đột biến trong khi điểm vẫn cao
-        if db_ok() and show_meal and not df_meal.empty:
-            try:
-                _sch = school_input if school_input else ""
-                _fb_count = len(db_get_feedback(school=_sch, status="pending"))
-                _avg_score = df_meal["Tỷ lệ đạt (%)"].mean()
-                if _fb_count >= 3 and _avg_score >= 90:
-                    _anomalies.append(
-                        f"📣 <b>Mâu thuẫn phản hồi</b>: {_fb_count} phản hồi phụ huynh chưa xử lý "
-                        f"trong khi điểm kiểm tra trung bình {_avg_score:.0f}%. "
-                        "Điều tra nguyên nhân bất cân xứng."
-                    )
-            except Exception:
-                pass
-
-        if _anomalies:
-            st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Cần chú ý</div>',
+            # Top 10 lỗi NCC nhiều nhất
+            st.markdown('<div class="sec-hdr">🟣 Top điểm không đạt nhiều nhất (Nhà Cung Cấp)</div>',
                         unsafe_allow_html=True)
-            for _a in _anomalies:
-                st.markdown(
-                    f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
-                    f'padding:10px 16px;margin:5px 0;font-size:0.85rem;color:#78350F">'
-                    f'{_a}</div>',
-                    unsafe_allow_html=True,
-                )
+            try:
+                sb = _get_sb()
+                if sb:
+                    _ncc_ids = [s["id"] for s in sessions
+                                if s.get("check_type") == "nha_cung_cap" and s.get("id")]
+                    if _ncc_ids:
+                        _ncc_items: list = []
+                        for _i in range(0, len(_ncc_ids), 100):
+                            _batch = _ncc_ids[_i:_i+100]
+                            _r = sb.table("checklist_results")\
+                                .select("item_code,result")\
+                                .in_("session_id", _batch)\
+                                .in_("result", ["Không Đạt", "❌ Không Đạt"])\
+                                .execute()
+                            _ncc_items += (_r.data or [])
+                        if _ncc_items:
+                            # Map S01-S12 từ SUPPLIER_ITEMS constant
+                            _NCC_KW = {it["code"]: f"{it['icon']} {it['desc']}"
+                                       for it in SUPPLIER_ITEMS}
+                            _NCC_KW.update({  # backward compat nếu desc dài
+                                "S01": "📄 Giấy phép CSSX/KDDV",
+                                "S02": "🏅 Chứng nhận ATTP cơ sở",
+                                "S03": "🚚 Xe/thùng vận chuyển",
+                                "S04": "🌡️ Nhiệt độ vận chuyển",
+                                "S05": "🧾 Hóa đơn nguồn gốc hôm nay",
+                                "S06": "🏷️ Nhãn mác thực phẩm",
+                                "S07": "📋 Thực đơn khớp đặt hàng",
+                                "S08": "⚖️ Khẩu phần đủ định mức",
+                                "S09": "👷 BHLĐ nhân viên giao hàng",
+                                "S10": "📦 Dụng cụ đựng thực phẩm",
+                                "S11": "🧫 Mẫu lưu thực phẩm 24h",
+                                "S12": "⏰ Thời gian giao hàng đúng lịch",
+                            })
+                            df_ncc_it = pd.DataFrame(_ncc_items)
+                            df_ncc_it = df_ncc_it[df_ncc_it["item_code"].str.startswith("S")]
+                            df_ncc_it["Tên điểm"] = df_ncc_it["item_code"].map(
+                                lambda c: _NCC_KW.get(c, c))
+                            top_ncc = (df_ncc_it.groupby("Tên điểm").size()
+                                       .reset_index(name="Số lần")
+                                       .sort_values("Số lần").tail(12))
+                            n_n = len(top_ncc)
+                            fig_ncc_fail = go.Figure(go.Bar(
+                                x=top_ncc["Số lần"], y=top_ncc["Tên điểm"], orientation="h",
+                                marker_color=[f"rgba(124,58,237,{0.25+0.75*i/max(n_n-1,1)})"
+                                              for i in range(n_n)],
+                                text=top_ncc["Số lần"], textposition="outside",
+                                textfont=dict(size=12),
+                                hovertemplate="<b>%{y}</b><br>Không đạt: %{x} lần<extra></extra>",
+                            ))
+                            fig_ncc_fail.update_layout(
+                                plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                                font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+                                margin=dict(l=10, r=60, t=4, b=16),
+                                height=max(280, n_n * 50),
+                                xaxis=dict(title="Số lần không đạt", showgrid=True,
+                                           gridcolor="#E2E8F0", dtick=1),
+                                yaxis=dict(showgrid=False, tickfont=dict(size=11), automargin=True),
+                            )
+                            st.plotly_chart(fig_ncc_fail, use_container_width=True)
+                        else:
+                            st.info("Chưa có điểm không đạt nào từ nhà cung cấp.")
+                    else:
+                        st.info("Chưa có dữ liệu kiểm tra nhà cung cấp.")
+            except Exception as _ne:
+                st.warning(f"Không thể tải top fail NCC: {_ne}")
+
+            # Bảng chi tiết NCC
+            st.markdown('<div class="sec-hdr">📋 Bảng chi tiết — Nhà Cung Cấp</div>',
+                        unsafe_allow_html=True)
+            _dn = df_ncc.drop(columns=["Cấp cảnh báo", "Đánh giá"], errors="ignore").copy()
+            _dn["Ngày"] = pd.to_datetime(_dn["Ngày"], errors="coerce").dt.strftime("%d/%m/%Y").fillna(_dn["Ngày"])
+            # Sắp xếp cột hợp lý hơn
+            _dn_cols = ["Ngày", "Trường", "Nhà Cung Cấp", "Người kiểm tra",
+                        "Xếp loại", "Tỷ lệ đạt (%)", "Điểm đạt", "Điểm không đạt", "Tổng điểm"]
+            _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
+            st.dataframe(_dn, use_container_width=True, hide_index=True)
+
+        # ── Cross-validation & Anomaly Detection (chỉ hiện với BGH/Admin) ────────
+        if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
+            _anomalies = []
+
+            # 1. Điểm quá đều trong 30 lần liên tiếp (≥ 19/20)
+            if show_meal and not df_meal.empty:
+                _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
+                if _streak_high >= 10 and len(df_meal) >= 10:
+                    _anomalies.append(
+                        f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
+                        "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
+                    )
+
+            # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
+            if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
+                _bgs_df = df_meal[df_meal["Loại"] == "Ban Giám Sát"]
+                _yte_df = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"]
+                if not _bgs_df.empty and not _yte_df.empty:
+                    _bgs_avg = _bgs_df["Tỷ lệ đạt (%)"].mean()
+                    _yte_avg = _yte_df["Tỷ lệ đạt (%)"].mean()
+                    if abs(_bgs_avg - _yte_avg) > 20:
+                        _anomalies.append(
+                            f"⚠️ <b>Chênh lệch BGS vs Y Tế</b>: BGS trung bình {_bgs_avg:.0f}% — "
+                            f"Y Tế {_yte_avg:.0f}% (chênh {abs(_bgs_avg-_yte_avg):.0f}%). "
+                            "Cần đối chiếu để đảm bảo tính trung thực."
+                        )
+
+            # 3. Feedback tăng đột biến trong khi điểm vẫn cao
+            if db_ok() and show_meal and not df_meal.empty:
+                try:
+                    _sch = school_input if school_input else ""
+                    _fb_count = len(db_get_feedback(school=_sch, status="pending"))
+                    _avg_score = df_meal["Tỷ lệ đạt (%)"].mean()
+                    if _fb_count >= 3 and _avg_score >= 90:
+                        _anomalies.append(
+                            f"📣 <b>Mâu thuẫn phản hồi</b>: {_fb_count} phản hồi phụ huynh chưa xử lý "
+                            f"trong khi điểm kiểm tra trung bình {_avg_score:.0f}%. "
+                            "Điều tra nguyên nhân bất cân xứng."
+                        )
+                except Exception:
+                    pass
+
+            if _anomalies:
+                st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Cần chú ý</div>',
+                            unsafe_allow_html=True)
+                for _a in _anomalies:
+                    st.markdown(
+                        f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
+                        f'padding:10px 16px;margin:5px 0;font-size:0.85rem;color:#78350F">'
+                        f'{_a}</div>',
+                        unsafe_allow_html=True,
+                    )
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
@@ -5798,41 +5802,38 @@ def tab_supplier(api_key: str = "", role: str = ""):
         elif result == "❌ Không Đạt":
             fail_count += 1
 
-        # Ghi chú — bắt buộc nếu Không Đạt và không có ảnh
+        # Ghi chú + Ảnh — trong expander, mở tự động khi Không Đạt
         _note_req = (result == "❌ Không Đạt")
-        _note_lbl = ("📝 Ghi chú mô tả lỗi — BẮT BUỘC nếu không có ảnh (≥ 10 ký tự)"
-                     if _note_req else "📝 Ghi chú (tuỳ chọn)")
-        note = st.text_area(
-            _note_lbl, key=f"sup_note_{code}", max_chars=300, height=70,
-            placeholder=(
-                "Mô tả cụ thể lỗi quan sát được, ví dụ: Xe giao hàng không có thùng cách nhiệt, "
-                "thùng chứa bám bẩn, nhiệt kế đo được 35°C..."
-                if _note_req else "Ghi chú thêm nếu cần..."
-            ),
-        )
-        st.session_state.sup_notes[code] = note
+        _ev_open  = _note_req  # mở khi không đạt để nhắc nhập bằng chứng
+        _ev_label = ("📝 Ghi chú & Ảnh minh chứng — BẮT BUỘC"
+                     if _note_req else "📝 Ghi chú & Ảnh (tuỳ chọn)")
+        with st.expander(_ev_label, expanded=_ev_open):
+            note = st.text_area(
+                "Ghi chú", key=f"sup_note_{code}", max_chars=300, height=68,
+                label_visibility="collapsed",
+                placeholder=(
+                    "Mô tả lỗi cụ thể, VD: Xe không có thùng cách nhiệt, nhiệt kế đo 35°C..."
+                    if _note_req else "Ghi chú thêm nếu cần..."
+                ),
+            )
+            st.session_state.sup_notes[code] = note
+            uploaded = st.file_uploader(
+                "📷 Ảnh minh chứng (1 ảnh · jpg/png ≤ 5 MB)",
+                type=["jpg", "jpeg", "png"],
+                key=f"sup_img_{code}", accept_multiple_files=False,
+            )
+            if uploaded is not None:
+                raw = uploaded.read()
+                if len(raw) <= 5 * 1024 * 1024:
+                    st.session_state.sup_imgs[code] = {
+                        "bytes": raw,
+                        "type": uploaded.type or "image/jpeg",
+                        "name": uploaded.name,
+                    }
+                else:
+                    st.warning(f"[{code}] Ảnh vượt 5 MB.")
 
-        # Upload ảnh — tối đa 1 ảnh/mục
-        _img_lbl = (
-            "📷 Ảnh minh chứng lỗi — BẮT BUỘC nếu không có ghi chú (1 ảnh · jpg/png · ≤ 5 MB)"
-            if _note_req else "📷 Ảnh minh chứng (tuỳ chọn · 1 ảnh · jpg/png · ≤ 5 MB)"
-        )
-        uploaded = st.file_uploader(
-            _img_lbl, type=["jpg", "jpeg", "png"],
-            key=f"sup_img_{code}", accept_multiple_files=False,
-        )
-        if uploaded is not None:
-            raw = uploaded.read()
-            if len(raw) <= 5 * 1024 * 1024:
-                st.session_state.sup_imgs[code] = {
-                    "bytes": raw,
-                    "type": uploaded.type or "image/jpeg",
-                    "name": uploaded.name,
-                }
-            else:
-                st.warning(f"[{code}] Ảnh vượt 5 MB — vui lòng chọn ảnh nhỏ hơn.")
-
-        # Hiện ảnh + nút Vision nếu đã có ảnh
+        # Hiện ảnh đã tải + Vision (ngoài expander để luôn thấy)
         if code in st.session_state.sup_imgs:
             _img_data = st.session_state.sup_imgs[code]
             _i1, _i2 = st.columns([1, 3])
