@@ -457,6 +457,16 @@ def db_get_ncc_registry(school: str = "") -> list:
     except Exception: return []
 
 
+def db_delete_ncc_registry(ncc_id: str) -> bool:
+    """Xóa mềm NCC registry (đặt is_active=False)."""
+    sb = _get_sb()
+    if not sb: return False
+    try:
+        sb.table("ncc_registry").update({"is_active": False}).eq("id", ncc_id).execute()
+        return True
+    except Exception: return False
+
+
 def db_save_ncc_registry(school: str, ncc_name: str, license_no: str,
                           license_expiry: str, attp_expiry: str,
                           phone: str = "", notes: str = "",
@@ -4863,7 +4873,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             f'🏫 <b>{school_filter}</b></div>',
             unsafe_allow_html=True,
         )
-        view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp", "📬 Phản hồi phụ huynh"],
+        view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "📬 Phản hồi PH", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
                                     label_visibility="collapsed")
         _school_sel = school_filter
     else:
@@ -4878,7 +4888,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             label_visibility="collapsed",
             help="Gõ tên trường để tìm nhanh",
         )
-        view_mode = _fl2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp", "📬 Phản hồi phụ huynh"],
+        view_mode = _fl2.selectbox("Hiển thị", ["Tất cả", "📬 Phản hồi PH", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
                                     label_visibility="collapsed")
 
     school_input = "" if _school_sel == "Tất cả trường" else _school_sel
@@ -4992,7 +5002,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
     # ── Feedback Phụ Huynh — hiện khi "Tất cả" hoặc "📬 Phản hồi phụ huynh" ──
     # BGH: mở mặc định · BGS/Y Tế: đóng mặc định
-    _show_complaint = view_mode in ("Tất cả", "📬 Phản hồi phụ huynh")
+    _show_complaint = view_mode in ("Tất cả", "📬 Phản hồi PH")
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok() and _show_complaint:
         import plotly.graph_objects as _go_fb
         import re as _re_fb
@@ -5354,7 +5364,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
     show_meal = view_mode in ("Tất cả", "🍱 Bữa ăn") and not df_meal.empty
     show_ncc  = view_mode in ("Tất cả", "🏭 Nhà Cung Cấp") and not df_ncc.empty
-    show_fb   = view_mode in ("Tất cả", "📬 Phản hồi phụ huynh")
+    show_fb   = view_mode in ("Tất cả", "📬 Phản hồi PH")
 
     if not show_meal and not show_ncc and not show_fb:
         st.info("Chưa có dữ liệu cho loại hiển thị đã chọn.")
@@ -5687,10 +5697,10 @@ def tab_history(role: str = "", school_filter: str = ""):
             st.dataframe(_dm, use_container_width=True, hide_index=True)
 
         # ══════════════════════════════════════════════════════════════════════════
-    # SECTION 2: NHÀ CUNG CẤP
+    # SECTION 2: NHÀ CUNG CẤP — chỉ hiện khi view_mode phù hợp
     # ══════════════════════════════════════════════════════════════════════════
-    # NCC section — hiện banner tím dù có hay không có data
-    st.markdown(
+    if view_mode in ("Tất cả", "🏭 Nhà Cung Cấp"):
+     st.markdown(
         '<div style="background:linear-gradient(135deg,#3B0764 0%,#7C3AED 100%);'
         'border-radius:12px;padding:14px 22px;margin:24px 0 14px 0">'
         '<div style="color:white;font-size:1.05rem;font-weight:700;margin-bottom:2px">'
@@ -6411,14 +6421,20 @@ def tab_supplier(api_key: str = "", role: str = ""):
     _score_pass = round(_n_active * SUPPLIER_SCORE_PASS / len(SUPPLIER_ITEMS))  # tỷ lệ với 12 mục
     _score_warn = round(_n_active * SUPPLIER_SCORE_WARN / len(SUPPLIER_ITEMS))
 
-    # ── Thông tin chung ────────────────────────────────────────────────────────
+    # ── Thông tin chung — lock trường + người KT từ profile ──────────────────
+    _sup_us   = st.session_state.get("user_school", "")
+    _sup_name_pf = st.session_state.get("user_profile", {}).get("full_name", "")
     c1, c2 = st.columns(2)
-    sup_school    = c1.text_input("🏫 Tên trường", placeholder="VD: TH Nguyễn Du",
+    sup_school    = c1.text_input("🏫 Tên trường", value=_sup_us,
+                                   disabled=bool(_sup_us),
+                                   placeholder="VD: TH Nguyễn Du",
                                    key="sup_school", max_chars=100)
     sup_name      = c2.text_input("🏭 Tên nhà cung cấp", placeholder="VD: Công ty TNHH Bếp Xanh",
                                    key="sup_name", max_chars=100)
     c3, c4 = st.columns(2)
-    sup_inspector = c3.text_input("👤 Người kiểm tra", placeholder="Họ và tên",
+    sup_inspector = c3.text_input("👤 Người kiểm tra", value=_sup_name_pf,
+                                   disabled=bool(_sup_name_pf),
+                                   placeholder="Họ và tên",
                                    key="sup_inspector", max_chars=80)
     sup_date      = c4.date_input("📅 Ngày kiểm tra", value=now_vn().date(),
                                    key="sup_date", format="DD/MM/YYYY")
@@ -7151,6 +7167,17 @@ def tab_ncc_bgh(school: str = ""):
 
                 if _ncc.get("notes"):
                     st.caption(f"Ghi chú: {_ncc['notes']}")
+
+                # Xóa NCC
+                st.markdown("---")
+                _del_col1, _del_col2 = st.columns([3, 1])
+                _del_col1.caption("⚠️ Xóa khi NCC điền sai hoặc hết hợp đồng. Dữ liệu lịch sử đánh giá vẫn được lưu.")
+                if _del_col2.button("🗑️ Xóa NCC này", key=f"del_{_ncc['id']}", type="secondary"):
+                    if db_delete_ncc_registry(_ncc["id"]):
+                        st.success(f"✅ Đã xóa: {_ncc['ncc_name']}")
+                        st.rerun()
+                    else:
+                        st.error("Lỗi xóa — kiểm tra kết nối DB.")
     else:
         st.info("Chưa có hồ sơ NCC. Thêm bên dưới.")
 
