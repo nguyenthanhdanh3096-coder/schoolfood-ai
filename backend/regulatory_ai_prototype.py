@@ -459,12 +459,12 @@ def db_get_ncc_registry(school: str = "") -> list:
 
 def db_save_ncc_registry(school: str, ncc_name: str, license_no: str,
                           license_expiry: str, attp_expiry: str,
-                          phone: str = "", notes: str = "") -> bool:
+                          phone: str = "", notes: str = "",
+                          address: str = "", contract_no: str = "") -> bool:
     """Lưu hoặc cập nhật thông tin NCC trong registry."""
     sb = _get_sb()
     if not sb: return False
     try:
-        # Upsert theo school + ncc_name
         existing = sb.table("ncc_registry").select("id")\
             .eq("school_name", school).eq("ncc_name", ncc_name).execute().data
         data = {
@@ -473,6 +473,7 @@ def db_save_ncc_registry(school: str, ncc_name: str, license_no: str,
             "license_expiry": license_expiry or None,
             "attp_expiry": attp_expiry or None,
             "phone": phone or "", "notes": notes or "",
+            "address": address or "", "contract_no": contract_no or "",
             "is_active": True,
             "updated_at": now_vn().isoformat(),
         }
@@ -987,6 +988,16 @@ def inject_css():
     .stButton > button { border-radius: 8px !important; font-family:'Inter',sans-serif !important; font-weight:500 !important; }
     .stTextInput > div > div > input { border-radius: 8px !important; }
     div[data-testid="stChatInput"] textarea { font-family:'Inter',sans-serif !important; }
+
+    /* Fix: Label của disabled text_input không bị mờ — đồng nhất với enabled inputs */
+    [data-testid="stTextInput"] label,
+    [data-testid="stDateInput"] label,
+    [data-testid="stSelectbox"] label,
+    [data-testid="stTextArea"] label {
+        color: #31333F !important;
+        opacity: 1 !important;
+        font-weight: 400 !important;
+    }
 
     /* Input disabled — override màu xám mặc định, giữ chữ đọc được */
     input:disabled, input[disabled] {
@@ -4852,7 +4863,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             f'🏫 <b>{school_filter}</b></div>',
             unsafe_allow_html=True,
         )
-        view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
+        view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp", "📬 Phản hồi phụ huynh"],
                                     label_visibility="collapsed")
         _school_sel = school_filter
     else:
@@ -4867,7 +4878,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             label_visibility="collapsed",
             help="Gõ tên trường để tìm nhanh",
         )
-        view_mode = _fl2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
+        view_mode = _fl2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp", "📬 Phản hồi phụ huynh"],
                                     label_visibility="collapsed")
 
     school_input = "" if _school_sel == "Tất cả trường" else _school_sel
@@ -4979,10 +4990,10 @@ def tab_history(role: str = "", school_filter: str = ""):
                 unsafe_allow_html=True,
             )
 
-    # ── Feedback Phụ Huynh — luôn hiện TRƯỚC early return ────────────────────
-    # ── Hệ thống Complaint — expandable, hiện TRƯỚC early return ─────────────
-    # BGH: mở mặc định (họ cần xử lý) · BGS/Y Tế: đóng mặc định
-    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok():
+    # ── Feedback Phụ Huynh — hiện khi "Tất cả" hoặc "📬 Phản hồi phụ huynh" ──
+    # BGH: mở mặc định · BGS/Y Tế: đóng mặc định
+    _show_complaint = view_mode in ("Tất cả", "📬 Phản hồi phụ huynh")
+    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok() and _show_complaint:
         import plotly.graph_objects as _go_fb
         import re as _re_fb
 
@@ -5343,8 +5354,9 @@ def tab_history(role: str = "", school_filter: str = ""):
 
     show_meal = view_mode in ("Tất cả", "🍱 Bữa ăn") and not df_meal.empty
     show_ncc  = view_mode in ("Tất cả", "🏭 Nhà Cung Cấp") and not df_ncc.empty
+    show_fb   = view_mode in ("Tất cả", "📬 Phản hồi phụ huynh")
 
-    if not show_meal and not show_ncc:
+    if not show_meal and not show_ncc and not show_fb:
         st.info("Chưa có dữ liệu cho loại hiển thị đã chọn.")
         return
 
@@ -7144,6 +7156,7 @@ def tab_ncc_bgh(school: str = ""):
 
     # ── Form thêm / cập nhật NCC ───────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">➕ Thêm / Cập nhật nhà cung cấp</div>', unsafe_allow_html=True)
+    st.caption("💡 Sau khi lưu, bấm vào tên NCC trong danh sách để upload file chứng nhận (PDF/JPG).")
     with st.form("ncc_bgh_form", clear_on_submit=True):
         _f1, _f2 = st.columns(2)
         _fn  = _f1.text_input("Tên công ty / cơ sở", placeholder="Công ty TNHH Bếp Xanh")
