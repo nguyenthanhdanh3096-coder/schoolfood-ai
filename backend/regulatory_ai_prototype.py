@@ -395,6 +395,52 @@ def db_update_feedback_status(feedback_id: str, new_status: str):
     except Exception:
         pass
 
+
+def db_get_all_feedbacks(school: str = "", limit: int = 100) -> list:
+    """Lấy TẤT CẢ feedback không filter status — dùng cho tab_history và traceback."""
+    sb = _get_sb()
+    if not sb: return []
+    try:
+        q = (sb.table("parent_feedback").select("*")
+             .order("created_at", desc=True).limit(limit))
+        if school:
+            q = q.eq("school_name", school)
+        return q.execute().data or []
+    except Exception:
+        return []
+
+
+def db_add_evidence(feedback_id: str, evidence_text: str, by_name: str) -> bool:
+    """BGS/Y Tế thêm minh chứng, diễn giải cho complaint — status chuyển sang reviewed."""
+    sb = _get_sb()
+    if not sb: return False
+    try:
+        sb.table("parent_feedback").update({
+            "evidence_text": evidence_text,
+            "evidence_by":   by_name,
+            "status":        "reviewed",
+            "reviewed_at":   now_vn().isoformat(),
+        }).eq("id", feedback_id).execute()
+        return True
+    except Exception:
+        return False
+
+
+def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> bool:
+    """BGH đóng complaint, ghi phản hồi chính thức."""
+    sb = _get_sb()
+    if not sb: return False
+    try:
+        sb.table("parent_feedback").update({
+            "status":        "resolved",
+            "response_text": response_text,
+            "response_by":   by_name,
+            "reviewed_at":   now_vn().isoformat(),
+        }).eq("id", feedback_id).execute()
+        return True
+    except Exception:
+        return False
+
 # Thư mục gốc của repo deploy (04_Development/)
 ROOT        = Path(__file__).parent.parent
 # Tìm PDF: ưu tiên thư mục deploy, fallback về thư mục gốc project
@@ -3129,15 +3175,14 @@ def tab_parent_view(api_key: str = ""):
                 st.warning("Chưa kết nối database — phản hồi chưa được lưu.")
 
     # ── Section 5: Theo dõi phản hồi trong trường ────────────────────────────
-    st.markdown('<div class="sec-hdr">📬 Phản hồi cộng đồng — Phụ Huynh trong trường</div>',
+    st.markdown('<div class="sec-hdr">📬 Theo dõi phản hồi — Phụ Huynh trong trường</div>',
                 unsafe_allow_html=True)
-    st.caption("Trạng thái: ⏳ Chờ xử lý · ✅ Đã xử lý")
 
     if db_ok():
         _fb_school = school or st.session_state.get("kt_school", "")
         try:
             _fq = (_get_sb().table("parent_feedback").select("*")
-                   .order("created_at", desc=True).limit(20))
+                   .order("created_at", desc=True).limit(30))
             if _fb_school:
                 _fq = _fq.eq("school_name", _fb_school)
             _fbs = _fq.execute().data or []
@@ -3145,31 +3190,65 @@ def tab_parent_view(api_key: str = ""):
             _fbs = []
 
         if _fbs:
-            for _fb in _fbs:
-                _st = _fb.get("status", "pending")
-                _st_badge = ("✅ Đã xử lý" if _st == "resolved"
-                             else "💬 Đang xử lý" if _st == "reviewed" else "⏳ Chờ xử lý")
-                _st_clr   = ("#16A34A" if _st == "resolved"
-                             else "#2563EB" if _st == "reviewed" else "#D97706")
-                _dt = (_fb.get("created_at") or "")[:16].replace("T", " ")
+            _ph_open   = [f for f in _fbs if f.get("status") != "resolved"]
+            _ph_closed = [f for f in _fbs if f.get("status") == "resolved"]
+
+            # Phản hồi đang chờ/đang xem
+            if _ph_open:
                 st.markdown(
-                    f'<div class="sf-card" style="padding:10px 16px;margin:5px 0">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
-                    f'flex-wrap:wrap;gap:4px;margin-bottom:5px">'
-                    f'<span style="font-size:0.75rem;font-weight:700;color:#64748B">'
-                    f'{_fb.get("category","")}</span>'
-                    f'<span style="font-size:0.72rem;font-weight:700;color:{_st_clr}">'
-                    f'{_st_badge}</span>'
-                    f'</div>'
-                    f'<div style="font-size:0.88rem;color:#1E293B">{_fb.get("content","")}</div>'
-                    f'<div style="font-size:0.72rem;color:#94A3B8;margin-top:4px">🕐 {_dt}</div>'
-                    f'</div>',
+                    f'<div style="font-size:0.82rem;font-weight:600;color:#D97706;margin:6px 0 4px">'
+                    f'⏳ Đang chờ xử lý ({len(_ph_open)})</div>',
                     unsafe_allow_html=True,
                 )
+                for _fb in _ph_open:
+                    _st = _fb.get("status","pending")
+                    _st_lbl = "💬 Đang xem xét" if _st=="reviewed" else "⏳ Chờ xử lý"
+                    _st_clr = "#2563EB" if _st=="reviewed" else "#D97706"
+                    _st_bg  = "#EFF6FF" if _st=="reviewed" else "#FFFBEB"
+                    _ev = _fb.get("evidence_text","") or ""
+                    _dt = (_fb.get("created_at") or "")[:10]
+                    st.markdown(
+                        f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
+                        f'border-left:3px solid {_st_clr}">'
+                        f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">{_dt} · {_fb.get("category","")}</span>'
+                        f'<span style="background:{_st_bg};color:{_st_clr};font-size:0.7rem;'
+                        f'font-weight:700;padding:2px 10px;border-radius:10px">{_st_lbl}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.85rem;color:#1E293B">{_fb.get("content","")}</div>'
+                        + (f'<div style="font-size:0.75rem;color:#2563EB;margin-top:4px">'
+                           f'📋 Minh chứng từ nhà trường: {_ev}</div>' if _ev else '')
+                        + '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+            # Phản hồi đã xử lý (hiện 5 gần nhất)
+            if _ph_closed:
+                with st.expander(f"✅ Đã xử lý ({len(_ph_closed)} phản hồi)"):
+                    for _fb in _ph_closed[:5]:
+                        _rep = _fb.get("response_text","") or ""
+                        _rby = _fb.get("response_by","") or ""
+                        _dt  = (_fb.get("created_at") or "")[:10]
+                        _rdt = (_fb.get("reviewed_at") or "")[:10]
+                        st.markdown(
+                            f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
+                            f'border-left:3px solid #16A34A;opacity:0.85">'
+                            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+                            f'<span style="font-size:0.75rem;color:#64748B">{_dt} · {_fb.get("category","")}</span>'
+                            f'<span style="font-size:0.7rem;color:#16A34A;font-weight:700">'
+                            f'✅ Đã xử lý {_rdt}</span>'
+                            f'</div>'
+                            f'<div style="font-size:0.85rem;color:#334155">{_fb.get("content","")}</div>'
+                            + (f'<div style="font-size:0.78rem;color:#166534;margin-top:5px;'
+                               f'background:#F0FDF4;border-radius:6px;padding:5px 10px">'
+                               f'💬 Phản hồi từ BGH ({_rby}): {_rep}</div>' if _rep else '')
+                            + '</div>',
+                            unsafe_allow_html=True,
+                        )
         else:
-            st.info("Chưa có phản hồi nào trong trường. Hãy là người đầu tiên gửi ý kiến!")
+            st.info("Chưa có phản hồi nào. Hãy là người đầu tiên gửi ý kiến!")
     else:
-        st.caption("Đăng nhập với tài khoản có trường để xem phản hồi cộng đồng.")
+        st.caption("Kết nối database để xem phản hồi.")
 
     # ── Section 6: Quyền pháp lý ─────────────────────────────────────────────
     with st.expander("⚖️ Quyền của Phụ Huynh theo pháp luật"):
@@ -4381,43 +4460,230 @@ def tab_history(role: str = "", school_filter: str = ""):
     sessions = db_get_sessions(school=school_input, limit=200)
 
     # ── Feedback Phụ Huynh — luôn hiện TRƯỚC early return ────────────────────
-    # (tránh bug: return sớm khi không có sessions khiến feedback bị mất)
-    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)") and db_ok():
-        _fb_school_hist = school_input
-        _is_bgh_hist = (role == "Ban Giám Hiệu")
-        _fb_hist_title = "📬 Phản hồi Phụ Huynh — Chờ xử lý" if _is_bgh_hist else "📬 Phản hồi Phụ Huynh (chỉ đọc)"
-        _feedbacks_hist = db_get_feedback(school=_fb_school_hist)
-        if _feedbacks_hist:
-            st.markdown(f'<div class="sec-hdr">{_fb_hist_title}</div>', unsafe_allow_html=True)
-            if not _is_bgh_hist:
-                st.caption("Ban Giám Hiệu sẽ xử lý các phản hồi này. Bạn chỉ có thể xem.")
-            for _fb_h in _feedbacks_hist:
-                _fh_dt  = (_fb_h.get("created_at","") or "")[:10]
-                _fh_cat = _fb_h.get("category","")
-                _fh_cnt = _fb_h.get("content","")
-                _fh_st  = _fb_h.get("status","pending")
-                _fh_badge = ("✅ Đã xử lý" if _fh_st=="resolved" else "💬 Đang xem" if _fh_st=="reviewed" else "⏳ Chờ xử lý")
-                _fh_clr   = ("#16A34A" if _fh_st=="resolved" else "#2563EB" if _fh_st=="reviewed" else "#D97706")
-                _fh_bg    = ("#DCFCE7" if _fh_st=="resolved" else "#DBEAFE" if _fh_st=="reviewed" else "#FEF9C3")
+    # ── Hệ thống Complaint — luôn hiện TRƯỚC early return ────────────────────
+    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok():
+        import plotly.graph_objects as _go_fb
+        _all_fb    = db_get_all_feedbacks(school=school_input, limit=200)
+        _is_bgh_fb = (role == "Ban Giám Hiệu")
+        _is_bgs_fb = role in ("Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường")
+        _user_name = st.session_state.get("user_profile", {}).get("full_name", role)
+
+        # Header + visualize
+        st.markdown('<div class="sec-hdr">📬 Phản hồi Phụ Huynh — Quản lý & Theo dõi</div>',
+                    unsafe_allow_html=True)
+
+        if _all_fb:
+            # ── Metrics tổng quan ─────────────────────────────────────────────
+            _total_fb    = len(_all_fb)
+            _pending_fb  = sum(1 for f in _all_fb if f.get("status") == "pending")
+            _reviewed_fb = sum(1 for f in _all_fb if f.get("status") == "reviewed")
+            _resolved_fb = sum(1 for f in _all_fb if f.get("status") == "resolved")
+            _overdue_fb  = sum(
+                1 for f in _all_fb
+                if f.get("status") == "pending"
+                and f.get("created_at","")
+                and (now_vn() - __import__("datetime").datetime.fromisoformat(
+                    f["created_at"][:19]).replace(
+                    tzinfo=__import__("datetime").timezone.utc)).days >= 2
+            )
+            _fm1,_fm2,_fm3,_fm4 = st.columns(4)
+            _fm1.markdown(f'<div class="metric-box"><div class="metric-lbl">Tổng phản hồi</div>'
+                          f'<div class="metric-num c-blue">{_total_fb}</div></div>',
+                          unsafe_allow_html=True)
+            _fm2.markdown(f'<div class="metric-box"><div class="metric-lbl">⏳ Chờ xử lý</div>'
+                          f'<div class="metric-num c-orange">{_pending_fb}</div></div>',
+                          unsafe_allow_html=True)
+            _fm3.markdown(f'<div class="metric-box"><div class="metric-lbl">💬 Đang xem</div>'
+                          f'<div class="metric-num c-blue">{_reviewed_fb}</div></div>',
+                          unsafe_allow_html=True)
+            _fm4.markdown(f'<div class="metric-box"><div class="metric-lbl">✅ Đã xử lý</div>'
+                          f'<div class="metric-num c-green">{_resolved_fb}</div></div>',
+                          unsafe_allow_html=True)
+            if _overdue_fb:
                 st.markdown(
-                    f'<div class="sf-card" style="padding:12px 16px;margin:5px 0;border-left:3px solid {_fh_clr}">'
-                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
-                    f'flex-wrap:wrap;gap:6px;margin-bottom:6px">'
-                    f'<span style="font-size:0.75rem;color:#64748B">{_fh_dt} · {_fh_cat}</span>'
-                    f'<span style="background:{_fh_bg};color:{_fh_clr};font-size:0.72rem;'
-                    f'font-weight:700;padding:2px 10px;border-radius:10px">{_fh_badge}</span>'
-                    f'</div>'
-                    f'<div style="font-size:0.88rem;color:#1E293B">{_fh_cnt}</div>'
-                    f'</div>',
+                    f'<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:8px;'
+                    f'padding:8px 16px;margin:8px 0;font-size:0.85rem;color:#991B1B;font-weight:600">'
+                    f'🚨 {_overdue_fb} phản hồi quá 2 ngày chưa xử lý — cần ưu tiên giải quyết!</div>',
                     unsafe_allow_html=True,
                 )
-                if _is_bgh_hist and _fh_st == "pending":
-                    _, _fh_btn_col = st.columns([4, 1])
-                    if _fh_btn_col.button("✅ Đánh dấu đã xử lý", key=f"fbh_{_fb_h['id']}",
-                                          use_container_width=True):
-                        db_update_feedback_status(_fb_h["id"], "resolved")
-                        st.rerun()
-            st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+
+            # ── Biểu đồ complaint ─────────────────────────────────────────────
+            _fc1, _fc2 = st.columns(2)
+            with _fc1:
+                # Bar chart: số complaint theo ngày (30 ngày gần nhất)
+                try:
+                    _dates_fb = {}
+                    for f in _all_fb:
+                        _d = (f.get("created_at","") or "")[:10]
+                        if _d:
+                            _dates_fb[_d] = _dates_fb.get(_d, 0) + 1
+                    _sorted_dates = sorted(_dates_fb.keys())[-30:]
+                    _date_labels = [f"{d[8:10]}/{d[5:7]}" for d in _sorted_dates]
+                    _fig_bar_fb = _go_fb.Figure(_go_fb.Bar(
+                        x=_date_labels, y=[_dates_fb[d] for d in _sorted_dates],
+                        marker_color="#7C3AED", opacity=0.8,
+                        hovertemplate="%{x}: %{y} phản hồi<extra></extra>",
+                    ))
+                    _fig_bar_fb.update_layout(
+                        plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                        font=dict(size=11), margin=dict(l=10,r=10,t=30,b=10), height=200,
+                        title=dict(text="📅 Phản hồi theo ngày (30 ngày gần nhất)",
+                                   font=dict(size=12, color="#1B3B6F")),
+                        xaxis=dict(showgrid=False, tickangle=-30),
+                        yaxis=dict(showgrid=True, gridcolor="#E2E8F0", dtick=1),
+                    )
+                    st.plotly_chart(_fig_bar_fb, use_container_width=True)
+                except Exception:
+                    pass
+
+            with _fc2:
+                # Donut: by category
+                try:
+                    _cats_fb = {}
+                    for f in _all_fb:
+                        _c = (f.get("category","") or "Khác").split(" ")[0]
+                        _cats_fb[_c] = _cats_fb.get(_c, 0) + 1
+                    _fig_pie_fb = _go_fb.Figure(_go_fb.Pie(
+                        labels=list(_cats_fb.keys()), values=list(_cats_fb.values()),
+                        hole=0.45, textfont_size=11,
+                        marker_colors=["#7C3AED","#2563EB","#DC2626","#D97706","#0D9488","#64748B"],
+                        hovertemplate="%{label}: %{value} (%{percent})<extra></extra>",
+                    ))
+                    _fig_pie_fb.update_layout(
+                        plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                        font=dict(size=11), margin=dict(l=10,r=10,t=30,b=10), height=200,
+                        title=dict(text="🏷️ Phản hồi theo loại",
+                                   font=dict(size=12, color="#1B3B6F")),
+                        showlegend=True,
+                        legend=dict(font=dict(size=10), orientation="v", x=1, y=0.5),
+                    )
+                    st.plotly_chart(_fig_pie_fb, use_container_width=True)
+                except Exception:
+                    pass
+
+            # ── Danh sách complaint chưa xử lý ────────────────────────────────
+            _open_fb = [f for f in _all_fb if f.get("status") != "resolved"]
+            if _open_fb:
+                st.markdown(
+                    f'<div class="sec-hdr" style="color:#DC2626">⏳ Chờ xử lý '
+                    f'({len(_open_fb)} phản hồi)</div>',
+                    unsafe_allow_html=True,
+                )
+                if _is_bgh_fb:
+                    st.caption("BGH: Đọc minh chứng từ BGS/Y Tế và đóng task khi đã xử lý xong.")
+                else:
+                    st.caption("Cung cấp minh chứng/diễn giải để hỗ trợ Ban Giám Hiệu xử lý.")
+
+                for _fb in _open_fb:
+                    _fid   = _fb.get("id","")
+                    _fdt   = (_fb.get("created_at","") or "")[:10]
+                    _fcat  = _fb.get("category","")
+                    _fcnt  = _fb.get("content","")
+                    _fst   = _fb.get("status","pending")
+                    _fevtx = _fb.get("evidence_text","") or ""
+                    _fevby = _fb.get("evidence_by","") or ""
+                    _fsch  = _fb.get("school_name","")
+
+                    # Kiểm tra quá hạn (> 2 ngày)
+                    _is_overdue = False
+                    try:
+                        _created = __import__("datetime").datetime.fromisoformat(
+                            (_fb.get("created_at","") or "")[:19]).replace(
+                            tzinfo=__import__("datetime").timezone.utc)
+                        _is_overdue = (now_vn() - _created).days >= 2
+                    except Exception:
+                        pass
+
+                    _fborder = "#DC2626" if _is_overdue else ("#2563EB" if _fst=="reviewed" else "#F59E0B")
+                    _fbg     = "#FFF5F5" if _is_overdue else ("#EFF6FF" if _fst=="reviewed" else "#FFFBEB")
+                    _fst_lbl = "💬 Đang xem xét" if _fst=="reviewed" else "⏳ Chờ xử lý"
+                    _fst_clr = "#2563EB" if _fst=="reviewed" else "#D97706"
+
+                    _overdue_tag = (
+                        '<span style="background:#FEE2E2;color:#DC2626;font-size:0.68rem;'
+                        'font-weight:700;padding:2px 8px;border-radius:8px;margin-left:6px">'
+                        '🚨 QUÁ HẠN</span>' if _is_overdue else ""
+                    )
+                    st.markdown(
+                        f'<div style="background:{_fbg};border:1.5px solid {_fborder};'
+                        f'border-radius:10px;padding:12px 16px;margin:6px 0">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                        f'flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">'
+                        f'📅 {_fdt} · 🏫 {_fsch} · {_fcat}</span>'
+                        f'<span style="display:flex;align-items:center">'
+                        f'<span style="background:{_fst_clr}20;color:{_fst_clr};font-size:0.72rem;'
+                        f'font-weight:700;padding:2px 10px;border-radius:10px">{_fst_lbl}</span>'
+                        f'{_overdue_tag}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.9rem;color:#1E293B;margin-bottom:6px">{_fcnt}</div>'
+                        + (f'<div style="background:white;border-radius:6px;padding:8px 10px;'
+                           f'font-size:0.8rem;color:#1D4ED8;margin-top:4px">'
+                           f'📋 <b>Minh chứng từ {_fevby}:</b> {_fevtx}</div>'
+                           if _fevtx else '')
+                        + '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    # Form action theo vai trò
+                    if _is_bgs_fb and not _fevtx:
+                        with st.expander(f"📝 Thêm minh chứng / diễn giải [{_fid[:8]}]"):
+                            _evtxt = st.text_area("Diễn giải / Mô tả đã xử lý",
+                                                   key=f"ev_{_fid}", height=80,
+                                                   placeholder="Mô tả tình huống, hành động đã thực hiện, kết quả...")
+                            if st.button("📤 Gửi minh chứng", key=f"ev_btn_{_fid}",
+                                         type="primary"):
+                                if _evtxt.strip():
+                                    if db_add_evidence(_fid, _evtxt.strip(), _user_name):
+                                        st.success("✅ Đã gửi minh chứng — Ban Giám Hiệu sẽ xem xét.")
+                                        st.rerun()
+                                else:
+                                    st.warning("Vui lòng nhập nội dung minh chứng.")
+
+                    elif _is_bgh_fb:
+                        with st.expander(f"✅ Đóng complaint & phản hồi chính thức [{_fid[:8]}]"):
+                            _reptxt = st.text_area("Phản hồi chính thức của Ban Giám Hiệu",
+                                                    key=f"rep_{_fid}", height=80,
+                                                    placeholder="Nhà trường đã xử lý vấn đề...")
+                            if st.button("🔒 Đóng task & lưu phản hồi", key=f"rep_btn_{_fid}",
+                                         type="primary"):
+                                _rtext = _reptxt.strip() or "Ban Giám Hiệu đã xem xét và xử lý."
+                                if db_resolve_complaint(_fid, _rtext, _user_name):
+                                    st.success("✅ Đã đóng task và lưu phản hồi!")
+                                    st.rerun()
+
+            else:
+                st.success("✅ Tất cả phản hồi đã được xử lý!")
+
+            # ── 10 complaint đã đóng gần nhất ─────────────────────────────────
+            _closed_fb = [f for f in _all_fb if f.get("status") == "resolved"][:10]
+            if _closed_fb:
+                with st.expander(f"📋 {len(_closed_fb)} phản hồi đã xử lý gần nhất"):
+                    for _cf in _closed_fb:
+                        _cdt  = (_cf.get("created_at","") or "")[:10]
+                        _ccat = _cf.get("category","")
+                        _ccnt = _cf.get("content","")
+                        _crep = _cf.get("response_text","") or ""
+                        _crby = _cf.get("response_by","") or ""
+                        _crev = (_cf.get("reviewed_at","") or "")[:10]
+                        st.markdown(
+                            f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
+                            f'border-left:3px solid #16A34A;opacity:0.85">'
+                            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+                            f'<span style="font-size:0.75rem;color:#64748B">{_cdt} · {_ccat}</span>'
+                            f'<span style="font-size:0.72rem;color:#16A34A;font-weight:600">'
+                            f'✅ Đóng {_crev}</span>'
+                            f'</div>'
+                            f'<div style="font-size:0.85rem;color:#334155">{_ccnt}</div>'
+                            + (f'<div style="font-size:0.78rem;color:#475569;margin-top:4px;'
+                               f'background:#F0FDF4;border-radius:6px;padding:4px 8px">'
+                               f'💬 BGH ({_crby}): {_crep}</div>' if _crep else '')
+                            + '</div>',
+                            unsafe_allow_html=True,
+                        )
+        else:
+            st.info("Chưa có phản hồi nào từ Phụ Huynh.")
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
     if not sessions:
         st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu.")
@@ -6424,7 +6690,7 @@ def main():
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_kiem_thuc(api_key, level)
         with _tabs[2]: tab_supplier(api_key, role=role)
-        with _tabs[3]: tab_history(role=role, school_filter=_school_pf)
+        with _tabs[3]: tab_history(role=role, school_filter="" if _is_super else _school_pf)
         with _tabs[4]: tab_emergency(api_key)
         with _tabs[5]: tab_guide()
 
@@ -6442,7 +6708,7 @@ def main():
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_checklist(api_key)
         with _tabs[2]: tab_supplier(api_key, role=role)
-        with _tabs[3]: tab_history(role=role, school_filter=_school_pf)
+        with _tabs[3]: tab_history(role=role, school_filter="" if _is_super else _school_pf)
         with _tabs[4]: tab_schedule()
         with _tabs[5]: tab_emergency(api_key)
         with _tabs[6]: tab_guide()
@@ -6455,7 +6721,7 @@ def main():
             _bgh_tabs.append("👤 Quản lý tài khoản")
         _tabs = st.tabs(_bgh_tabs)
         with _tabs[0]: tab_chat(api_key, role, level, loc)
-        with _tabs[1]: tab_history(role=role, school_filter=_school_pf)
+        with _tabs[1]: tab_history(role=role, school_filter="" if _is_super else _school_pf)
         with _tabs[2]: tab_schedule()
         with _tabs[3]: tab_emergency(api_key)
         with _tabs[4]: tab_guide()
