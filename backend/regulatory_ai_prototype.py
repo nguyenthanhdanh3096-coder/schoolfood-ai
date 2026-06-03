@@ -3133,12 +3133,14 @@ def tab_parent_view(api_key: str = ""):
                 unsafe_allow_html=True)
     st.caption("Trạng thái: ⏳ Chờ xử lý · ✅ Đã xử lý")
 
-    if db_ok() and (school or st.session_state.get("kt_school")):
+    if db_ok():
         _fb_school = school or st.session_state.get("kt_school", "")
         try:
-            _fbs = (_get_sb().table("parent_feedback").select("*")
-                    .eq("school_name", _fb_school)
-                    .order("created_at", desc=True).limit(20).execute().data or [])
+            _fq = (_get_sb().table("parent_feedback").select("*")
+                   .order("created_at", desc=True).limit(20))
+            if _fb_school:
+                _fq = _fq.eq("school_name", _fb_school)
+            _fbs = _fq.execute().data or []
         except Exception:
             _fbs = []
 
@@ -4377,6 +4379,46 @@ def tab_history(role: str = "", school_filter: str = ""):
 
     school_input = "" if _school_sel == "Tất cả trường" else _school_sel
     sessions = db_get_sessions(school=school_input, limit=200)
+
+    # ── Feedback Phụ Huynh — luôn hiện TRƯỚC early return ────────────────────
+    # (tránh bug: return sớm khi không có sessions khiến feedback bị mất)
+    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)") and db_ok():
+        _fb_school_hist = school_input
+        _is_bgh_hist = (role == "Ban Giám Hiệu")
+        _fb_hist_title = "📬 Phản hồi Phụ Huynh — Chờ xử lý" if _is_bgh_hist else "📬 Phản hồi Phụ Huynh (chỉ đọc)"
+        _feedbacks_hist = db_get_feedback(school=_fb_school_hist)
+        if _feedbacks_hist:
+            st.markdown(f'<div class="sec-hdr">{_fb_hist_title}</div>', unsafe_allow_html=True)
+            if not _is_bgh_hist:
+                st.caption("Ban Giám Hiệu sẽ xử lý các phản hồi này. Bạn chỉ có thể xem.")
+            for _fb_h in _feedbacks_hist:
+                _fh_dt  = (_fb_h.get("created_at","") or "")[:10]
+                _fh_cat = _fb_h.get("category","")
+                _fh_cnt = _fb_h.get("content","")
+                _fh_st  = _fb_h.get("status","pending")
+                _fh_badge = ("✅ Đã xử lý" if _fh_st=="resolved" else "💬 Đang xem" if _fh_st=="reviewed" else "⏳ Chờ xử lý")
+                _fh_clr   = ("#16A34A" if _fh_st=="resolved" else "#2563EB" if _fh_st=="reviewed" else "#D97706")
+                _fh_bg    = ("#DCFCE7" if _fh_st=="resolved" else "#DBEAFE" if _fh_st=="reviewed" else "#FEF9C3")
+                st.markdown(
+                    f'<div class="sf-card" style="padding:12px 16px;margin:5px 0;border-left:3px solid {_fh_clr}">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                    f'flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+                    f'<span style="font-size:0.75rem;color:#64748B">{_fh_dt} · {_fh_cat}</span>'
+                    f'<span style="background:{_fh_bg};color:{_fh_clr};font-size:0.72rem;'
+                    f'font-weight:700;padding:2px 10px;border-radius:10px">{_fh_badge}</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.88rem;color:#1E293B">{_fh_cnt}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                if _is_bgh_hist and _fh_st == "pending":
+                    _, _fh_btn_col = st.columns([4, 1])
+                    if _fh_btn_col.button("✅ Đánh dấu đã xử lý", key=f"fbh_{_fb_h['id']}",
+                                          use_container_width=True):
+                        db_update_feedback_status(_fb_h["id"], "resolved")
+                        st.rerun()
+            st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+
     if not sessions:
         st.info("Chưa có dữ liệu lịch sử. Thực hiện kiểm tra và tạo báo cáo lần đầu.")
         return
@@ -5083,70 +5125,7 @@ def tab_history(role: str = "", school_filter: str = ""):
     except Exception as e:
         st.error(f"Lỗi xuất Excel: {e}")
 
-    # ── Feedback Phụ Huynh ────────────────────────────────────────────────────
-    if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)"):
-        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        _is_bgh_here = (role == "Ban Giám Hiệu")
-        _fb_title = "📬 Phản hồi Phụ Huynh — Chờ xử lý" if _is_bgh_here else "📬 Phản hồi Phụ Huynh (chỉ đọc)"
-        st.markdown(f'<div class="sec-hdr">{_fb_title}</div>', unsafe_allow_html=True)
-        if not _is_bgh_here:
-            st.caption("Ban Giám Hiệu sẽ xử lý các phản hồi này. Bạn chỉ có thể xem.")
-        feedbacks = db_get_feedback(school=school_input.strip())
-        if not feedbacks:
-            st.info("Không có phản hồi mới từ Phụ Huynh.")
-        else:
-            for fb in feedbacks:
-                _fb_dt = (fb.get("created_at","") or "")[:10]
-                _fb_cat = fb.get("category","")
-                _fb_content = fb.get("content","")
-                # Status badge
-                _fb_status = fb.get("status", "pending")
-                _sb_lbl = ("✅ Đã xử lý" if _fb_status == "resolved"
-                           else "💬 Đang xem xét" if _fb_status == "reviewed"
-                           else "⏳ Chờ xử lý")
-                _sb_clr = ("#16A34A" if _fb_status == "resolved"
-                           else "#2563EB" if _fb_status == "reviewed"
-                           else "#D97706")
-                _sb_bg  = ("#DCFCE7" if _fb_status == "resolved"
-                           else "#DBEAFE" if _fb_status == "reviewed"
-                           else "#FEF9C3")
-
-                if _is_bgh_here:
-                    # BGH: thẻ + nút xử lý chỉ khi pending
-                    st.markdown(
-                        f'<div class="sf-card" style="padding:12px 16px;margin:5px 0;'
-                        f'border-left:3px solid {_sb_clr}">'
-                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
-                        f'flex-wrap:wrap;gap:6px;margin-bottom:6px">'
-                        f'<span style="font-size:0.75rem;color:#64748B">{_fb_dt} · {_fb_cat}</span>'
-                        f'<span style="background:{_sb_bg};color:{_sb_clr};font-size:0.72rem;'
-                        f'font-weight:700;padding:2px 10px;border-radius:10px">{_sb_lbl}</span>'
-                        f'</div>'
-                        f'<div style="font-size:0.88rem;color:#1E293B">{_fb_content}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if _fb_status == "pending":
-                        _fbcol1, _fbcol2 = st.columns([3, 1])
-                        if _fbcol2.button("✅ Đánh dấu đã xử lý", key=f"fb_{fb['id']}",
-                                          use_container_width=True):
-                            db_update_feedback_status(fb["id"], "resolved")
-                            st.rerun()
-                else:
-                    # BGS: chỉ xem, không có nút
-                    st.markdown(
-                        f'<div class="sf-card" style="padding:10px 16px;margin:4px 0">'
-                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
-                        f'flex-wrap:wrap;gap:4px;margin-bottom:5px">'
-                        f'<span style="font-size:0.75rem;color:#64748B">{_fb_dt} · {_fb_cat}</span>'
-                        f'<span style="background:{_sb_bg};color:{_sb_clr};font-size:0.72rem;'
-                        f'font-weight:600;padding:2px 10px;border-radius:10px">{_sb_lbl}</span>'
-                        f'</div>'
-                        f'<div style="font-size:0.88rem;color:#1E293B">{_fb_content}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-
+    # Feedback section đã được chuyển lên trước early return ở đầu hàm
 
 def tab_supplier(api_key: str = "", role: str = ""):
     """G4: Checklist kiểm tra nhà cung cấp suất ăn 12 điểm."""
