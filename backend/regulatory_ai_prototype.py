@@ -213,8 +213,9 @@ def db_save_feedback(school: str, category: str, content: str) -> bool:
         return False
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def db_get_sessions(school: str = "", limit: int = 30) -> list:
-    """Lấy lịch sử phiên kiểm tra."""
+    """Lấy lịch sử phiên kiểm tra — cache 60s để giảm lag khi chuyển tab."""
     sb = _get_sb()
     if not sb:
         return []
@@ -4740,7 +4741,7 @@ def tab_history(role: str = "", school_filter: str = ""):
     # ── Bộ lọc ────────────────────────────────────────────────────────────────
     # Nếu đã đăng nhập và không phải BGH → khóa theo trường của mình
     _is_bgh   = st.session_state.get("is_bgh", True)
-    _lock     = bool(school_filter) and not _is_bgh and bool(st.session_state.get("auth_user"))
+    _lock     = bool(school_filter) and not st.session_state.get("is_super", False) and bool(st.session_state.get("auth_user"))
 
     col_f, col_r = st.columns([3, 1])
     with col_f:
@@ -4773,8 +4774,9 @@ def tab_history(role: str = "", school_filter: str = ""):
     sessions = db_get_sessions(school=school_input, limit=200)
 
     # ── 🚨 ALERT BANNER — hiện ngay đầu trang cho BGH/Admin ──────────────────
-    # Tính nhanh từ sessions (không cần df_meal) để hiện trước mọi thứ
-    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok() and sessions:
+    # Điều kiện: BGH hoặc Admin (is_super), có DB, có hoặc không có sessions
+    # → luôn kiểm tra tần suất, kể cả khi chưa có dữ liệu
+    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok():
         import pandas as _pd_alert
         _now_alert = _pd_alert.Timestamp(now_vn().date())
         _quick_alerts = []
@@ -7055,15 +7057,21 @@ def tab_user_management(school: str = ""):
                                             use_container_width=True)
 
     if _nu_submit:
+        import re as _re_email
+        _email_clean = _nu_email.strip().lower() if _nu_email else ""
+        _email_valid = bool(_re_email.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
+                                             _email_clean)) if _email_clean else False
         if not all([_nu_email, _nu_name, _nu_pw, _nu_school]):
             st.warning("⚠️ Vui lòng điền đầy đủ: email, họ tên, trường, mật khẩu.")
+        elif not _email_valid:
+            st.error(f"❌ Email không đúng định dạng: **{_email_clean}**\n\nVD đúng: `ten@truong.edu.vn` · Không được có khoảng trắng hoặc ký tự đặc biệt.")
         elif len(_nu_pw) < 6:
             st.warning("Mật khẩu tạm thời cần ≥ 6 ký tự.")
         else:
             try:
                 with st.spinner("Đang tạo tài khoản..."):
-                    _uid = db_auth_signup(_nu_email, _nu_pw)
-                _ok = db_save_profile(_uid, _nu_email, _nu_name,
+                    _uid = db_auth_signup(_email_clean, _nu_pw)
+                _ok = db_save_profile(_uid, _email_clean, _nu_name,
                                        ROLE_KEY.get(_nu_role, "phu_huynh"), _nu_school,
                                        default_level=_nu_default_level)
                 if _ok:
@@ -7446,16 +7454,17 @@ def main():
     show_reminder_banner(role)
 
     # ── G5: Onboarding cho BGH mới ───────────────────────────────────────────
+    # Onboarding check — chỉ chạy khi cần, không thêm DB call
     if role == "Ban Giám Hiệu" and _use_auth and _school_pf:
-        _ob_profiles = db_get_all_profiles(school=_school_pf)
-        _ob_profiles = [p for p in _ob_profiles if not p.get("is_super_admin", False)]
-        _ob_sessions = len(db_get_sessions(school=_school_pf, limit=5))
-        show_onboarding_banner(_school_pf, _ob_profiles, _ob_sessions)
+        if not st.session_state.get("onboarding_dismissed"):
+            _ob_profiles = db_get_all_profiles(school=_school_pf)
+            _ob_profiles = [p for p in _ob_profiles if not p.get("is_super_admin", False)]
+            _ob_sessions = 0  # Sẽ check trong banner nếu cần
+            show_onboarding_banner(_school_pf, _ob_profiles, _ob_sessions)
 
     # Lịch sử — gắn cờ đỏ nếu có CRITICAL gần đây
-    _hist_label = "📊 Lịch sử" + (" 🔴" if db_ok() and
-        any(s.get("alert_level") == "CRITICAL"
-            for s in db_get_sessions(limit=5)) else "")
+    # Dùng cache: tránh gọi DB thêm lần nữa chỉ để check critical flag
+    _hist_label = "📊 Lịch sử"  # Flag đỏ sẽ hiện trong alert banner
 
     # ── Tabs theo từng vai trò — mỗi vai trò thấy đúng chức năng mình cần ─────
     if role == "Phụ Huynh":
