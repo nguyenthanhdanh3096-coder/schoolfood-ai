@@ -2867,49 +2867,116 @@ def tab_parent_view(api_key: str = ""):
     # Tính tổng hợp: Y Tế 40%, BGS 60% (BGS độc lập hơn)
     if _yte_pct is not None and _bgs_pct is not None:
         _combined_pct = _bgs_pct * 0.60 + _yte_pct * 0.40
-        _source_txt = "Y Tế Học Đường + Ban Giám Sát (kết hợp)"
+        pass  # sources shown via _sources_html pills below
     elif _yte_pct is not None:
         _combined_pct = _yte_pct
-        _source_txt = "Y Tế Học Đường"
+        pass
     elif _bgs_pct is not None:
         _combined_pct = _bgs_pct
-        _source_txt = "Ban Giám Sát (Đại Diện PHHS)"
+        pass
     else:
         _combined_pct = None
-        _source_txt = ""
+
+    # ── Helper: auto-emoji cho từng món ăn ───────────────────────────────────
+    def _dish_emoji(dish: str) -> str:
+        d = dish.lower()
+        if any(k in d for k in ["cơm", "cháo"]): return "🍚"
+        if any(k in d for k in ["canh", "súp", "lẩu"]): return "🍲"
+        if any(k in d for k in ["phở", "bún", "hủ tiếu", "mì", "miến"]): return "🍜"
+        if any(k in d for k in ["gà"]): return "🍗"
+        if any(k in d for k in ["tôm"]): return "🦐"
+        if any(k in d for k in ["cá", "cua", "mực", "bạch tuộc"]): return "🐟"
+        if any(k in d for k in ["heo", "thịt", "sườn", "chả", "xúc xích"]): return "🥩"
+        if any(k in d for k in ["bò"]): return "🥩"
+        if any(k in d for k in ["trứng"]): return "🥚"
+        if any(k in d for k in ["rau", "xào", "luộc", "salad"]): return "🥬"
+        if any(k in d for k in ["đậu", "hũ", "tofu"]): return "🫘"
+        if any(k in d for k in ["bánh", "sandwich"]): return "🥐"
+        if any(k in d for k in ["trái cây", "tráng miệng"]): return "🍎"
+        if any(k in d for k in ["sữa", "yaourt"]): return "🥛"
+        return "🍽️"
 
     if _combined_pct is not None:
         _pct_r = round(_combined_pct)
         if _pct_r >= 90:
-            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#DCFCE7", "🟢", "AN TOÀN", "Bữa ăn đạt tiêu chuẩn ATTP"
+            _grad   = "linear-gradient(135deg, #16A34A 0%, #15803D 100%)"
+            _icon   = "🛡️"
+            _lbl    = "BỮA ĂN AN TOÀN"
+            _sub    = "Bé có thể ăn ngon và an toàn hôm nay!"
+            _pill_c = "rgba(255,255,255,0.25)"
         elif _pct_r >= 75:
-            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#FEF9C3", "🟡", "CẦN THEO DÕI", "Có một số điểm cần cải thiện — nhà trường đang xử lý"
+            _grad   = "linear-gradient(135deg, #D97706 0%, #B45309 100%)"
+            _icon   = "⚠️"
+            _lbl    = "CẦN THEO DÕI"
+            _sub    = "Có một số điểm cần cải thiện — nhà trường đang xử lý"
+            _pill_c = "rgba(255,255,255,0.25)"
         else:
-            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#FEE2E2", "🔴", "CÓ VẤN ĐỀ", "Nhà trường đang tiến hành khắc phục — Ban Giám Hiệu đã được thông báo"
+            _grad   = "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+            _icon   = "🚨"
+            _lbl    = "CÓ VẤN ĐỀ"
+            _sub    = "Nhà trường đang khắc phục — Ban Giám Hiệu đã được thông báo"
+            _pill_c = "rgba(255,255,255,0.2)"
+
+        _sources_html = ""
+        if _yte_pct is not None:
+            _sources_html += (f'<span style="background:rgba(255,255,255,0.18);border-radius:12px;'
+                              f'padding:3px 12px;font-size:0.75rem;color:white;margin:3px">'
+                              f'🏥 Y Tế Học Đường {_yte_pct:.0f}%</span>')
+        if _bgs_pct is not None:
+            _sources_html += (f'<span style="background:rgba(255,255,255,0.18);border-radius:12px;'
+                              f'padding:3px 12px;font-size:0.75rem;color:white;margin:3px">'
+                              f'👥 Ban Giám Sát {_bgs_pct:.0f}%</span>')
 
         st.markdown(
-            f'<div style="background:{_tl_bg};border-radius:14px;padding:20px 24px;'
-            f'text-align:center;margin-bottom:10px">'
-            f'<div style="font-size:3rem;line-height:1.2">{_tl_icon}</div>'
-            f'<div style="font-size:1.3rem;font-weight:800;color:#1E293B;margin-top:6px">'
-            f'{_tl_lbl}</div>'
-            f'<div style="font-size:0.88rem;color:#475569;margin-top:4px">{_tl_sub}</div>'
-            f'<div style="font-size:0.75rem;color:#94A3B8;margin-top:8px">'
-            f'Nguồn: {_source_txt} · Cập nhật: {now_vn().strftime("%H:%M %d/%m")}</div>'
+            f'<div style="background:{_grad};border-radius:20px;padding:32px 24px;'
+            f'text-align:center;position:relative;overflow:hidden;margin-bottom:14px;'
+            f'box-shadow:0 8px 32px rgba(0,0,0,0.15)">'
+            # decorative circles
+            f'<div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;'
+            f'border-radius:50%;background:rgba(255,255,255,0.06)"></div>'
+            f'<div style="position:absolute;bottom:-50px;left:-30px;width:140px;height:140px;'
+            f'border-radius:50%;background:rgba(255,255,255,0.05)"></div>'
+            # icon
+            f'<div style="font-size:4rem;line-height:1;margin-bottom:12px">{_icon}</div>'
+            # label
+            f'<div style="color:white;font-size:2rem;font-weight:900;letter-spacing:0.05em;'
+            f'text-shadow:0 2px 8px rgba(0,0,0,0.2)">{_lbl}</div>'
+            # sub
+            f'<div style="color:rgba(255,255,255,0.88);font-size:1rem;margin-top:8px">{_sub}</div>'
+            # score pill
+            f'<div style="display:inline-block;background:{_pill_c};border-radius:24px;'
+            f'padding:8px 24px;margin-top:16px;border:1px solid rgba(255,255,255,0.3)">'
+            f'<span style="color:white;font-size:1.4rem;font-weight:800">{_pct_r}%</span>'
+            f'<span style="color:rgba(255,255,255,0.75);font-size:0.85rem;margin-left:6px">'
+            f'đạt chuẩn ATTP</span></div>'
+            # sources
+            f'<div style="margin-top:16px;display:flex;justify-content:center;flex-wrap:wrap;gap:4px">'
+            f'{_sources_html}</div>'
+            # timestamp
+            f'<div style="color:rgba(255,255,255,0.55);font-size:0.75rem;margin-top:12px">'
+            f'Cập nhật: {now_vn().strftime("%H:%M · %d/%m/%Y")}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
     else:
+        # Chưa có kết quả — design hấp dẫn
+        _now_h = now_vn().hour
+        _next_check = "9:30–11:00" if _now_h < 9 else ("Đang trong giờ kiểm tra" if _now_h < 11 else "Đã qua giờ Y Tế — chờ BGS kiểm tra")
         st.markdown(
-            '<div style="background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:14px;'
-            'padding:24px;text-align:center">'
-            '<div style="font-size:2rem">⏳</div>'
-            '<div style="font-size:1rem;font-weight:600;color:#475569;margin-top:8px">'
-            'Chưa có kết quả kiểm tra hôm nay</div>'
-            '<div style="font-size:0.82rem;color:#94A3B8;margin-top:6px;line-height:1.7">'
-            'Y Tế Học Đường kiểm tra trước bữa ăn (9:30–11:00)<br>'
-            'Ban Giám Sát kiểm tra 2 lần/tuần — kết quả xuất hiện ở đây ngay sau khi hoàn thành'
-            '</div></div>',
+            '<div style="background:linear-gradient(135deg,#F8FAFC,#EFF6FF);'
+            'border:2px dashed #BFDBFE;border-radius:20px;padding:32px 24px;text-align:center;'
+            'margin-bottom:14px">'
+            '<div style="font-size:3.5rem;margin-bottom:12px">⏳</div>'
+            '<div style="font-size:1.2rem;font-weight:800;color:#1E293B">'
+            'Kết quả chưa có hôm nay</div>'
+            '<div style="font-size:0.88rem;color:#64748B;margin-top:8px;line-height:1.8">'
+            f'🏥 Y Tế Học Đường kiểm tra: <b>9:30–11:00</b><br>'
+            f'👥 Ban Giám Sát kiểm tra <b>2 lần/tuần</b>'
+            '</div>'
+            f'<div style="display:inline-block;background:#DBEAFE;border-radius:12px;'
+            f'padding:6px 18px;margin-top:14px;font-size:0.82rem;color:#1D4ED8;font-weight:600">'
+            f'⏱️ {_next_check}</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
@@ -2923,16 +2990,32 @@ def tab_parent_view(api_key: str = ""):
         if _m and not _m.startswith("NCC:") and not _m.startswith("Nhà CC:"):
             _menu_today = _m
             break
-    # Fallback: session_state (nếu Y Tế vừa nhập trên cùng thiết bị)
     if not _menu_today:
         _menu_today = st.session_state.get("shared_menu", "").strip()
 
     if _menu_today:
+        # Parse từng món + auto emoji
+        import re as _re
+        _dishes = [d.strip() for d in _re.split(r"[,،،\n]+", _menu_today) if d.strip()]
+        _dish_html = ""
+        for _dish in _dishes:
+            _em = _dish_emoji(_dish)
+            _dish_html += (
+                f'<div style="display:flex;align-items:center;gap:10px;'
+                f'padding:8px 12px;border-radius:8px;background:rgba(22,163,74,0.06);'
+                f'margin:4px 0">'
+                f'<span style="font-size:1.4rem">{_em}</span>'
+                f'<span style="font-size:0.92rem;color:#1E293B;font-weight:500">{_dish}</span>'
+                f'</div>'
+            )
         st.markdown(
-            f'<div class="sf-card" style="border-left:4px solid #16A34A">'
-            f'<div style="font-size:0.75rem;color:#16A34A;font-weight:700;margin-bottom:4px">'
-            f'✅ Thực đơn đã được cập nhật</div>'
-            f'<div style="font-size:0.95rem;color:#1E293B;font-weight:500">{_menu_today}</div>'
+            f'<div style="background:white;border:1px solid #E2E8F0;border-radius:14px;'
+            f'padding:16px 18px;box-shadow:0 1px 4px rgba(0,0,0,0.05)">'
+            f'<div style="font-size:0.75rem;color:#16A34A;font-weight:700;margin-bottom:8px;'
+            f'display:flex;align-items:center;gap:6px">'
+            f'<span style="background:#DCFCE7;border-radius:8px;padding:2px 10px">✅ Thực đơn đã được cập nhật</span>'
+            f'</div>'
+            f'{_dish_html}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -2963,29 +3046,36 @@ def tab_parent_view(api_key: str = ""):
             _hist = []
 
         if _hist:
-            # Group by date, tính average pct — hiện 7 ngày gần nhất
             _by_date: dict = {}
             for h in _hist:
                 _d = h.get("check_date", "")
                 _ti = h.get("total_items") or 0
-                if not _d or _ti == 0:
-                    continue
-                _p = h["pass_count"] / _ti * 100
-                _by_date.setdefault(_d, []).append(_p)
+                if not _d or _ti == 0: continue
+                _by_date.setdefault(_d, []).append(h["pass_count"] / _ti * 100)
             _dates = sorted(_by_date.keys())[-7:]
+            _DAY_VN = ["T2","T3","T4","T5","T6","T7","CN"]
             if _dates:
                 _cols = st.columns(len(_dates))
                 for i, _d in enumerate(_dates):
                     _avg = round(sum(_by_date[_d]) / len(_by_date[_d]))
-                    _ic  = "🟢" if _avg >= 90 else "🟡" if _avg >= 75 else "🔴"
-                    # Định dạng DD/MM (chuẩn Việt Nam)
+                    _bg  = "#DCFCE7" if _avg >= 90 else "#FEF9C3" if _avg >= 75 else "#FEE2E2"
+                    _tc  = "#16A34A" if _avg >= 90 else "#D97706" if _avg >= 75 else "#DC2626"
                     _dd  = f"{_d[8:10]}/{_d[5:7]}" if len(_d) >= 10 else _d
+                    try:
+                        import datetime as _dmod
+                        _dow = _DAY_VN[_dmod.date.fromisoformat(_d).weekday()]
+                    except Exception:
+                        _dow = ""
                     _cols[i].markdown(
-                        f'<div style="text-align:center;padding:8px 4px">'
-                        f'<div style="font-size:1.4rem">{_ic}</div>'
-                        f'<div style="font-size:0.7rem;color:#64748B;margin-top:2px">{_dd}</div>'
-                        f'<div style="font-size:0.75rem;font-weight:700;color:#1E293B">{_avg}%</div>'
-                        f'</div>',
+                        f'<div style="text-align:center;padding:6px 2px">'
+                        f'<div style="font-size:0.65rem;color:#94A3B8;font-weight:600;'
+                        f'text-transform:uppercase;margin-bottom:4px">{_dow}</div>'
+                        f'<div style="background:{_bg};border-radius:10px;padding:10px 6px;'
+                        f'border:2px solid {_tc}20">'
+                        f'<div style="font-size:1.5rem">{"🟢" if _avg>=90 else "🟡" if _avg>=75 else "🔴"}</div>'
+                        f'<div style="font-size:0.85rem;font-weight:800;color:{_tc};margin-top:4px">{_avg}%</div>'
+                        f'<div style="font-size:0.65rem;color:#64748B;margin-top:2px">{_dd}</div>'
+                        f'</div></div>',
                         unsafe_allow_html=True,
                     )
             else:
@@ -2996,23 +3086,35 @@ def tab_parent_view(api_key: str = ""):
         st.caption("Kết nối database để xem lịch sử.")
 
     # ── Section 4: Gửi phản hồi ───────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">📤 Gửi phản hồi về bữa ăn</div>',
-                unsafe_allow_html=True)
-    loai = st.selectbox("Loại phản hồi", [
-        "Chọn loại phản hồi...",
-        "Chất lượng thức ăn (khẩu phần, hương vị)",
-        "Vệ sinh (nghi ngờ không sạch)",
-        "Ngộ độc hoặc dấu hiệu bất thường",
-        "Thiếu dinh dưỡng theo chuẩn",
-        "Thực đơn không như đã thông báo",
-        "Khác",
-    ])
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#EFF6FF,#F5F3FF);'
+        'border-radius:14px;padding:20px 22px;margin:14px 0 10px 0;'
+        'border:1px solid #DBEAFE">'
+        '<div style="font-size:1rem;font-weight:700;color:#1E293B;margin-bottom:4px">'
+        '📤 Gửi phản hồi về bữa ăn</div>'
+        '<div style="font-size:0.82rem;color:#64748B">'
+        'Ý kiến của bạn giúp cải thiện bữa ăn cho các bé — Ban Giám Hiệu sẽ xem xét trong 1–2 ngày</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    loai = st.selectbox(
+        "Loại phản hồi",
+        ["— Chọn loại phản hồi —",
+         "🍽️ Chất lượng thức ăn (khẩu phần, hương vị)",
+         "🧹 Vệ sinh bếp ăn (nghi ngờ không sạch)",
+         "🚨 Nghi ngờ ngộ độc / dấu hiệu bất thường",
+         "🥗 Thiếu dinh dưỡng theo chuẩn",
+         "📋 Thực đơn không khớp thông báo",
+         "💬 Góp ý khác"],
+        label_visibility="collapsed",
+    )
     noi_dung = st.text_area(
-        "Mô tả cụ thể (ngày, bữa ăn, triệu chứng nếu có...)", height=110,
+        "Mô tả cụ thể", height=100,
         placeholder="VD: Hôm nay 03/06, con kể thức ăn có mùi lạ ở bữa trưa...",
+        label_visibility="collapsed",
     )
     if st.button("📤 Gửi phản hồi", type="primary", use_container_width=True):
-        if loai == "Chọn loại phản hồi..." or not noi_dung.strip():
+        if loai.startswith("—") or not noi_dung.strip():
             st.warning("⚠️ Vui lòng chọn loại và điền nội dung.")
         elif "Ngộ độc" in loai:
             st.error("🚨 Nghi ngờ ngộ độc: gọi **115** ngay và xem tab **🚨 Khẩn cấp**.")
