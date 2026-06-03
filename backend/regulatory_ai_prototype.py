@@ -5496,9 +5496,16 @@ def tab_user_management(school: str = ""):
         st.warning("Database chưa kết nối — không thể quản lý tài khoản.")
         return
 
-    # ── Danh sách người dùng ──────────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">📋 Danh sách tài khoản</div>', unsafe_allow_html=True)
-    _profiles = db_get_all_profiles(school=school if school else "")
+    # is_super từ session_state để biết có lock trường không
+    _caller_is_super = st.session_state.get("is_super", False)
+
+    # ── Danh sách người dùng (ẩn super admin) ────────────────────────────────
+    st.markdown('<div class="sec-hdr">📋 Danh sách tài khoản trong trường</div>',
+                unsafe_allow_html=True)
+    _all_p  = db_get_all_profiles(school=school if school else "")
+    # Ẩn super admin khỏi danh sách BGH thấy
+    _profiles = [p for p in _all_p if not p.get("is_super_admin", False)]
+
     if _profiles:
         import pandas as _pd_um
         _df_um = _pd_um.DataFrame([{
@@ -5513,12 +5520,12 @@ def tab_user_management(school: str = ""):
 
         # Bật/tắt tài khoản
         st.markdown('<div class="sec-hdr">🔧 Cập nhật trạng thái</div>', unsafe_allow_html=True)
-        _emails = [p.get("email", "") for p in _profiles]
+        _emails    = [p.get("email", "") for p in _profiles]
         _sel_email = st.selectbox("Chọn tài khoản", _emails, key="um_sel_email")
-        _sel_p = next((p for p in _profiles if p.get("email") == _sel_email), None)
+        _sel_p     = next((p for p in _profiles if p.get("email") == _sel_email), None)
         if _sel_p:
             _cur_active = _sel_p.get("is_active", True)
-            _col1, _col2 = st.columns(2)
+            _col1, _ = st.columns(2)
             if _cur_active:
                 if _col1.button("🔒 Tạm khóa tài khoản này", key="um_deact"):
                     if db_toggle_profile(_sel_p["id"], False):
@@ -5528,22 +5535,34 @@ def tab_user_management(school: str = ""):
                     if db_toggle_profile(_sel_p["id"], True):
                         st.success("✅ Đã kích hoạt!"); st.rerun()
     else:
-        st.info("Chưa có tài khoản nào. Hãy thêm bên dưới.")
+        st.info("Chưa có tài khoản nào trong trường này. Hãy thêm bên dưới.")
 
     # ── Thêm người dùng mới ───────────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">➕ Thêm người dùng mới</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sec-hdr">➕ Thêm người dùng cho trường</div>',
+                unsafe_allow_html=True)
     st.caption(
-        "Nhập email + mật khẩu tạm → người dùng đăng nhập lần đầu và đổi mật khẩu. "
-        "Chức năng 'Quên mật khẩu' ở trang đăng nhập hỗ trợ tự đổi."
+        "Tạo tài khoản cho giáo viên / phụ huynh trong trường. "
+        "Người dùng nhận mật khẩu từ bạn và đổi sau lần đầu đăng nhập."
     )
     with st.form("add_user_form", clear_on_submit=True):
         _nu_c1, _nu_c2 = st.columns(2)
         _nu_email = _nu_c1.text_input("📧 Email người dùng", placeholder="ten@truong.edu.vn")
         _nu_name  = _nu_c2.text_input("👤 Họ và tên đầy đủ", placeholder="Nguyễn Văn A")
         _nu_c3, _nu_c4 = st.columns(2)
-        _nu_role   = _nu_c3.selectbox("Vai trò", list(ROLE_VN.values()))
-        _nu_school = _nu_c4.text_input("🏫 Tên trường", value=school,
-                                        placeholder="VD: THCS Nguyễn Du")
+
+        # Vai trò: BGH không tạo được tài khoản BGH khác (chỉ 3 vai trò còn lại)
+        _nu_roles_allowed = (list(ROLE_VN.values()) if _caller_is_super
+                             else [v for k, v in ROLE_VN.items() if k != "ban_giam_hieu"])
+        _nu_role = _nu_c3.selectbox("Vai trò", _nu_roles_allowed)
+
+        # Trường: Super Admin tự nhập, BGH bị khóa theo trường mình
+        if _caller_is_super:
+            _nu_school = _nu_c4.text_input("🏫 Tên trường", value=school or "",
+                                            placeholder="THCS Nguyễn Du")
+        else:
+            _nu_school = _nu_c4.text_input("🏫 Tên trường", value=school,
+                                            disabled=True, placeholder=school)
+
         _nu_pw = st.text_input("🔒 Mật khẩu tạm thời (≥ 6 ký tự)",
                                 type="password", placeholder="Người dùng sẽ đổi sau lần đầu")
         _nu_submit = st.form_submit_button("➕ Tạo tài khoản", type="primary",
@@ -5565,6 +5584,7 @@ def tab_user_management(school: str = ""):
                         f"✅ Đã tạo tài khoản **{_nu_name}** ({_nu_email}) — "
                         f"Vai trò: {_nu_role} · Trường: {_nu_school}"
                     )
+                    st.info("💡 Người dùng đăng nhập được ngay — không cần xác nhận email.")
                     st.rerun()
                 else:
                     st.warning("Tài khoản auth đã tạo nhưng không lưu được profile — kiểm tra DB.")
@@ -5676,56 +5696,72 @@ def main():
 
     # ── Thanh thông tin người dùng / điều khiển ──────────────────────────────
     if _use_auth and _user_profile:
-        # ── Chế độ đã đăng nhập: hiện thông tin user + logout ────────────────
-        _pf        = _user_profile
-        _role_key  = _pf.get("role", "phu_huynh")
-        role       = ROLE_VN.get(_role_key, "Phụ Huynh")
-        _school_pf = _pf.get("school_name", "")
-        _is_demo   = _auth_user.get("demo", False)
+        # ── Chế độ đã đăng nhập ──────────────────────────────────────────────
+        _pf           = _user_profile
+        _is_super     = _pf.get("is_super_admin", False)
+        _role_key     = _pf.get("role", "phu_huynh")
+        _school_pf    = _pf.get("school_name", "")
+        _is_demo      = _auth_user.get("demo", False)
 
-        _clr = ROLE_CLR_MAP.get(role, "#64748B")
-        st.markdown(
-            f'<div style="background:white;border:1px solid #E2E8F0;border-radius:12px;'
-            f'padding:10px 20px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);'
-            f'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
-            f'<div style="display:flex;align-items:center;gap:12px">'
-            f'<div style="background:{_clr};color:white;border-radius:8px;'
-            f'padding:4px 12px;font-size:0.78rem;font-weight:700">{role}</div>'
-            f'<div style="font-size:0.88rem;color:#1E293B;font-weight:600">'
-            f'{_pf.get("full_name","")}</div>'
-            f'<div style="font-size:0.78rem;color:#64748B">{_auth_user.get("email","")}</div>'
-            + (f'<div style="font-size:0.78rem;color:#475569">🏫 {_school_pf}</div>'
-               if _school_pf else '')
-            + (f'<span style="background:#FEF9C3;color:#92400E;font-size:0.72rem;'
-               f'padding:2px 8px;border-radius:6px">🔓 Demo</span>' if _is_demo else '')
-            + f'</div></div>',
-            unsafe_allow_html=True,
-        )
-        _c_level, _c_api, _c_logout = st.columns([2, 3, 1])
-        level = _c_level.selectbox(
-            "Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
-            label_visibility="collapsed",
-        )
-        with _c_api:
+        # ── Thanh thông tin user ──────────────────────────────────────────────
+        _bar_cols = st.columns([5, 2, 1]) if not _is_super else st.columns([4, 2, 1.5, 1])
+        with _bar_cols[0]:
+            # Badge vai trò + tên + email + trường
+            _role_display = ROLE_VN.get(_role_key, "Phụ Huynh")
+            _clr = ROLE_CLR_MAP.get(_role_display, "#64748B")
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;flex-wrap:wrap">'
+                + (f'<span style="background:#7C3AED;color:white;border-radius:6px;'
+                   f'padding:3px 10px;font-size:0.72rem;font-weight:700">⚡ ADMIN</span>'
+                   if _is_super else
+                   f'<span style="background:{_clr};color:white;border-radius:6px;'
+                   f'padding:3px 10px;font-size:0.72rem;font-weight:700">{_role_display}</span>')
+                + f'<span style="font-size:0.88rem;color:#1E293B;font-weight:600">'
+                  f'{_pf.get("full_name","")}</span>'
+                + f'<span style="font-size:0.78rem;color:#64748B">{_auth_user.get("email","")}</span>'
+                + (f'<span style="font-size:0.78rem;color:#475569">🏫 {_school_pf}</span>'
+                   if _school_pf else '')
+                + ('</div>'),
+                unsafe_allow_html=True,
+            )
+
+        # ── Super Admin: chọn vai trò để xem/test ────────────────────────────
+        if _is_super:
+            with _bar_cols[1]:
+                role = st.selectbox(
+                    "🔧 Xem vai trò",
+                    ["Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)",
+                     "Y Tế Học Đường", "Phụ Huynh"],
+                    key="admin_role_switch", label_visibility="collapsed",
+                )
+        else:
+            role = _role_display
+
+        _api_col = _bar_cols[2] if _is_super else _bar_cols[1]
+        _out_col = _bar_cols[3] if _is_super else _bar_cols[2]
+        with _api_col:
             if api_key:
                 st.text_input("API", value="✅ AI sẵn sàng", disabled=True,
                               label_visibility="collapsed")
             else:
                 _mk = st.text_input("Claude API Key", type="password",
-                                    placeholder="sk-ant-... (tuỳ chọn)",
-                                    label_visibility="collapsed")
-                if _mk:
-                    api_key = _mk
-        if _c_logout.button("🚪 Đăng xuất", use_container_width=True):
-            for _k in ("auth_user", "user_profile"):
+                                    placeholder="sk-ant-...", label_visibility="collapsed")
+                if _mk: api_key = _mk
+        if _out_col.button("🚪 Đăng xuất", use_container_width=True):
+            for _k in ("auth_user", "user_profile", "admin_role_switch"):
                 st.session_state.pop(_k, None)
             st.rerun()
 
+        level = st.selectbox(
+            "Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+            label_visibility="collapsed",
+        )
         loc = _school_pf or "TP.HCM"
-        # Lưu vào session_state để các tab khác dùng (tự điền + khóa trường)
+        # Lưu session_state để các tab khác dùng
         st.session_state.user_school  = _school_pf
         st.session_state.user_role    = role
         st.session_state.is_bgh       = (role == "Ban Giám Hiệu")
+        st.session_state.is_super     = _is_super
 
     else:
         # ── Chế độ demo/local: giữ selectbox cũ ─────────────────────────────
