@@ -4930,7 +4930,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                 )
 
             # ── Chi tiết: Biểu đồ + Danh sách — collapsible ─────────────────
-            # BGH: mở mặc định · BGS/Y Tế: đóng để không che dashboard
+            st.markdown("<br>", unsafe_allow_html=True)  # khoảng cách như section Bữa Ăn / NCC
             _detail_label = ("📊 Chi tiết biểu đồ & danh sách xử lý"
                              + (f" ({_pending_fb} chờ, {_reviewed_fb} đang xem)"
                                 if _pending_fb + _reviewed_fb > 0 else ""))
