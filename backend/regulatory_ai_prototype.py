@@ -981,8 +981,8 @@ def inject_css():
     .sf-div { border-top: 1px solid #E2E8F0; margin: 16px 0; }
 
     /* Section header */
-    .sec-hdr { font-size:0.72rem; font-weight:700; color:#94A3B8;
-        text-transform:uppercase; letter-spacing:0.08em; margin:16px 0 8px; }
+    .sec-hdr { font-size:0.72rem; font-weight:800; color:#334155;
+        text-transform:uppercase; letter-spacing:0.1em; margin:16px 0 8px; }
 
     .stButton > button { border-radius: 8px !important; font-family:'Inter',sans-serif !important; font-weight:500 !important; }
     .stTextInput > div > div > input { border-radius: 8px !important; }
@@ -3052,12 +3052,6 @@ def tab_emergency(api_key: str = ""):
             <div class="sf-card-body">{body}</div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="sec-hdr">Số điện thoại quan trọng</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    c1.markdown('<div class="metric-box"><div class="metric-lbl">Cấp Cứu</div><div class="metric-num c-red">115</div><div class="metric-lbl">Miễn phí · 24/7</div></div>', unsafe_allow_html=True)
-    c2.markdown('<div class="metric-box"><div class="metric-lbl">Cục ATTP</div><div class="metric-num c-blue" style="font-size:1.4rem">1800 6838</div><div class="metric-lbl">Miễn phí · Giờ hành chính</div></div>', unsafe_allow_html=True)
-    c3.markdown('<div class="metric-box"><div class="metric-lbl">Cảnh Sát</div><div class="metric-num c-orange">113</div><div class="metric-lbl">Khi có hành vi cố ý</div></div>', unsafe_allow_html=True)
-
     # ── Task#6: Truy vết sự cố ngộ độc — BGH + Y Tế ────────────────────────
     _role_em = st.session_state.get("user_role","")
     _can_trace = _role_em in ("Ban Giám Hiệu","Y Tế Học Đường") or st.session_state.get("is_super")
@@ -3066,7 +3060,7 @@ def tab_emergency(api_key: str = ""):
         st.markdown(
             '<div style="background:linear-gradient(135deg,#7F1D1D,#DC2626);'
             'border-radius:12px;padding:14px 20px;margin-bottom:12px">'
-            '<div style="color:white;font-size:1rem;font-weight:700">🔍 Truy Vết Sự Cố Ngộ Độc</div>'
+            '<div style="color:white;font-size:1rem;font-weight:700">🔍 Truy vết sự cố ngộ độc</div>'
             '<div style="color:#FECACA;font-size:0.8rem">'
             'Nhập ngày nghi ngờ → truy xuất toàn bộ dữ liệu: bữa ăn, NCC, kết quả kiểm tra, mẫu lưu'
             '</div></div>',
@@ -3171,6 +3165,13 @@ def tab_emergency(api_key: str = ""):
             else:
                 st.info(f"Không tìm thấy dữ liệu kiểm tra ngày {_tr_date.strftime('%d/%m/%Y')} tại {_tr_school or '(chọn trường)'}.")
 
+
+
+    st.markdown('<div class="sec-hdr">Số điện thoại quan trọng</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown('<div class="metric-box"><div class="metric-lbl">Cấp Cứu</div><div class="metric-num c-red">115</div><div class="metric-lbl">Miễn phí · 24/7</div></div>', unsafe_allow_html=True)
+    c2.markdown('<div class="metric-box"><div class="metric-lbl">Cục ATTP</div><div class="metric-num c-blue" style="font-size:1.4rem">1800 6838</div><div class="metric-lbl">Miễn phí · Giờ hành chính</div></div>', unsafe_allow_html=True)
+    c3.markdown('<div class="metric-box"><div class="metric-lbl">Cảnh Sát</div><div class="metric-num c-orange">113</div><div class="metric-lbl">Khi có hành vi cố ý</div></div>', unsafe_allow_html=True)
 
 # ── TAB 5: Về ứng dụng ───────────────────────────────────────────────────────
 # ── Tab riêng cho Phụ Huynh (chỉ xem, không thực hiện checklist) ─────────────
@@ -3656,9 +3657,19 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
     _us_kt = st.session_state.get("user_school", "")
     kc1, kc2, kc3, kc4 = st.columns(4)
-    kt_school = kc1.text_input("Tên trường", value=_us_kt,
-                                disabled=bool(_us_kt),
-                                placeholder="TH Nguyễn Du, Q.1", key="kt_school")
+    # Tên trường — locked nếu đã đăng nhập với trường cụ thể
+    if _us_kt:
+        kc1.markdown("**Tên trường**", unsafe_allow_html=False)
+        kc1.markdown(
+            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+            f'padding:8px 12px;font-size:0.88rem;font-weight:600;color:#166534">'
+            f'🏫 {_us_kt}</div>',
+            unsafe_allow_html=True,
+        )
+        kt_school = _us_kt
+    else:
+        kt_school = kc1.text_input("Tên trường", value="",
+                                    placeholder="TH Nguyễn Du, Q.1", key="kt_school")
     kt_date   = kc2.date_input("Ngày", value=datetime.today(), format="DD/MM/YYYY",
                                 key="kt_date")
     kt_name   = kc3.text_input("Y Tế Học Đường",
@@ -7500,25 +7511,64 @@ def main():
         _stat("6",  "Văn bản pháp lý","#FDE68A") + _sep +
         _stat("🤖", "AI phân tích",   "#C4B5FD")
     )
+    # ── WOW Header — AI-powered, đột phá ──────────────────────────────────────
     st.markdown(
-        f'<div style="background:linear-gradient(135deg,#0F2651 0%,#1B3B6F 45%,#1D4ED8 100%);'
-        f'border-radius:16px;padding:28px 32px 22px 32px;margin-bottom:14px;'
-        f'position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(15,38,81,0.25)">'
-        f'{_circles}'
-        f'<div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">'
-        f'<div style="display:flex;align-items:center;gap:14px;flex:1;min-width:200px">'
-        f'<span style="font-size:2.6rem;line-height:1">🍱</span>'
-        f'<div><div style="color:white;font-size:1.9rem;font-weight:800;letter-spacing:-0.5px;line-height:1.1">'
-        f'SchoolFood AI</div>'
-        f'<div style="color:#93C5FD;font-size:0.78rem;margin-top:4px;font-weight:500">'
-        f'Phiên bản 2.0 &nbsp;·&nbsp; Cập nhật 06/2026</div></div></div>'
-        f'<div style="display:flex;gap:6px;flex-wrap:wrap;padding-top:4px">{_badges}</div></div>'
-        f'<p style="color:#DBEAFE;font-size:1.0rem;margin:14px 0 16px 0;line-height:1.65;font-weight:400">'
-        f'Giám sát An toàn Thực phẩm bữa ăn học đường — dành cho '
-        f'<b style="color:white">Phụ Huynh · Ban Giám Sát · Y Tế Học Đường · Ban Giám Hiệu</b></p>'
-        f'<div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.15);'
+        # Outer container: multi-layer gradient (navy → blue → AI purple)
+        '<div style="background:linear-gradient(135deg,#0C1445 0%,#1E3A8A 35%,#1D4ED8 65%,#5B21B6 100%);'
+        'border-radius:20px;padding:28px 32px 22px 32px;margin-bottom:16px;'
+        'position:relative;overflow:hidden;'
+        'box-shadow:0 20px 60px rgba(29,78,216,0.4),0 4px 20px rgba(91,33,182,0.3)">'
+
+        # Background decorative elements
+        '<div style="position:absolute;top:-60px;right:-60px;width:280px;height:280px;'
+        'border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,0.2),transparent 70%);'
+        'pointer-events:none"></div>'
+        '<div style="position:absolute;bottom:-80px;left:10%;width:200px;height:200px;'
+        'border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,0.15),transparent 70%);'
+        'pointer-events:none"></div>'
+        '<div style="position:absolute;top:50%;right:25%;width:140px;height:140px;'
+        'border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,0.1),transparent 70%);'
+        'pointer-events:none"></div>'
+
+        # Top row: logo + title + badges
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">'
+        '<div style="display:flex;align-items:center;gap:16px">'
+        # Emoji in glowing circle
+        '<div style="background:rgba(255,255,255,0.12);backdrop-filter:blur(10px);'
+        'border:1px solid rgba(255,255,255,0.2);border-radius:16px;'
+        'padding:12px 14px;font-size:2.8rem;line-height:1;'
+        'box-shadow:0 0 20px rgba(124,58,237,0.4)">🍱</div>'
+        '<div>'
+        '<div style="color:white;font-size:2.2rem;font-weight:900;letter-spacing:-1px;line-height:1;'
+        'text-shadow:0 2px 20px rgba(255,255,255,0.3)">'
+        'SchoolFood <span style="background:linear-gradient(90deg,#60A5FA,#A78BFA);'
+        '-webkit-background-clip:text;-webkit-text-fill-color:transparent;'
+        'background-clip:text">AI</span></div>'
+        '<div style="color:rgba(255,255,255,0.65);font-size:0.8rem;margin-top:5px;'
+        'display:flex;align-items:center;gap:8px">'
+        '<span style="background:rgba(16,185,129,0.3);border:1px solid rgba(16,185,129,0.5);'
+        'border-radius:20px;padding:2px 10px;font-weight:700;color:#6EE7B7;font-size:0.72rem">'
+        '● LIVE</span>'
+        '<span style="opacity:0.7">Powered by Claude AI · NĐ 15/2018 · TTLT 13/2016</span>'
+        '</div></div></div>'
+        # Right: badge pills
+        f'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;padding-top:6px">{_badges}</div>'
+        '</div>'
+
+        # Description
+        '<p style="color:rgba(219,234,254,0.9);font-size:0.98rem;margin:16px 0 14px 0;'
+        'line-height:1.7;font-weight:400;max-width:700px">'
+        'Nền tảng giám sát An toàn Thực phẩm học đường — '
+        '<b style="color:white">AI phân tích ảnh</b>, '
+        '<b style="color:#A78BFA">câu hỏi chống gian lận</b>, '
+        '<b style="color:#6EE7B7">alert real-time</b>, '
+        '<b style="color:#FCD34D">báo cáo chuẩn hành chính</b>'
+        '</p>'
+
+        # Stats bar
+        f'<div style="display:flex;gap:0;border-top:1px solid rgba(255,255,255,0.12);'
         f'padding-top:14px;flex-wrap:wrap">{_stats}</div>'
-        f'</div>',
+        '</div>',
         unsafe_allow_html=True,
     )
 
