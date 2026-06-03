@@ -2029,10 +2029,15 @@ def tab_checklist(api_key: str = ""):
 
     # Thông tin kiểm tra
     st.markdown('<div class="sec-hdr">Thông tin buổi kiểm tra</div>', unsafe_allow_html=True)
+    _us = st.session_state.get("user_school", "")
     c1, c2, c3 = st.columns(3)
-    school = c1.text_input("Tên trường", placeholder="VD: TH Nguyễn Du, Q.1")
+    school = c1.text_input("Tên trường", value=_us,
+                            disabled=bool(_us),
+                            placeholder="VD: TH Nguyễn Du, Q.1")
     date   = c2.date_input("Ngày kiểm tra", value=datetime.today(), format="DD/MM/YYYY")
-    insp   = c3.text_input("Người kiểm tra", placeholder="Họ và tên")
+    insp   = c3.text_input("Người kiểm tra",
+                            value=st.session_state.get("user_profile", {}).get("full_name", ""),
+                            placeholder="Họ và tên")
     menu   = st.text_input("Thực đơn hôm nay",
                             placeholder="VD: Cơm, thịt kho trứng, rau muống xào tỏi, canh chua cá",
                             key="shared_menu")
@@ -2938,13 +2943,16 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
 
     # Thông tin buổi kiểm tra
     st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
+    _us_kt = st.session_state.get("user_school", "")
     kc1, kc2, kc3, kc4 = st.columns(4)
-    kt_school = kc1.text_input("Tên trường", placeholder="TH Nguyễn Du, Q.1",
-                                key="kt_school")
+    kt_school = kc1.text_input("Tên trường", value=_us_kt,
+                                disabled=bool(_us_kt),
+                                placeholder="TH Nguyễn Du, Q.1", key="kt_school")
     kt_date   = kc2.date_input("Ngày", value=datetime.today(), format="DD/MM/YYYY",
                                 key="kt_date")
-    kt_name   = kc3.text_input("Y Tế Học Đường", placeholder="Họ và tên",
-                                key="kt_name")
+    kt_name   = kc3.text_input("Y Tế Học Đường",
+                                value=st.session_state.get("user_profile", {}).get("full_name", ""),
+                                placeholder="Họ và tên", key="kt_name")
     kt_menu   = kc4.text_input("Thực đơn hôm nay",
                                 placeholder="Cơm, thịt kho, rau...",
                                 key="kt_menu_yte")
@@ -4049,19 +4057,33 @@ def tab_history(role: str = "", school_filter: str = ""):
         return
 
     # ── Bộ lọc ────────────────────────────────────────────────────────────────
-    _schools_db = db_get_schools()  # danh sách trường từ DB (cache 2 phút)
-    _school_opts = ["Tất cả trường"] + _schools_db
+    # Nếu đã đăng nhập và không phải BGH → khóa theo trường của mình
+    _is_bgh   = st.session_state.get("is_bgh", True)
+    _lock     = bool(school_filter) and not _is_bgh and bool(st.session_state.get("auth_user"))
 
     col_f, col_r = st.columns([3, 1])
     with col_f:
-        _default_idx = (_school_opts.index(school_filter)
-                        if school_filter and school_filter in _school_opts else 0)
-        _school_sel = st.selectbox(
-            "Lọc theo tên trường",
-            options=_school_opts,
-            index=_default_idx,
-            help="Gõ tên trường để tìm nhanh — danh sách lấy từ database",
-        )
+        if _lock:
+            # Non-BGH: chỉ thấy dữ liệu trường mình, không thay đổi được
+            st.markdown(
+                f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+                f'padding:8px 14px;font-size:0.85rem;color:#166534">'
+                f'🏫 Dữ liệu trường: <b>{school_filter}</b></div>',
+                unsafe_allow_html=True,
+            )
+            _school_sel = school_filter
+        else:
+            # BGH hoặc demo: selectbox chọn tự do
+            _schools_db  = db_get_schools()
+            _school_opts = ["Tất cả trường"] + _schools_db
+            _default_idx = (_school_opts.index(school_filter)
+                            if school_filter and school_filter in _school_opts else 0)
+            _school_sel  = st.selectbox(
+                "Lọc theo tên trường",
+                options=_school_opts,
+                index=_default_idx,
+                help="Gõ tên trường để tìm nhanh — danh sách lấy từ database",
+            )
     view_mode = col_r.selectbox(
         "Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"]
     )
@@ -5700,6 +5722,10 @@ def main():
             st.rerun()
 
         loc = _school_pf or "TP.HCM"
+        # Lưu vào session_state để các tab khác dùng (tự điền + khóa trường)
+        st.session_state.user_school  = _school_pf
+        st.session_state.user_role    = role
+        st.session_state.is_bgh       = (role == "Ban Giám Hiệu")
 
     else:
         # ── Chế độ demo/local: giữ selectbox cũ ─────────────────────────────
@@ -5734,6 +5760,9 @@ def main():
                 if _mk2:
                     api_key = _mk2
         _school_pf = ""
+        st.session_state.user_school  = ""
+        st.session_state.user_role    = role
+        st.session_state.is_bgh       = (role == "Ban Giám Hiệu")
 
     # ── Mô tả vai trò (dùng chung) ───────────────────────────────────────────
     DESCS = {
@@ -5824,7 +5853,7 @@ def main():
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_kiem_thuc(api_key, level)
         with _tabs[2]: tab_supplier(api_key, role=role)
-        with _tabs[3]: tab_history(role=role)
+        with _tabs[3]: tab_history(role=role, school_filter=_school_pf)
         with _tabs[4]: tab_emergency(api_key)
         with _tabs[5]: tab_guide()
 
@@ -5842,7 +5871,7 @@ def main():
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_checklist(api_key)
         with _tabs[2]: tab_supplier(api_key, role=role)
-        with _tabs[3]: tab_history(role=role)
+        with _tabs[3]: tab_history(role=role, school_filter=_school_pf)
         with _tabs[4]: tab_schedule()
         with _tabs[5]: tab_emergency(api_key)
         with _tabs[6]: tab_guide()
@@ -5855,7 +5884,7 @@ def main():
             _bgh_tabs.append("👤 Quản lý tài khoản")
         _tabs = st.tabs(_bgh_tabs)
         with _tabs[0]: tab_chat(api_key, role, level, loc)
-        with _tabs[1]: tab_history(role=role)
+        with _tabs[1]: tab_history(role=role, school_filter=_school_pf)
         with _tabs[2]: tab_schedule()
         with _tabs[3]: tab_emergency(api_key)
         with _tabs[4]: tab_guide()
