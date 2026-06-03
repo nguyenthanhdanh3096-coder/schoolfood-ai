@@ -5086,25 +5086,66 @@ def tab_history(role: str = "", school_filter: str = ""):
     # ── Feedback Phụ Huynh ────────────────────────────────────────────────────
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)"):
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-hdr">📬 Feedback Phụ Huynh chưa xử lý</div>',
-                    unsafe_allow_html=True)
+        _is_bgh_here = (role == "Ban Giám Hiệu")
+        _fb_title = "📬 Phản hồi Phụ Huynh — Chờ xử lý" if _is_bgh_here else "📬 Phản hồi Phụ Huynh (chỉ đọc)"
+        st.markdown(f'<div class="sec-hdr">{_fb_title}</div>', unsafe_allow_html=True)
+        if not _is_bgh_here:
+            st.caption("Ban Giám Hiệu sẽ xử lý các phản hồi này. Bạn chỉ có thể xem.")
         feedbacks = db_get_feedback(school=school_input.strip())
         if not feedbacks:
-            st.info("Không có feedback mới từ Phụ Huynh.")
+            st.info("Không có phản hồi mới từ Phụ Huynh.")
         else:
             for fb in feedbacks:
-                col_fb, col_btn = st.columns([5, 1])
-                col_fb.markdown(
-                    f'<div class="sf-card" style="padding:10px 16px;margin:4px 0">'
-                    f'<span style="font-size:0.75rem;color:#64748B">'
-                    f'{fb.get("created_at","")[:10]} · {fb.get("category","")}</span><br>'
-                    f'<span style="font-size:0.9rem;color:#1E293B">{fb.get("content","")}</span>'
-                    f'</div>', unsafe_allow_html=True,
-                )
-                if col_btn.button("✅ Đã xử lý", key=f"fb_{fb['id']}",
-                                  use_container_width=True):
-                    db_update_feedback_status(fb["id"], "resolved")
-                    st.rerun()
+                _fb_dt = (fb.get("created_at","") or "")[:10]
+                _fb_cat = fb.get("category","")
+                _fb_content = fb.get("content","")
+                # Status badge
+                _fb_status = fb.get("status", "pending")
+                _sb_lbl = ("✅ Đã xử lý" if _fb_status == "resolved"
+                           else "💬 Đang xem xét" if _fb_status == "reviewed"
+                           else "⏳ Chờ xử lý")
+                _sb_clr = ("#16A34A" if _fb_status == "resolved"
+                           else "#2563EB" if _fb_status == "reviewed"
+                           else "#D97706")
+                _sb_bg  = ("#DCFCE7" if _fb_status == "resolved"
+                           else "#DBEAFE" if _fb_status == "reviewed"
+                           else "#FEF9C3")
+
+                if _is_bgh_here:
+                    # BGH: thẻ + nút xử lý chỉ khi pending
+                    st.markdown(
+                        f'<div class="sf-card" style="padding:12px 16px;margin:5px 0;'
+                        f'border-left:3px solid {_sb_clr}">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                        f'flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">{_fb_dt} · {_fb_cat}</span>'
+                        f'<span style="background:{_sb_bg};color:{_sb_clr};font-size:0.72rem;'
+                        f'font-weight:700;padding:2px 10px;border-radius:10px">{_sb_lbl}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.88rem;color:#1E293B">{_fb_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if _fb_status == "pending":
+                        _fbcol1, _fbcol2 = st.columns([3, 1])
+                        if _fbcol2.button("✅ Đánh dấu đã xử lý", key=f"fb_{fb['id']}",
+                                          use_container_width=True):
+                            db_update_feedback_status(fb["id"], "resolved")
+                            st.rerun()
+                else:
+                    # BGS: chỉ xem, không có nút
+                    st.markdown(
+                        f'<div class="sf-card" style="padding:10px 16px;margin:4px 0">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                        f'flex-wrap:wrap;gap:4px;margin-bottom:5px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">{_fb_dt} · {_fb_cat}</span>'
+                        f'<span style="background:{_sb_bg};color:{_sb_clr};font-size:0.72rem;'
+                        f'font-weight:600;padding:2px 10px;border-radius:10px">{_sb_lbl}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.88rem;color:#1E293B">{_fb_content}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
 
 
 def tab_supplier(api_key: str = "", role: str = ""):
@@ -6205,6 +6246,10 @@ def main():
             # Badge vai trò + tên + email + trường
             _role_display = ROLE_VN.get(_role_key, "Phụ Huynh")
             _clr = ROLE_CLR_MAP.get(_role_display, "#64748B")
+            _dm_now = st.session_state.get("dark_mode", False)
+            _name_c  = "#F1F5F9" if _dm_now else "#1E293B"
+            _email_c = "#94A3B8" if _dm_now else "#64748B"
+            _school_c = "#94A3B8" if _dm_now else "#475569"
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;flex-wrap:wrap">'
                 + (f'<span style="background:#7C3AED;color:white;border-radius:6px;'
@@ -6212,10 +6257,10 @@ def main():
                    if _is_super else
                    f'<span style="background:{_clr};color:white;border-radius:6px;'
                    f'padding:3px 10px;font-size:0.72rem;font-weight:700">{_role_display}</span>')
-                + f'<span style="font-size:0.88rem;color:#1E293B;font-weight:600">'
+                + f'<span style="font-size:0.88rem;color:{_name_c};font-weight:600">'
                   f'{_pf.get("full_name","")}</span>'
-                + f'<span style="font-size:0.78rem;color:#64748B">{_auth_user.get("email","")}</span>'
-                + (f'<span style="font-size:0.78rem;color:#475569">🏫 {_school_pf}</span>'
+                + f'<span style="font-size:0.78rem;color:{_email_c}">{_auth_user.get("email","")}</span>'
+                + (f'<span style="font-size:0.78rem;color:{_school_c}">🏫 {_school_pf}</span>'
                    if _school_pf and not _is_super else '')
                 + ('</div>'),
                 unsafe_allow_html=True,
@@ -6248,19 +6293,21 @@ def main():
                 st.session_state.pop(_k, None)
             st.rerun()
 
-        # ── G7: Dark mode toggle ──────────────────────────────────────────────
+        # ── G7: Dark mode + Cấp học ───────────────────────────────────────────
         _dm_on = st.session_state.get("dark_mode", False)
         _dm_c1, _dm_c2, _dm_c3 = st.columns([2, 1, 1])
         level = _dm_c1.selectbox(
-            "Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+            "Chuẩn dinh dưỡng theo cấp học — ảnh hưởng tiêu chuẩn C12/C13 và AI tư vấn",
+            ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
             label_visibility="collapsed",
+            help="Cấp học ảnh hưởng tiêu chuẩn dinh dưỡng (khẩu phần C12, C13) và nội dung AI tư vấn"
         )
         if _dm_c3.button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
             st.session_state.dark_mode = not _dm_on
             st.rerun()
         loc = _school_pf or "TP.HCM"
-        # Lưu session_state để các tab khác dùng
-        st.session_state.user_school  = _school_pf
+        # Admin không bị lock trường — school chỉ lock cho các vai trò thường
+        st.session_state.user_school  = "" if _is_super else _school_pf
         st.session_state.user_role    = role
         st.session_state.is_bgh       = (role == "Ban Giám Hiệu")
         st.session_state.is_super     = _is_super
