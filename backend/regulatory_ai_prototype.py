@@ -324,8 +324,9 @@ def db_get_profile(user_id: str) -> dict | None:
 
 
 def db_save_profile(user_id: str, email: str, full_name: str,
-                    role: str, school_name: str) -> bool:
-    """Tạo hoặc cập nhật user profile."""
+                    role: str, school_name: str,
+                    default_level: str = "Tiểu Học (6–11 tuổi)") -> bool:
+    """Tạo hoặc cập nhật user profile. default_level dùng cho Y Tế đa cấp."""
     sb = _get_sb()
     if not sb:
         return False
@@ -334,6 +335,7 @@ def db_save_profile(user_id: str, email: str, full_name: str,
             "id": user_id, "email": email.strip().lower(),
             "full_name": full_name.strip(), "role": role,
             "school_name": school_name.strip() if school_name else "",
+            "default_level": default_level,
             "is_active": True,
         }).execute()
         return True
@@ -2099,17 +2101,18 @@ def tab_checklist(api_key: str = ""):
     )
     n = NUTRITION[level_key]
 
-    # Banner dinh dưỡng
-    st.markdown(f"""<div class="nutrition-banner">
-        <div class="nutrition-label">📊 Tiêu Chuẩn Dinh Dưỡng Bữa Trưa — Cấp {n['short']} (QĐ 3958/QĐ-BYT 2025)</div>
-        <div class="nutrition-grid">
-            <div class="nutrition-item">⚡ Năng lượng: <span class="nutrition-val">{n['kcal']}</span> ({n['pct_day']} nhu cầu ngày)</div>
-            <div class="nutrition-item">🥩 Thịt/cá tối thiểu: <span class="nutrition-val">{n['meat_g']}g/học sinh</span></div>
-            <div class="nutrition-item">🥦 Rau xanh: <span class="nutrition-val">{n['veg_range']}/học sinh</span></div>
-            <div class="nutrition-item">💪 Protein: <span class="nutrition-val">{n['protein_pct']}</span> tổng năng lượng</div>
-        </div>
-        <div style="font-size:0.75rem;color:#1D4ED8;margin-top:6px">💡 {n['note']}</div>
-    </div>""", unsafe_allow_html=True)
+    # Banner dinh dưỡng — thu gọn để không che checklist chính
+    with st.expander(f"📊 Tiêu chuẩn dinh dưỡng cấp {n['short']} (tham khảo cho C12, C13)"):
+        st.markdown(f"""<div class="nutrition-banner">
+            <div class="nutrition-label">📊 Tiêu Chuẩn Dinh Dưỡng Bữa Trưa — Cấp {n['short']} (QĐ 3958/QĐ-BYT 2025)</div>
+            <div class="nutrition-grid">
+                <div class="nutrition-item">⚡ Năng lượng: <span class="nutrition-val">{n['kcal']}</span> ({n['pct_day']} nhu cầu ngày)</div>
+                <div class="nutrition-item">🥩 Thịt/cá tối thiểu: <span class="nutrition-val">{n['meat_g']}g/học sinh</span></div>
+                <div class="nutrition-item">🥦 Rau xanh: <span class="nutrition-val">{n['veg_range']}/học sinh</span></div>
+                <div class="nutrition-item">💪 Protein: <span class="nutrition-val">{n['protein_pct']}</span> tổng năng lượng</div>
+            </div>
+            <div style="font-size:0.75rem;color:#1D4ED8;margin-top:6px">💡 {n['note']}</div>
+        </div>""", unsafe_allow_html=True)
 
     # Thông tin kiểm tra
     st.markdown('<div class="sec-hdr">Thông tin buổi kiểm tra</div>', unsafe_allow_html=True)
@@ -3932,34 +3935,125 @@ MANUAL_CONTENT = {
         {
             "id": "roles",
             "icon": "👥",
-            "title": "2. Hướng dẫn theo vai trò",
+            "title": "2. Hướng dẫn theo vai trò — Tab & Chức năng",
             "subsections": [
-                ("👨‍👩‍👧 Phụ Huynh — làm gì trong app",
-                 "1. Chọn vai trò 'Phụ Huynh' ở sidebar\n"
-                 "2. Tab 💬 Hỏi đáp AI: đặt câu hỏi bằng tiếng Việt thông thường về ATTP\n"
-                 "3. Tab 📅 Lịch & thông báo: xem lịch kiểm tra của Ban Giám Sát\n"
-                 "4. Tab 🚨 Khẩn cấp: xem quy trình xử lý khi con có triệu chứng ngộ độc\n\n"
-                 "Phụ huynh KHÔNG tự vào bếp kiểm tra nếu chưa được đào tạo và uỷ quyền."),
-                ("👥 Ban Giám Sát (Đại Diện PHHS) — quy trình kiểm tra",
-                 "1. Chọn vai trò 'Ban Giám Sát (Đại Diện PHHS)' và cấp trường\n"
-                 "2. Tab ✅ Checklist: nhập thông tin buổi kiểm tra (trường, ngày, người kiểm tra)\n"
-                 "3. Nhập thực đơn hôm nay → bấm 🤖 Tạo câu hỏi bổ sung (nếu có API)\n"
-                 "4. Đánh giá lần lượt 20 điểm: chọn ✅ Đạt / ❌ Không Đạt / ghi chú\n"
-                 "5. Chụp ảnh minh chứng ở mỗi nhóm (nếu có điểm KHÔNG ĐẠT bắt buộc cung cấp)\n"
-                 "6. Tạo báo cáo Word → gửi cho Hiệu Trưởng trong 24 giờ\n"
-                 "7. Tần suất: 2 lần/tuần (1 lần báo trước, 1 lần đột xuất)"),
-                ("🏥 Y Tế Học Đường — kiểm thực 3 bước",
-                 "Thực hiện mỗi ngày lúc 10:00 (30–45 phút trước bữa trưa):\n\n"
-                 "Bước 1 — TRƯỚC chế biến: kiểm tra nguyên liệu đầu vào (tem kiểm dịch, hạn dùng, hóa đơn)\n"
-                 "Bước 2 — TRONG chế biến: kiểm tra nhiệt độ nấu, vệ sinh dụng cụ, nhân viên\n"
-                 "Bước 3 — SAU chế biến: kiểm tra nhiệt độ chia, màu mùi, khẩu phần, mẫu lưu\n\n"
-                 "Ghi vào sổ kiểm thực (giấy bắt buộc theo TTLT 13/2016) + ghi vào app để lưu số."),
-                ("🏫 Ban Giám Hiệu — xem tổng quan",
-                 "1. Chọn vai trò 'Ban Giám Hiệu'\n"
-                 "2. Nhận thông báo khi có báo cáo mới từ Ban Giám Sát\n"
-                 "3. Xem mức cảnh báo: CRITICAL → xử lý ngay; MAJOR → trong ngày; MINOR → trong tuần\n"
-                 "4. Ký duyệt báo cáo Word nhận được từ Ban Giám Sát\n"
-                 "5. Tần suất xem: 1 lần/tuần tối thiểu"),
+                ("👨‍👩‍👧 Phụ Huynh — 4 Tab",
+                 "Đăng nhập bằng tài khoản được Ban Giám Hiệu cấp.\n\n"
+                 "Tab 💬 Hỏi đáp AI: Đặt câu hỏi tiếng Việt về ATTP, dinh dưỡng, quyền phụ huynh\n"
+                 "Tab 🍱 Góc Phụ Huynh:\n"
+                 "  • Xem kết quả bữa ăn hôm nay (🟢 An toàn / 🟡 Cần theo dõi / 🔴 Có vấn đề)\n"
+                 "  • Xem thực đơn hôm nay\n"
+                 "  • Lịch sử 7 ngày gần nhất\n"
+                 "  • Gửi phản hồi/complaint về bữa ăn — theo dõi trạng thái ⏳→💬→✅\n"
+                 "Tab 🚨 Khẩn cấp: Quy trình 6 bước khi nghi ngờ ngộ độc · Số điện thoại 115, 1800 6838\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ + quyền pháp lý\n\n"
+                 "⚠️ Phụ huynh KHÔNG trực tiếp vào bếp kiểm tra — chỉ Ban Đại Diện PHHS chính thức mới có quyền."),
+
+                ("👥 Ban Giám Sát (Đại Diện PHHS) — 7 Tab",
+                 "Đăng nhập bằng tài khoản được Ban Giám Hiệu cấp.\n\n"
+                 "Tab 💬 Hỏi đáp AI: Tư vấn pháp luật, câu hỏi nghiệp vụ kiểm tra\n"
+                 "Tab ✅ Checklist kiểm tra (NHIỆM VỤ CHÍNH · 2 lần/tuần tối thiểu):\n"
+                 "  • 1 lần báo trước ≥ 24h · 1 lần đột xuất KHÔNG báo trước\n"
+                 "  • 20 điểm chuẩn hóa · 7 mục bắt buộc BẮT BUỘC có ảnh minh chứng khi Không Đạt\n"
+                 "  • Xuất báo cáo Word gửi Ban Giám Hiệu trong 24 giờ\n"
+                 "Tab 🏭 Nhà Cung Cấp (KIỂM TRA TOÀN DIỆN · 1 lần/tháng):\n"
+                 "  • 12 điểm theo NĐ 15/2018 · S01–S12 · Xếp loại A/B/C\n"
+                 "  • Kiểm tra giao hàng khi có mặt: S03–S12 (10 điểm)\n"
+                 "Tab 📊 Lịch sử: Dashboard kết quả + theo dõi complaint (chỉ đọc)\n"
+                 "Tab 📅 Lịch & Chuẩn mực: Lịch kiểm tra + hệ thống cảnh báo 4 cấp\n"
+                 "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ"),
+
+                ("🏥 Y Tế Học Đường — 6 Tab",
+                 "Đăng nhập bằng tài khoản được Ban Giám Hiệu cấp.\n"
+                 "Chọn cấp học đúng với lớp bạn phụ trách (Tiểu Học / THCS / THPT) — ảnh hưởng tiêu chuẩn dinh dưỡng.\n\n"
+                 "Tab 💬 Hỏi đáp AI: Tư vấn kỹ thuật ATTP, câu hỏi nghiệp vụ\n"
+                 "Tab 🏥 Kiểm thực 3 bước (NHIỆM VỤ CHÍNH · HÀNG NGÀY 9:30–11:00):\n"
+                 "  • Bước 1 (8:00–9:30 | Trước chế biến): tem kiểm dịch, hóa đơn, hạn dùng, nhiệt độ tủ lạnh\n"
+                 "  • Bước 2 (9:30–10:30 | Trong chế biến): nhiệt độ nấu ≥70°C, vệ sinh dụng cụ, nhân viên\n"
+                 "  • Bước 3 (10:30–11:00 | Sau chế biến): nhiệt độ chia, màu mùi, khẩu phần, mẫu lưu 24h\n"
+                 "  → Song song ghi sổ kiểm thực giấy (bắt buộc theo TTLT 13/2016)\n"
+                 "Tab 🏭 Nhà Cung Cấp (KIỂM TRA GIAO HÀNG · Mỗi lần NCC giao):\n"
+                 "  • 10 điểm S03–S12: xe vận chuyển, nhiệt độ, hóa đơn, nhãn mác, mẫu lưu\n"
+                 "  • Cung cấp minh chứng cho complaint của Phụ Huynh (Y Tế là người trực tiếp tại bếp)\n"
+                 "Tab 📊 Lịch sử: Xem kết quả + cung cấp minh chứng complaint\n"
+                 "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ"),
+
+                ("🏫 Ban Giám Hiệu — 6 Tab",
+                 "Tài khoản đầu tiên do Admin hệ thống (Quản trị viên) cấp.\n"
+                 "Ban Giám Hiệu tự tạo tài khoản cho Y Tế, BGS, Phụ Huynh trong trường.\n\n"
+                 "Tab 💬 Hỏi đáp AI: Tư vấn pháp luật, quản lý chất lượng bữa ăn\n"
+                 "Tab 📊 Lịch sử & Phản hồi (DASHBOARD CHÍNH):\n"
+                 "  • Tổng quan kết quả kiểm tra bữa ăn + nhà cung cấp\n"
+                 "  • Phát hiện bất thường tự động (điểm quá đều, BGS/Y Tế chênh lệch)\n"
+                 "  • Quản lý complaint: xem minh chứng từ Y Tế → đóng task + phản hồi chính thức\n"
+                 "  • Luồng: ⏳ Chờ xử lý → 💬 Y Tế thêm minh chứng → ✅ BGH đóng + phản hồi\n"
+                 "Tab 📅 Lịch & Chuẩn mực: Lịch + hệ thống cảnh báo 4 cấp\n"
+                 "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ\n"
+                 "Tab 👤 Quản lý tài khoản:\n"
+                 "  • Tạo tài khoản cho Y Tế (có chọn cấp học mặc định), BGS, Phụ Huynh\n"
+                 "  • Tối đa 2 tài khoản BGH · Chỉ tạo cho trường mình quản lý"),
+            ]
+        },
+        {
+            "id": "complaint",
+            "icon": "📬",
+            "title": "2b. Hệ thống Phản hồi & Complaint",
+            "content": "Luồng xử lý complaint 3 bước — từ Phụ Huynh đến Ban Giám Hiệu:",
+            "subsections": [
+                ("⏳ Bước 1 — Phụ Huynh gửi phản hồi",
+                 "Phụ Huynh vào Tab 🍱 Góc Phụ Huynh → Gửi phản hồi → Chọn loại + Mô tả cụ thể\n"
+                 "Trạng thái: ⏳ Chờ xử lý\n"
+                 "Phụ Huynh có thể theo dõi trạng thái complaint đã gửi trong cùng tab."),
+                ("💬 Bước 2 — Y Tế Học Đường thêm minh chứng",
+                 "Y Tế vào Tab 📊 Lịch sử → Thấy complaint → Bấm '📝 Thêm minh chứng'\n"
+                 "Nhập diễn giải + tải ảnh/file minh chứng (jpg, png, pdf)\n"
+                 "Trạng thái tự động chuyển: ⏳ → 💬 Đang xem xét\n"
+                 "Ban Giám Hiệu sẽ thấy minh chứng này khi xem xét."),
+                ("✅ Bước 3 — Ban Giám Hiệu đóng task",
+                 "BGH vào Tab 📊 Lịch sử → Xem minh chứng từ Y Tế → Bấm '🔒 Đóng task'\n"
+                 "Nhập phản hồi chính thức → Lưu\n"
+                 "Trạng thái: ✅ Đóng DD/MM/YYYY\n"
+                 "Phụ Huynh thấy phản hồi chính thức của BGH trong Tab Góc Phụ Huynh.\n\n"
+                 "⚠️ Complaint quá 2 ngày chưa xử lý → Được highlight đỏ trong tab Lịch sử của BGH"),
+                ("📊 Visualize complaint",
+                 "Ban Giám Hiệu thấy 2 biểu đồ trong tab Lịch sử:\n"
+                 "• Bar chart: số complaint theo ngày (30 ngày gần nhất)\n"
+                 "• Donut chart: phân bố theo loại (Chất lượng / Vệ sinh / Nghi ngờ ngộ độc / ...)"),
+            ]
+        },
+        {
+            "id": "accounts",
+            "icon": "🔐",
+            "title": "2c. Quản lý tài khoản & Trường đa cấp",
+            "subsections": [
+                ("Quy trình tạo tài khoản",
+                 "Bước 1 — Admin hệ thống tạo tài khoản BGH đầu tiên cho trường\n"
+                 "Bước 2 — BGH đăng nhập → Tab 👤 Quản lý tài khoản → Tạo tài khoản cho:\n"
+                 "  • Y Tế Học Đường: Chọn cấp học mặc định (TH / THCS / THPT)\n"
+                 "  • Ban Giám Sát (Đại Diện PHHS)\n"
+                 "  • Phụ Huynh\n"
+                 "Bước 3 — Người dùng nhận mật khẩu tạm từ BGH → Đăng nhập → Đổi mật khẩu qua 'Quên mật khẩu'"),
+                ("Trường đa cấp (TH + THCS hoặc TH + THCS + THPT)",
+                 "Phương án được khuyến nghị:\n\n"
+                 "CÁCH 1 — Tên trường có kèm cấp:\n"
+                 "  • 'Trường ABC (TH)' → 1 bộ tài khoản riêng\n"
+                 "  • 'Trường ABC (THCS)' → 1 bộ tài khoản riêng\n"
+                 "  → Dữ liệu tách biệt rõ ràng, dễ quản lý\n\n"
+                 "CÁCH 2 — Cùng tên trường, Y Tế phân theo cấp mặc định:\n"
+                 "  • Y Tế TH: tài khoản 'default_level = Tiểu Học'\n"
+                 "  • Y Tế THCS: tài khoản 'default_level = THCS'\n"
+                 "  → Dữ liệu chung, level tự điền theo tài khoản\n"
+                 "  → BGH thấy tổng hợp cả 2 cấp trong tab Lịch sử\n\n"
+                 "BGS và Phụ Huynh chọn level khi làm checklist (per session) nên dùng được cho cả 2 cách."),
+                ("Bảo mật và phân quyền dữ liệu",
+                 "• Phụ Huynh / BGS / Y Tế: chỉ thấy dữ liệu trường mình (locked)\n"
+                 "• BGH: thấy tất cả dữ liệu trường mình\n"
+                 "• Admin hệ thống: thấy tất cả trường, có role switcher để test\n"
+                 "• BGH không tạo được tài khoản cho trường khác\n"
+                 "• Tối đa 2 tài khoản BGH mỗi trường"),
             ]
         },
         {
@@ -4491,14 +4585,15 @@ def tab_history(role: str = "", school_filter: str = ""):
     sessions = db_get_sessions(school=school_input, limit=200)
 
     # ── Feedback Phụ Huynh — luôn hiện TRƯỚC early return ────────────────────
-    # ── Hệ thống Complaint — luôn hiện TRƯỚC early return ────────────────────
+    # ── Hệ thống Complaint — expandable, hiện TRƯỚC early return ─────────────
+    # BGH: mở mặc định (họ cần xử lý) · BGS/Y Tế: đóng mặc định
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok():
         import plotly.graph_objects as _go_fb
         import re as _re_fb
 
         _all_fb    = db_get_all_feedbacks(school=school_input, limit=200)
         _is_bgh_fb = (role == "Ban Giám Hiệu")
-        # Chỉ Y Tế Học Đường được thêm minh chứng (kiểm tra trực tiếp bằng role)
+        # Chỉ Y Tế Học Đường được thêm minh chứng
         _user_name = st.session_state.get("user_profile", {}).get("full_name", role)
 
         def _fmt_date_fb(iso_str: str) -> str:
@@ -4556,9 +4651,14 @@ def tab_history(role: str = "", school_filter: str = ""):
                     unsafe_allow_html=True,
                 )
 
-            # ── Biểu đồ complaint ─────────────────────────────────────────────
-            _fc1, _fc2 = st.columns(2)
-            with _fc1:
+            # ── Chi tiết: Biểu đồ + Danh sách — collapsible ─────────────────
+            # BGH: mở mặc định · BGS/Y Tế: đóng để không che dashboard
+            _detail_label = ("📊 Chi tiết biểu đồ & danh sách xử lý"
+                             + (f" ({_pending_fb} chờ, {_reviewed_fb} đang xem)"
+                                if _pending_fb + _reviewed_fb > 0 else ""))
+            with st.expander(_detail_label, expanded=_is_bgh_fb):
+              _fc1, _fc2 = st.columns(2)
+              with _fc1:
                 # Bar chart: số complaint theo ngày (30 ngày gần nhất)
                 try:
                     _dates_fb = {}
@@ -4585,7 +4685,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                 except Exception:
                     pass
 
-            with _fc2:
+              with _fc2:
                 # Donut: by category
                 try:
                     # Keywords mapping để legend ngắn gọn rõ ràng
@@ -4625,9 +4725,9 @@ def tab_history(role: str = "", school_filter: str = ""):
                 except Exception:
                     pass
 
-            # ── Danh sách complaint chưa xử lý ────────────────────────────────
-            _open_fb = [f for f in _all_fb if f.get("status") != "resolved"]
-            if _open_fb:
+              # ── Danh sách complaint chưa xử lý ────────────────────────────────
+              _open_fb = [f for f in _all_fb if f.get("status") != "resolved"]
+              if _open_fb:
                 st.markdown(
                     f'<div class="sec-hdr" style="color:#DC2626">⏳ Chờ xử lý '
                     f'({len(_open_fb)} phản hồi)</div>',
@@ -4749,12 +4849,12 @@ def tab_history(role: str = "", school_filter: str = ""):
                                     st.success("✅ Đã đóng task!")
                                     st.rerun()
 
-            else:
+              else:
                 st.success("✅ Tất cả phản hồi đã được xử lý!")
 
-            # ── Phần đã đóng — phân biệt rõ với phần mở ─────────────────────
-            _closed_fb = [f for f in _all_fb if f.get("status") == "resolved"][:10]
-            if _closed_fb:
+              # ── Phần đã đóng — phân biệt rõ với phần mở ─────────────────────
+              _closed_fb = [f for f in _all_fb if f.get("status") == "resolved"][:10]
+              if _closed_fb:
                 st.markdown(
                     '<div style="background:linear-gradient(135deg,#1E293B,#334155);'
                     'border-radius:10px;padding:10px 18px;margin:16px 0 8px 0">'
@@ -6415,6 +6515,15 @@ def tab_user_management(school: str = ""):
             _nu_school = _nu_c4.text_input("🏫 Tên trường", value=school,
                                             disabled=True, placeholder=school)
 
+        # Cấp học mặc định — chỉ hiện khi tạo tài khoản Y Tế (ảnh hưởng kiem_thuc)
+        _nu_default_level = "Tiểu Học (6–11 tuổi)"
+        if _nu_role == "Y Tế Học Đường":
+            _nu_default_level = st.selectbox(
+                "📚 Cấp học phụ trách (mặc định khi đăng nhập)",
+                ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
+                help="Dùng cho trường đa cấp — Y Tế sẽ thấy tiêu chuẩn dinh dưỡng đúng cấp khi đăng nhập"
+            )
+
         _nu_pw = st.text_input("🔒 Mật khẩu tạm thời (≥ 6 ký tự)",
                                 type="password", placeholder="Người dùng sẽ đổi sau lần đầu")
         _nu_submit = st.form_submit_button("➕ Tạo tài khoản", type="primary",
@@ -6430,7 +6539,8 @@ def tab_user_management(school: str = ""):
                 with st.spinner("Đang tạo tài khoản..."):
                     _uid = db_auth_signup(_nu_email, _nu_pw)
                 _ok = db_save_profile(_uid, _nu_email, _nu_name,
-                                       ROLE_KEY.get(_nu_role, "phu_huynh"), _nu_school)
+                                       ROLE_KEY.get(_nu_role, "phu_huynh"), _nu_school,
+                                       default_level=_nu_default_level)
                 if _ok:
                     st.success(
                         f"✅ Đã tạo tài khoản **{_nu_name}** ({_nu_email}) — "
@@ -6660,18 +6770,31 @@ def main():
                 st.session_state.pop(_k, None)
             st.rerun()
 
-        # ── G7: Dark mode + Cấp học ───────────────────────────────────────────
+        # ── G7: Dark mode + Cấp học (chỉ hiện cho Y Tế) ─────────────────────
         _dm_on = st.session_state.get("dark_mode", False)
-        _dm_c1, _dm_c2, _dm_c3 = st.columns([2, 1, 1])
-        level = _dm_c1.selectbox(
-            "Chuẩn dinh dưỡng theo cấp học — ảnh hưởng tiêu chuẩn C12/C13 và AI tư vấn",
-            ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
-            label_visibility="collapsed",
-            help="Cấp học ảnh hưởng tiêu chuẩn dinh dưỡng (khẩu phần C12, C13) và nội dung AI tư vấn"
-        )
-        if _dm_c3.button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
-            st.session_state.dark_mode = not _dm_on
-            st.rerun()
+        _default_lvl = _pf.get("default_level") or "Tiểu Học (6–11 tuổi)"
+        _LEVELS = ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"]
+
+        if role == "Y Tế Học Đường":
+            # Y Tế: hiện selectbox cấp học (dùng trong tab kiểm thực + AI context)
+            _dm_c1, _dm_c2 = st.columns([3, 1])
+            _lvl_idx = _LEVELS.index(_default_lvl) if _default_lvl in _LEVELS else 0
+            level = _dm_c1.selectbox(
+                "Cấp học phụ trách",
+                _LEVELS, index=_lvl_idx,
+                label_visibility="collapsed",
+                help="Ảnh hưởng tiêu chuẩn dinh dưỡng trong kiểm thực và AI tư vấn",
+            )
+            if _dm_c2.button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
+                st.session_state.dark_mode = not _dm_on
+                st.rerun()
+        else:
+            # Các vai trò khác: lấy cấp từ profile (không cần chọn)
+            level = _default_lvl
+            _dm_only = st.columns([5, 1])
+            if _dm_only[1].button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
+                st.session_state.dark_mode = not _dm_on
+                st.rerun()
         loc = _school_pf or "TP.HCM"
         # Admin không bị lock trường — school chỉ lock cho các vai trò thường
         st.session_state.user_school  = "" if _is_super else _school_pf
