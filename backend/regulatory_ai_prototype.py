@@ -2543,7 +2543,7 @@ def tab_checklist(api_key: str = ""):
     _already_saved  = st.session_state.get(_save_guard_key, False)
 
     if st.button(
-        "📄 Tạo báo cáo kiểm tra" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
+        "📄 Tải báo cáo" if can_submit else "⛔ Hoàn thành đủ 20 mục để xuất báo cáo",
         type="primary" if can_submit else "secondary",
         disabled=not can_submit,
         use_container_width=True,
@@ -2611,7 +2611,7 @@ def tab_checklist(api_key: str = ""):
             )
         fname_docx = f"BaoCao_ATTP_{(school or 'Truong').replace(' ','_')}_{date.strftime('%d-%m-%Y')}.docx"
         st.download_button(
-            "⬇️ Tải báo cáo Word (.docx) — Times New Roman, chuẩn hành chính",
+            "⬇️ Tải báo cáo (.docx)",
             data=docx_bytes, file_name=fname_docx,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True, type="primary",
@@ -3768,7 +3768,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
             )
         fname = f"SoKiemThuc_{(kt_school or 'Truong').replace(' ','_')}_{kt_date.strftime('%d-%m-%Y')}.docx"
         st.download_button(
-            "📋 Xuất Sổ Kiểm Thực (.docx) — chuẩn TTLT 13/2016",
+            "📋 Tải báo cáo (.docx)",
             data=docx_bytes, file_name=fname,
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True, type="primary",
@@ -5620,7 +5620,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
-            "⬇️ Tải báo cáo Excel 2 sheet (.xlsx)",
+            "⬇️ Tải báo cáo (.xlsx)",
             data=buf.getvalue(),
             file_name=f"BaoCao_ATTP_{now_vn().strftime('%d-%m-%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -6070,7 +6070,7 @@ def tab_supplier(api_key: str = "", role: str = ""):
             _miss.append(f"Mục Không Đạt chưa có ghi chú/ảnh: {', '.join(_missing_evid)}")
         st.warning("⚠️ Chưa đủ điều kiện tạo báo cáo: " + " · ".join(_miss))
 
-    if st.button("📄 Tạo báo cáo Word & Lưu DB", type="primary",
+    if st.button("📄 Tải báo cáo", type="primary",
                  disabled=not can_submit, use_container_width=True):
         guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
         already_saved = st.session_state.get(guard_key, False)
@@ -6245,7 +6245,7 @@ def tab_supplier(api_key: str = "", role: str = ""):
             doc.save(_buf); _buf.seek(0)
             _fn = f"KiemTraNCC_{sup_name.replace(' ', '_')}_{sup_date.strftime('%Y%m%d')}.docx"
             st.download_button(
-                "⬇️ Tải báo cáo Word (.docx)", data=_buf.getvalue(), file_name=_fn,
+                "⬇️ Tải báo cáo (.docx)", data=_buf.getvalue(), file_name=_fn,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 use_container_width=True,
             )
