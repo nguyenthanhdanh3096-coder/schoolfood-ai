@@ -4755,9 +4755,10 @@ def tab_history(role: str = "", school_filter: str = ""):
         # Locked: hiện tên trường + view_mode cùng 1 hàng compact
         _lk1, _lk2 = st.columns([3, 1])
         _lk1.markdown(
-            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-            f'padding:8px 14px;font-size:0.85rem;color:#166534;line-height:2.5">'
-            f'🏫 Dữ liệu trường: <b>{school_filter}</b></div>',
+            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:6px;'
+            f'padding:4px 12px;font-size:0.82rem;color:#166534;'
+            f'display:flex;align-items:center;height:38px;margin-top:2px">'
+            f'🏫 <b>{school_filter}</b></div>',
             unsafe_allow_html=True,
         )
         view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
@@ -5799,7 +5800,7 @@ def tab_history(role: str = "", school_filter: str = ""):
             pass
 
         if _anomalies:
-            st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Chi tiết</div>',
+            st.markdown('<div class="sec-hdr" style="color:#991B1B;font-weight:700">🔍 PHÁT HIỆN BẤT THƯỜNG — CHI TIẾT</div>',
                         unsafe_allow_html=True)
             for _a in _anomalies:
                 _is_crit_a = _a.startswith("🚨")
@@ -6991,8 +6992,9 @@ def tab_user_management(school: str = ""):
             "Trường": p.get("school_name", ""),
             "Trạng thái": "✅ Hoạt động" if p.get("is_active") else "🔒 Tạm khóa",
             "Đăng nhập cuối": (
-                __import__("datetime").datetime.fromisoformat(
-                    (p.get("last_login") or "")[:19].replace("T", " ")
+                (__import__("datetime").datetime.fromisoformat(
+                    (p.get("last_login") or "")[:19].replace("T"," ")
+                ) + __import__("datetime").timedelta(hours=7)
                 ).strftime("%d/%m/%Y %H:%M")
                 if p.get("last_login") and len(p.get("last_login","")) >= 16 else "—"
             ),
