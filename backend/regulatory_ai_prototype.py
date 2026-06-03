@@ -3323,21 +3323,33 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Banner tiêu chuẩn dinh dưỡng — dùng level từ thanh điều khiển ───────
-    n_yte = NUTRITION.get(level, NUTRITION[list(NUTRITION.keys())[0]])
-    st.markdown(
-        f'<div class="nutrition-banner">'
-        f'<div class="nutrition-label">📊 Tiêu Chuẩn Dinh Dưỡng Bữa Trưa — Cấp {n_yte["short"]} (QĐ 3958/QĐ-BYT 2025)</div>'
-        f'<div class="nutrition-grid">'
-        f'<div class="nutrition-item">⚡ Năng lượng: <span class="nutrition-val">{n_yte["kcal"]}</span> ({n_yte["pct_day"]} nhu cầu ngày)</div>'
-        f'<div class="nutrition-item">🥩 Thịt/cá tối thiểu: <span class="nutrition-val">{n_yte["meat_g"]}g/học sinh</span></div>'
-        f'<div class="nutrition-item">🥦 Rau xanh: <span class="nutrition-val">{n_yte["veg_range"]}/học sinh</span></div>'
-        f'<div class="nutrition-item">💪 Protein: <span class="nutrition-val">{n_yte["protein_pct"]}</span> tổng năng lượng</div>'
-        f'</div>'
-        f'<div style="font-size:0.75rem;color:#1D4ED8;margin-top:6px">💡 {n_yte["note"]}</div>'
-        f'</div>',
-        unsafe_allow_html=True,
+    # ── Chọn cấp học + Tiêu chuẩn dinh dưỡng (collapsible) ──────────────────
+    _kt_levels = ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"]
+    _kt_default = st.session_state.get("user_profile", {}).get("default_level") or level
+    _kt_lvl_idx = _kt_levels.index(_kt_default) if _kt_default in _kt_levels else 0
+    _kt_level = st.selectbox(
+        "📚 Cấp học đang kiểm thực",
+        _kt_levels, index=_kt_lvl_idx, key="kt_level_selector",
+        help="Chọn cấp học để xem tiêu chuẩn dinh dưỡng phù hợp (B1_04, khẩu phần...)",
     )
+    # Cập nhật level cho phần còn lại của tab
+    level = _kt_level
+
+    n_yte = NUTRITION.get(level, NUTRITION[list(NUTRITION.keys())[0]])
+    with st.expander(f"📊 Tiêu chuẩn dinh dưỡng cấp {n_yte['short']} (tham khảo B3_04)"):
+        st.markdown(
+            f'<div class="nutrition-banner">'
+            f'<div class="nutrition-label">📊 Tiêu Chuẩn Dinh Dưỡng Bữa Trưa — Cấp {n_yte["short"]} (QĐ 3958/QĐ-BYT 2025)</div>'
+            f'<div class="nutrition-grid">'
+            f'<div class="nutrition-item">⚡ Năng lượng: <span class="nutrition-val">{n_yte["kcal"]}</span> ({n_yte["pct_day"]} nhu cầu ngày)</div>'
+            f'<div class="nutrition-item">🥩 Thịt/cá tối thiểu: <span class="nutrition-val">{n_yte["meat_g"]}g/học sinh</span></div>'
+            f'<div class="nutrition-item">🥦 Rau xanh: <span class="nutrition-val">{n_yte["veg_range"]}/học sinh</span></div>'
+            f'<div class="nutrition-item">💪 Protein: <span class="nutrition-val">{n_yte["protein_pct"]}</span> tổng năng lượng</div>'
+            f'</div>'
+            f'<div style="font-size:0.75rem;color:#1D4ED8;margin-top:6px">💡 {n_yte["note"]}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # Thông tin buổi kiểm tra
     st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
@@ -6718,84 +6730,107 @@ def main():
         _school_pf    = _pf.get("school_name", "")
         _is_demo      = _auth_user.get("demo", False)
 
-        # ── Thanh thông tin user ──────────────────────────────────────────────
-        _bar_cols = st.columns([5, 2, 1]) if not _is_super else st.columns([4, 2, 1.5, 1])
-        with _bar_cols[0]:
-            # Badge vai trò + tên + email + trường
-            _role_display = ROLE_VN.get(_role_key, "Phụ Huynh")
-            _clr = ROLE_CLR_MAP.get(_role_display, "#64748B")
-            _dm_now = st.session_state.get("dark_mode", False)
-            _name_c  = "#F1F5F9" if _dm_now else "#1E293B"
-            _email_c = "#94A3B8" if _dm_now else "#64748B"
-            _school_c = "#94A3B8" if _dm_now else "#475569"
-            st.markdown(
-                f'<div style="display:flex;align-items:center;gap:10px;padding:6px 0;flex-wrap:wrap">'
-                + (f'<span style="background:#7C3AED;color:white;border-radius:6px;'
-                   f'padding:3px 10px;font-size:0.72rem;font-weight:700">⚡ ADMIN</span>'
-                   if _is_super else
-                   f'<span style="background:{_clr};color:white;border-radius:6px;'
-                   f'padding:3px 10px;font-size:0.72rem;font-weight:700">{_role_display}</span>')
-                + f'<span style="font-size:0.88rem;color:{_name_c};font-weight:600">'
-                  f'{_pf.get("full_name","")}</span>'
-                + f'<span style="font-size:0.78rem;color:{_email_c}">{_auth_user.get("email","")}</span>'
-                + (f'<span style="font-size:0.78rem;color:{_school_c}">🏫 {_school_pf}</span>'
-                   if _school_pf and not _is_super else '')
-                + ('</div>'),
-                unsafe_allow_html=True,
-            )
+        # ── Thanh thông tin user — thiết kế mới 1 hàng ──────────────────────
+        _role_display = ROLE_VN.get(_role_key, "Phụ Huynh")
+        _clr     = ROLE_CLR_MAP.get(_role_display, "#64748B")
+        _dm_now  = st.session_state.get("dark_mode", False)
+        _bg_bar  = "#1E293B" if _dm_now else "white"
+        _brd_bar = "#334155" if _dm_now else "#E2E8F0"
+        _name_c  = "#F1F5F9" if _dm_now else "#1E293B"
+        _email_c = "#94A3B8"
+        _dm_on   = _dm_now
 
-        # ── Super Admin: chọn vai trò để xem/test ────────────────────────────
+        # Badge info HTML
+        _badge = (
+            f'<span style="background:#7C3AED;color:white;border-radius:6px;'
+            f'padding:3px 12px;font-size:0.75rem;font-weight:800;letter-spacing:0.03em">⚡ ADMIN</span>'
+            if _is_super else
+            f'<span style="background:{_clr};color:white;border-radius:6px;'
+            f'padding:3px 12px;font-size:0.75rem;font-weight:700">{_role_display}</span>'
+        )
+        _school_html = (
+            f'<span style="background:#EFF6FF;color:#2563EB;border-radius:5px;'
+            f'padding:2px 8px;font-size:0.72rem;font-weight:600">🏫 {_school_pf}</span>'
+            if _school_pf and not _is_super else ''
+        )
+        _demo_html = (
+            '<span style="background:#FEF9C3;color:#92400E;border-radius:5px;'
+            'padding:2px 8px;font-size:0.7rem;font-weight:600">🔓 Demo</span>'
+            if _is_demo else ''
+        )
+        _api_html = (
+            '<span style="background:#DCFCE7;color:#166534;border-radius:5px;'
+            'padding:2px 8px;font-size:0.72rem;font-weight:600">✅ AI</span>'
+            if api_key else
+            '<span style="background:#F1F5F9;color:#64748B;border-radius:5px;'
+            'padding:2px 8px;font-size:0.72rem">AI off</span>'
+        )
+
+        st.markdown(
+            f'<div style="background:{_bg_bar};border:1px solid {_brd_bar};border-radius:12px;'
+            f'padding:8px 16px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">'
+            f'<div style="display:flex;align-items:center;justify-content:space-between;'
+            f'flex-wrap:wrap;gap:8px">'
+            # Trái: badge + tên + email + trường
+            f'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+            f'{_badge}'
+            f'<span style="font-size:0.9rem;color:{_name_c};font-weight:700">'
+            f'{_pf.get("full_name","")}</span>'
+            f'<span style="font-size:0.77rem;color:{_email_c}">'
+            f'{_auth_user.get("email","")}</span>'
+            f'{_school_html}{_demo_html}'
+            f'</div>'
+            # Phải: API status badge
+            f'<div style="display:flex;align-items:center;gap:6px">'
+            f'{_api_html}'
+            f'</div>'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
+
+        # Hàng điều khiển: role switcher (admin) + API key input + dark mode + logout
         if _is_super:
-            with _bar_cols[1]:
+            _ctrl = st.columns([3, 2, 0.6, 0.8])
+            with _ctrl[0]:
                 role = st.selectbox(
                     "🔧 Xem vai trò",
                     ["Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)",
                      "Y Tế Học Đường", "Phụ Huynh"],
                     key="admin_role_switch", label_visibility="collapsed",
                 )
+            with _ctrl[1]:
+                if not api_key:
+                    _mk = st.text_input("Key", type="password",
+                                        placeholder="sk-ant-... (tuỳ chọn)",
+                                        label_visibility="collapsed")
+                    if _mk: api_key = _mk
+            if _ctrl[2].button("🌙" if not _dm_on else "☀️", use_container_width=True,
+                                help="Chuyển Dark/Light mode"):
+                st.session_state.dark_mode = not _dm_on; st.rerun()
+            if _ctrl[3].button("🚪 Đăng xuất", use_container_width=True):
+                for _k in ("auth_user","user_profile","admin_role_switch"):
+                    st.session_state.pop(_k, None)
+                st.rerun()
         else:
             role = _role_display
+            _ctrl = st.columns([3, 0.6, 0.8])
+            with _ctrl[0]:
+                if not api_key:
+                    _mk = st.text_input("Key", type="password",
+                                        placeholder="sk-ant-... (Claude API Key, tuỳ chọn)",
+                                        label_visibility="collapsed")
+                    if _mk: api_key = _mk
+            if _ctrl[1].button("🌙" if not _dm_on else "☀️", use_container_width=True,
+                                help="Chuyển Dark/Light mode"):
+                st.session_state.dark_mode = not _dm_on; st.rerun()
+            if _ctrl[2].button("🚪 Đăng xuất", use_container_width=True):
+                for _k in ("auth_user","user_profile"):
+                    st.session_state.pop(_k, None)
+                st.rerun()
 
-        _api_col = _bar_cols[2] if _is_super else _bar_cols[1]
-        _out_col = _bar_cols[3] if _is_super else _bar_cols[2]
-        with _api_col:
-            if api_key:
-                st.text_input("API", value="✅ AI sẵn sàng", disabled=True,
-                              label_visibility="collapsed")
-            else:
-                _mk = st.text_input("Claude API Key", type="password",
-                                    placeholder="sk-ant-...", label_visibility="collapsed")
-                if _mk: api_key = _mk
-        if _out_col.button("🚪 Đăng xuất", use_container_width=True):
-            for _k in ("auth_user", "user_profile", "admin_role_switch"):
-                st.session_state.pop(_k, None)
-            st.rerun()
-
-        # ── G7: Dark mode + Cấp học (chỉ hiện cho Y Tế) ─────────────────────
-        _dm_on = st.session_state.get("dark_mode", False)
+        # Level — tất cả vai trò đều lấy từ profile (Y Tế chọn trong tab_kiem_thuc)
         _default_lvl = _pf.get("default_level") or "Tiểu Học (6–11 tuổi)"
-        _LEVELS = ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"]
-
-        if role == "Y Tế Học Đường":
-            # Y Tế: hiện selectbox cấp học (dùng trong tab kiểm thực + AI context)
-            _dm_c1, _dm_c2 = st.columns([3, 1])
-            _lvl_idx = _LEVELS.index(_default_lvl) if _default_lvl in _LEVELS else 0
-            level = _dm_c1.selectbox(
-                "Cấp học phụ trách",
-                _LEVELS, index=_lvl_idx,
-                label_visibility="collapsed",
-                help="Ảnh hưởng tiêu chuẩn dinh dưỡng trong kiểm thực và AI tư vấn",
-            )
-            if _dm_c2.button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
-                st.session_state.dark_mode = not _dm_on
-                st.rerun()
-        else:
-            # Các vai trò khác: lấy cấp từ profile (không cần chọn)
-            level = _default_lvl
-            _dm_only = st.columns([5, 1])
-            if _dm_only[1].button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
-                st.session_state.dark_mode = not _dm_on
-                st.rerun()
+        level = _default_lvl
         loc = _school_pf or "TP.HCM"
         # Admin không bị lock trường — school chỉ lock cho các vai trò thường
         st.session_state.user_school  = "" if _is_super else _school_pf
