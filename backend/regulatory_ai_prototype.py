@@ -4552,6 +4552,42 @@ def tab_guide():
         unsafe_allow_html=True,
     )
 
+    # ── Đổi mật khẩu — đặt trong Hướng dẫn, không làm rối header ─────────────
+    _auth_user_guide = st.session_state.get("auth_user")
+    _is_demo_guide   = (_auth_user_guide or {}).get("demo", False) if _auth_user_guide else True
+    if _auth_user_guide and not _is_demo_guide:
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;'
+            'padding:16px 20px;margin-top:8px">'
+            '<div style="font-size:0.9rem;font-weight:700;color:#1E293B;margin-bottom:4px">'
+            '🔑 Đổi mật khẩu</div>'
+            '<div style="font-size:0.78rem;color:#64748B;margin-bottom:12px">'
+            'Sau khi đổi, dùng mật khẩu mới cho lần đăng nhập tiếp theo.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        _gpw_c1, _gpw_c2 = st.columns(2)
+        _gpw1 = _gpw_c1.text_input("Mật khẩu mới (≥ 6 ký tự)", type="password",
+                                     placeholder="Mật khẩu mới...", key="gpw_new")
+        _gpw2 = _gpw_c2.text_input("Xác nhận mật khẩu mới", type="password",
+                                     placeholder="Nhập lại...", key="gpw_confirm")
+        if st.button("💾 Cập nhật mật khẩu", key="gpw_btn", type="primary",
+                     use_container_width=False):
+            if not _gpw1 or not _gpw2:
+                st.warning("Vui lòng nhập cả 2 trường.")
+            elif len(_gpw1) < 6:
+                st.warning("Mật khẩu cần ≥ 6 ký tự.")
+            elif _gpw1 != _gpw2:
+                st.error("Mật khẩu xác nhận không khớp.")
+            else:
+                _tok_g = (_auth_user_guide or {}).get("access_token", "")
+                _ok_g, _err_g = db_change_password(_tok_g, _gpw1)
+                if _ok_g:
+                    st.success("✅ Đã đổi mật khẩu! Dùng mật khẩu mới lần sau đăng nhập.")
+                else:
+                    st.error(f"❌ {_err_g}")
+
 
 # ── Tạo sổ tay Word chuyên nghiệp ─────────────────────────────────────────────
 def generate_manual_docx() -> bytes:
@@ -5610,31 +5646,67 @@ def tab_history(role: str = "", school_filter: str = ""):
                 except Exception:
                     pass
 
-            # 4. BGS không kiểm tra đủ tần suất (Task#4)
+            # 4. BGS + Y Tế không kiểm tra đủ tần suất — cả 2 đều cần escalate BGH
             if show_meal and not df_meal.empty:
                 try:
+                    _now_dt = pd.Timestamp(now_vn().date())
+
+                    # ── BGS: yêu cầu 2 lần/tuần (NĐ 15/2018) ────────────────
                     _bgs_only = df_meal[df_meal["Loại"] == "Ban Giám Sát"].copy()
                     if not _bgs_only.empty:
                         _bgs_only["Ngày_dt"] = pd.to_datetime(_bgs_only["Ngày"], errors="coerce")
-                        _now_dt = pd.Timestamp(now_vn().date())
-                        # Kiểm tra 7 ngày gần nhất
-                        _last_7d = _bgs_only[_bgs_only["Ngày_dt"] >= _now_dt - pd.Timedelta(days=7)]
+                        _bgs_7d = _bgs_only[_bgs_only["Ngày_dt"] >= _now_dt - pd.Timedelta(days=7)]
                         _last_bgs = _bgs_only["Ngày_dt"].max()
-                        _days_since = (_now_dt - _last_bgs).days if pd.notna(_last_bgs) else 99
-                        if _days_since > 7:
+                        _bgs_gap  = (_now_dt - _last_bgs).days if pd.notna(_last_bgs) else 99
+                        if _bgs_gap > 7:
                             _anomalies.append(
-                                f"⏰ <b>BGS không kiểm tra đủ tần suất</b>: "
-                                f"Lần kiểm tra gần nhất cách đây <b>{_days_since} ngày</b> "
-                                f"(yêu cầu tối thiểu 2 lần/tuần theo NĐ 15/2018). "
-                                "Liên hệ Ban Giám Sát để lên lịch kiểm tra ngay."
+                                f"🚨 <b>[BGH → BGS] Không kiểm tra</b>: "
+                                f"Ban Giám Sát chưa kiểm tra <b>{_bgs_gap} ngày</b> — "
+                                f"vi phạm NĐ 15/2018 (tối thiểu 2 lần/tuần). "
+                                f"Ban Giám Hiệu cần liên hệ ngay."
                             )
-                        elif len(_last_7d) < 2:
+                        elif len(_bgs_7d) < 2:
                             _anomalies.append(
-                                f"⏰ <b>BGS kiểm tra dưới tần suất</b>: "
-                                f"7 ngày qua chỉ có <b>{len(_last_7d)} lần</b> kiểm tra "
-                                "(yêu cầu tối thiểu 2 lần/tuần). "
-                                "Nhắc nhở Ban Giám Sát tăng cường kiểm tra."
+                                f"⏰ <b>[BGH → BGS] Tần suất thấp</b>: "
+                                f"7 ngày qua Ban Giám Sát chỉ kiểm tra <b>{len(_bgs_7d)} lần</b> "
+                                f"(yêu cầu ≥ 2 lần/tuần). Ban Giám Hiệu cần nhắc nhở."
                             )
+                    else:
+                        _anomalies.append(
+                            "🚨 <b>[BGH → BGS] Chưa có kiểm tra nào</b>: "
+                            "Ban Giám Sát chưa thực hiện kiểm tra trong kỳ này. "
+                            "Liên hệ ngay để lên lịch."
+                        )
+
+                    # ── Y Tế: yêu cầu HÀNG NGÀY (TTLT 13/2016 Điều 9) ────────
+                    _yte_only = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"].copy()
+                    if not _yte_only.empty:
+                        _yte_only["Ngày_dt"] = pd.to_datetime(_yte_only["Ngày"], errors="coerce")
+                        # Đếm ngày làm việc trong 7 ngày gần nhất (Thứ 2-6)
+                        _yte_7d = _yte_only[_yte_only["Ngày_dt"] >= _now_dt - pd.Timedelta(days=7)]
+                        _last_yte = _yte_only["Ngày_dt"].max()
+                        _yte_gap  = (_now_dt - _last_yte).days if pd.notna(_last_yte) else 99
+                        _workdays_7d = sum(1 for d in pd.date_range(_now_dt - pd.Timedelta(days=6), _now_dt)
+                                           if d.weekday() < 5)  # Thứ 2-6
+                        if _yte_gap > 3:
+                            _anomalies.append(
+                                f"🚨 <b>[BGH → Y Tế] Không kiểm thực</b>: "
+                                f"Y Tế Học Đường chưa kiểm thực <b>{_yte_gap} ngày</b> — "
+                                f"vi phạm TTLT 13/2016 Điều 9 (yêu cầu HÀNG NGÀY). "
+                                f"Ban Giám Hiệu cần xử lý ngay."
+                            )
+                        elif len(_yte_7d) < max(1, _workdays_7d - 1):
+                            _anomalies.append(
+                                f"⏰ <b>[BGH → Y Tế] Bỏ sót kiểm thực</b>: "
+                                f"7 ngày qua Y Tế chỉ kiểm thực <b>{len(_yte_7d)}/{_workdays_7d} ngày làm việc</b> "
+                                f"(TTLT 13/2016: bắt buộc hàng ngày). Ban Giám Hiệu cần theo dõi."
+                            )
+                    else:
+                        _anomalies.append(
+                            "🚨 <b>[BGH → Y Tế] Chưa có kiểm thực</b>: "
+                            "Y Tế Học Đường chưa thực hiện kiểm thực 3 bước. "
+                            "Vi phạm TTLT 13/2016 — cần giải trình ngay."
+                        )
                 except Exception:
                     pass
 
@@ -5642,131 +5714,18 @@ def tab_history(role: str = "", school_filter: str = ""):
                 st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Cần chú ý</div>',
                             unsafe_allow_html=True)
                 for _a in _anomalies:
+                    # Critical (🚨 BGH escalation) → đỏ; Warning (⏰) → vàng
+                    _is_crit_a = _a.startswith("🚨")
+                    _a_bg  = "#FEF2F2" if _is_crit_a else "#FFFBEB"
+                    _a_bd  = "#FCA5A5" if _is_crit_a else "#FCD34D"
+                    _a_clr = "#991B1B" if _is_crit_a else "#78350F"
                     st.markdown(
-                        f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
-                        f'padding:10px 16px;margin:5px 0;font-size:0.85rem;color:#78350F">'
+                        f'<div style="background:{_a_bg};border:1.5px solid {_a_bd};'
+                        f'border-radius:8px;padding:10px 16px;margin:5px 0;'
+                        f'font-size:0.85rem;color:{_a_clr}">'
                         f'{_a}</div>',
                         unsafe_allow_html=True,
                     )
-
-    # ── Báo cáo tháng tổng hợp — BGH gửi Sở GD&ĐT ───────────────────────────
-    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
-        st.markdown('<div class="sec-hdr">📋 Báo cáo tháng tổng hợp — Gửi Sở GD&ĐT</div>',
-                    unsafe_allow_html=True)
-        _mc1, _mc2, _mc3 = st.columns([1.5, 1.5, 2])
-        _sel_month = _mc1.selectbox(
-            "Tháng", list(range(1, 13)),
-            index=now_vn().month - 1,
-            format_func=lambda x: f"Tháng {x:02d}",
-            key="rpt_month", label_visibility="collapsed"
-        )
-        _sel_year  = _mc2.number_input("Năm", value=now_vn().year, min_value=2024,
-                                        max_value=2030, step=1, key="rpt_year",
-                                        label_visibility="collapsed")
-        if _mc3.button("📋 Tạo báo cáo tháng", use_container_width=True,
-                        key="gen_monthly_rpt"):
-            try:
-                from docx import Document as _Doc
-                from docx.shared import Pt as _Pt, Cm as _Cm, RGBColor as _RGB
-                from docx.enum.text import WD_ALIGN_PARAGRAPH as _ALIGN
-                from io import BytesIO as _BIO
-
-                # Lọc sessions trong tháng
-                _month_sessions = [s for s in sessions if (
-                    s.get("check_date","").startswith(f"{_sel_year}-{_sel_month:02d}")
-                )]
-                _meal_ses = [s for s in _month_sessions if s.get("check_type") in {"ban_giam_sat","kiem_thuc_3_buoc"}]
-                _ncc_ses  = [s for s in _month_sessions if s.get("check_type") == "nha_cung_cap"]
-                _bgs_ses  = [s for s in _month_sessions if s.get("check_type") == "ban_giam_sat"]
-                _yte_ses  = [s for s in _month_sessions if s.get("check_type") == "kiem_thuc_3_buoc"]
-                _meal_avg = round(sum(s["pass_count"]/max(s["total_items"],1)*100 for s in _meal_ses)/max(len(_meal_ses),1),1) if _meal_ses else 0
-                _crit_ct  = sum(1 for s in _meal_ses if s.get("alert_level")=="CRITICAL")
-                # Complaints trong tháng
-                try:
-                    _month_fb = _get_sb().table("parent_feedback").select("status,category,created_at")\
-                        .gte("created_at", f"{_sel_year}-{_sel_month:02d}-01")\
-                        .lt("created_at", f"{_sel_year}-{_sel_month+1 if _sel_month<12 else 1:02d}-01")\
-                        .execute().data or []
-                except Exception:
-                    _month_fb = []
-                _fb_total   = len(_month_fb)
-                _fb_resolved= sum(1 for f in _month_fb if f.get("status")=="resolved")
-
-                doc = _Doc()
-                for _sec in doc.sections:
-                    _sec.top_margin = _sec.bottom_margin = _Cm(2.5)
-                    _sec.left_margin = _Cm(3.0); _sec.right_margin = _Cm(2.0)
-
-                def _rp(p, txt, bold=False, sz=13, align=None, color=None):
-                    p.alignment = getattr(_ALIGN, align or "LEFT", _ALIGN.LEFT)
-                    r = p.add_run(txt); r.bold = bold
-                    r.font.name = "Times New Roman"; r.font.size = _Pt(sz)
-                    if color: r.font.color.rgb = color
-                    return r
-
-                _rp(doc.add_paragraph(), "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", bold=True, sz=13, align="CENTER")
-                _rp(doc.add_paragraph(), "Độc lập – Tự do – Hạnh phúc", bold=True, sz=13, align="CENTER")
-                doc.add_paragraph("")
-                _rp(doc.add_paragraph(),
-                    f"BÁO CÁO THÁNG {_sel_month:02d}/{_sel_year}\nAN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG",
-                    bold=True, sz=15, align="CENTER")
-                _rp(doc.add_paragraph(), f"Trường: {school_input or 'Tất cả trường'}", sz=13)
-                doc.add_paragraph("")
-
-                # Bảng tổng hợp
-                _rp(doc.add_paragraph(), "I. TỔNG HỢP KIỂM TRA BỮA ĂN", bold=True, sz=13)
-                tbl = doc.add_table(rows=1, cols=2); tbl.style = "Table Grid"
-                for _r, _v in [
-                    ("Số buổi kiểm tra (Ban Giám Sát)", str(len(_bgs_ses))),
-                    ("Số lần kiểm thực 3 bước (Y Tế)", str(len(_yte_ses))),
-                    ("Tỷ lệ đạt trung bình", f"{_meal_avg}%"),
-                    ("Số lần CRITICAL", str(_crit_ct)),
-                    ("Số phản hồi Phụ Huynh", str(_fb_total)),
-                    ("Đã xử lý", str(_fb_resolved)),
-                    ("Số lần đánh giá NCC", str(len(_ncc_ses))),
-                ]:
-                    _row = tbl.add_row().cells
-                    for ci, val in enumerate([_r, _v]):
-                        _pp = _row[ci].paragraphs[0]
-                        _rr = _pp.add_run(val)
-                        _rr.font.name = "Times New Roman"; _rr.font.size = _Pt(12)
-                        if ci == 0: _rr.bold = True
-
-                # Kết luận
-                doc.add_paragraph("")
-                _rp(doc.add_paragraph(), "II. KẾT LUẬN VÀ KIẾN NGHỊ", bold=True, sz=13)
-                _concl_txt = (
-                    f"Trong tháng {_sel_month:02d}/{_sel_year}, nhà trường đã thực hiện "
-                    f"{len(_bgs_ses)} lần kiểm tra (Ban Giám Sát) và {len(_yte_ses)} lần kiểm thực "
-                    f"3 bước (Y Tế Học Đường). Tỷ lệ đạt trung bình: {_meal_avg}%."
-                )
-                if _crit_ct > 0:
-                    _concl_txt += f" Ghi nhận {_crit_ct} lần cảnh báo mức CRITICAL — đã xử lý theo quy trình."
-                _concl_txt += f"\n\nPhản hồi Phụ Huynh: {_fb_total} phản hồi, {_fb_resolved} đã xử lý."
-                _rp(doc.add_paragraph(), _concl_txt, sz=13)
-
-                doc.add_paragraph("")
-                _sign_dt = f"......., ngày {now_vn().strftime('%d')} tháng {now_vn().strftime('%m')} năm {now_vn().strftime('%Y')}"
-                _rp(doc.add_paragraph(), _sign_dt, sz=13, align="RIGHT")
-                _sig_tbl = doc.add_table(rows=1, cols=2)
-                _s1, _s2 = _sig_tbl.rows[0].cells
-                for _cell, _txt in [(_s1, "NGƯỜI LẬP BÁO CÁO\n(Ký, ghi rõ họ tên)"),
-                                     (_s2, "HIỆU TRƯỞNG\n(Ký tên, đóng dấu)")]:
-                    _cell.paragraphs[0].alignment = _ALIGN.CENTER
-                    _rr = _cell.paragraphs[0].add_run(_txt)
-                    _rr.bold = True; _rr.font.name = "Times New Roman"; _rr.font.size = _Pt(12)
-
-                _mbuf = _BIO(); doc.save(_mbuf); _mbuf.seek(0)
-                st.download_button(
-                    f"⬇️ Tải báo cáo tháng {_sel_month:02d}/{_sel_year} (.docx)",
-                    data=_mbuf.getvalue(),
-                    file_name=f"BaoCao_Thang{_sel_month:02d}_{_sel_year}_{(school_input or 'TatCaTruong').replace(' ','_')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True, type="primary",
-                )
-                st.caption(f"✅ Báo cáo: {len(_meal_ses)} lần kiểm tra · {_meal_avg}% đạt · {_fb_total} phản hồi PH")
-            except Exception as _me:
-                st.error(f"Lỗi tạo báo cáo: {_me}")
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
@@ -5913,6 +5872,140 @@ def tab_history(role: str = "", school_filter: str = ""):
         )
     except Exception as e:
         st.error(f"Lỗi xuất Excel: {e}")
+
+    # ── Báo cáo tháng tổng hợp — BGH gửi Sở GD&ĐT ───────────────────────────
+    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
+        st.markdown('<div class="sec-hdr">📋 Báo cáo tháng tổng hợp — Gửi Sở GD&ĐT</div>',
+                    unsafe_allow_html=True)
+        _mc1, _mc2, _mc3 = st.columns([1.5, 1.5, 2])
+        _sel_month = _mc1.selectbox(
+            "Tháng", list(range(1, 13)),
+            index=now_vn().month - 1,
+            format_func=lambda x: f"Tháng {x:02d}",
+            key="rpt_month", label_visibility="collapsed"
+        )
+        _sel_year  = _mc2.number_input("Năm", value=now_vn().year, min_value=2024,
+                                        max_value=2030, step=1, key="rpt_year",
+                                        label_visibility="collapsed")
+        if _mc3.button("📋 Tạo báo cáo tháng", use_container_width=True,
+                        key="gen_monthly_rpt"):
+            try:
+                from docx import Document as _Doc
+                from docx.shared import Pt as _Pt, Cm as _Cm, RGBColor as _RGB
+                from docx.enum.text import WD_ALIGN_PARAGRAPH as _ALIGN
+                from io import BytesIO as _BIO
+
+                # Lọc sessions trong tháng
+                _month_sessions = [s for s in sessions if (
+                    s.get("check_date","").startswith(f"{_sel_year}-{_sel_month:02d}")
+                )]
+                _meal_ses = [s for s in _month_sessions if s.get("check_type") in {"ban_giam_sat","kiem_thuc_3_buoc"}]
+                _ncc_ses  = [s for s in _month_sessions if s.get("check_type") == "nha_cung_cap"]
+                _bgs_ses  = [s for s in _month_sessions if s.get("check_type") == "ban_giam_sat"]
+                _yte_ses  = [s for s in _month_sessions if s.get("check_type") == "kiem_thuc_3_buoc"]
+                _meal_avg = round(sum(s["pass_count"]/max(s["total_items"],1)*100 for s in _meal_ses)/max(len(_meal_ses),1),1) if _meal_ses else 0
+                _crit_ct  = sum(1 for s in _meal_ses if s.get("alert_level")=="CRITICAL")
+                # Complaints trong tháng
+                try:
+                    _month_fb = _get_sb().table("parent_feedback").select("status,category,created_at")\
+                        .gte("created_at", f"{_sel_year}-{_sel_month:02d}-01")\
+                        .lt("created_at", f"{_sel_year}-{_sel_month+1 if _sel_month<12 else 1:02d}-01")\
+                        .execute().data or []
+                except Exception:
+                    _month_fb = []
+                _fb_total   = len(_month_fb)
+                _fb_resolved= sum(1 for f in _month_fb if f.get("status")=="resolved")
+
+                doc = _Doc()
+                for _sec in doc.sections:
+                    _sec.top_margin = _sec.bottom_margin = _Cm(2.5)
+                    _sec.left_margin = _Cm(3.0); _sec.right_margin = _Cm(2.0)
+
+                def _rp(p, txt, bold=False, sz=13, align=None, color=None):
+                    p.alignment = getattr(_ALIGN, align or "LEFT", _ALIGN.LEFT)
+                    r = p.add_run(txt); r.bold = bold
+                    r.font.name = "Times New Roman"; r.font.size = _Pt(sz)
+                    if color: r.font.color.rgb = color
+                    return r
+
+                _rp(doc.add_paragraph(), "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", bold=True, sz=13, align="CENTER")
+                _rp(doc.add_paragraph(), "Độc lập – Tự do – Hạnh phúc", bold=True, sz=13, align="CENTER")
+                doc.add_paragraph("")
+                _rp(doc.add_paragraph(),
+                    f"BÁO CÁO THÁNG {_sel_month:02d}/{_sel_year}\nAN TOÀN THỰC PHẨM BỮA ĂN HỌC ĐƯỜNG",
+                    bold=True, sz=15, align="CENTER")
+                _rp(doc.add_paragraph(), f"Trường: {school_input or 'Tất cả trường'}", sz=13)
+                doc.add_paragraph("")
+
+                # Bảng tổng hợp
+                _rp(doc.add_paragraph(), "I. TỔNG HỢP KIỂM TRA BỮA ĂN", bold=True, sz=13)
+                tbl = doc.add_table(rows=1, cols=2); tbl.style = "Table Grid"
+                # Header row
+                _hdr = tbl.rows[0].cells
+                for _ci, _htxt in enumerate(["Chỉ số", "Số liệu"]):
+                    _hdr[_ci].paragraphs[0].alignment = getattr(_ALIGN, "CENTER", 0)
+                    _hrr = _hdr[_ci].paragraphs[0].add_run(_htxt)
+                    _hrr.bold = True; _hrr.font.name = "Times New Roman"; _hrr.font.size = _Pt(12)
+                    from docx.oxml.ns import qn as _qn
+                    from docx.oxml import OxmlElement as _OE
+                    _tc = _hdr[_ci]._tc
+                    _tcp = _tc.get_or_add_tcPr()
+                    _shd = _OE("w:shd")
+                    _shd.set(_qn("w:fill"), "1B3B6F"); _shd.set(_qn("w:color"), "auto")
+                    _shd.set(_qn("w:val"), "clear"); _tcp.append(_shd)
+                    _hrr.font.color.rgb = _RGB(0xFF, 0xFF, 0xFF)
+                for _r, _v in [
+                    ("Số buổi kiểm tra (Ban Giám Sát)", str(len(_bgs_ses))),
+                    ("Số lần kiểm thực 3 bước (Y Tế)", str(len(_yte_ses))),
+                    ("Tỷ lệ đạt trung bình", f"{_meal_avg}%"),
+                    ("Số lần CRITICAL", str(_crit_ct)),
+                    ("Số phản hồi Phụ Huynh", str(_fb_total)),
+                    ("Đã xử lý", str(_fb_resolved)),
+                    ("Số lần đánh giá NCC", str(len(_ncc_ses))),
+                ]:
+                    _row = tbl.add_row().cells
+                    for ci, val in enumerate([_r, _v]):
+                        _pp = _row[ci].paragraphs[0]
+                        _rr = _pp.add_run(val)
+                        _rr.font.name = "Times New Roman"; _rr.font.size = _Pt(12)
+                        if ci == 0: _rr.bold = True
+
+                # Kết luận
+                doc.add_paragraph("")
+                _rp(doc.add_paragraph(), "II. KẾT LUẬN VÀ KIẾN NGHỊ", bold=True, sz=13)
+                _concl_txt = (
+                    f"Trong tháng {_sel_month:02d}/{_sel_year}, nhà trường đã thực hiện "
+                    f"{len(_bgs_ses)} lần kiểm tra (Ban Giám Sát) và {len(_yte_ses)} lần kiểm thực "
+                    f"3 bước (Y Tế Học Đường). Tỷ lệ đạt trung bình: {_meal_avg}%."
+                )
+                if _crit_ct > 0:
+                    _concl_txt += f" Ghi nhận {_crit_ct} lần cảnh báo mức CRITICAL — đã xử lý theo quy trình."
+                _concl_txt += f"\n\nPhản hồi Phụ Huynh: {_fb_total} phản hồi, {_fb_resolved} đã xử lý."
+                _rp(doc.add_paragraph(), _concl_txt, sz=13)
+
+                doc.add_paragraph("")
+                _sign_dt = f"......., ngày {now_vn().strftime('%d')} tháng {now_vn().strftime('%m')} năm {now_vn().strftime('%Y')}"
+                _rp(doc.add_paragraph(), _sign_dt, sz=13, align="RIGHT")
+                _sig_tbl = doc.add_table(rows=1, cols=2)
+                _s1, _s2 = _sig_tbl.rows[0].cells
+                for _cell, _txt in [(_s1, "NGƯỜI LẬP BÁO CÁO\n(Ký, ghi rõ họ tên)"),
+                                     (_s2, "HIỆU TRƯỞNG\n(Ký tên, đóng dấu)")]:
+                    _cell.paragraphs[0].alignment = _ALIGN.CENTER
+                    _rr = _cell.paragraphs[0].add_run(_txt)
+                    _rr.bold = True; _rr.font.name = "Times New Roman"; _rr.font.size = _Pt(12)
+
+                _mbuf = _BIO(); doc.save(_mbuf); _mbuf.seek(0)
+                st.download_button(
+                    f"⬇️ Tải báo cáo tháng {_sel_month:02d}/{_sel_year} (.docx)",
+                    data=_mbuf.getvalue(),
+                    file_name=f"BaoCao_Thang{_sel_month:02d}_{_sel_year}_{(school_input or 'TatCaTruong').replace(' ','_')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True, type="primary",
+                )
+                st.caption(f"✅ Báo cáo: {len(_meal_ses)} lần kiểm tra · {_meal_avg}% đạt · {_fb_total} phản hồi PH")
+            except Exception as _me:
+                st.error(f"Lỗi tạo báo cáo: {_me}")
+
 
     # Feedback section đã được chuyển lên trước early return ở đầu hàm
 
@@ -7114,28 +7207,7 @@ def main():
                     st.session_state.pop(_k, None)
                 st.rerun()
 
-        # ── Đổi mật khẩu — collapsible, không bị đăng xuất ─────────────────
-        if not _is_demo:
-            with st.expander("🔑 Đổi mật khẩu", expanded=False):
-                _pw1 = st.text_input("Mật khẩu mới", type="password",
-                                     placeholder="Tối thiểu 6 ký tự", key="chpw_new")
-                _pw2 = st.text_input("Xác nhận mật khẩu mới", type="password",
-                                     placeholder="Nhập lại mật khẩu mới", key="chpw_confirm")
-                if st.button("💾 Cập nhật mật khẩu", key="chpw_btn", type="primary",
-                             use_container_width=True):
-                    if not _pw1 or not _pw2:
-                        st.warning("Vui lòng nhập đầy đủ mật khẩu mới và xác nhận.")
-                    elif len(_pw1) < 6:
-                        st.warning("Mật khẩu mới cần ≥ 6 ký tự.")
-                    elif _pw1 != _pw2:
-                        st.error("Mật khẩu xác nhận không khớp.")
-                    else:
-                        _tok = _auth_user.get("access_token", "")
-                        _ok, _err = db_change_password(_tok, _pw1)
-                        if _ok:
-                            st.success("✅ Đã đổi mật khẩu thành công! Dùng mật khẩu mới lần sau.")
-                        else:
-                            st.error(f"❌ Lỗi: {_err}")
+        # Đổi mật khẩu: đặt ở cuối tab Hướng dẫn (xem tab_guide function)
 
         # Level — tất cả vai trò đều lấy từ profile (Y Tế chọn trong tab_kiem_thuc)
         _default_lvl = _pf.get("default_level") or "Tiểu Học (6–11 tuổi)"
