@@ -2841,16 +2841,14 @@ def tab_parent_view(api_key: str = ""):
     _sessions_today: list = []
     if db_ok():
         try:
-            _r = (_get_sb().table("checklist_sessions")
-                  .select("check_type,pass_count,total_items,alert_level,menu_today,check_date")
+            _q = (_get_sb().table("checklist_sessions")
+                  .select("check_type,pass_count,total_items,alert_level,menu_today,check_date,school_name")
                   .eq("check_date", today_str)
                   .order("created_at", desc=True)
-                  .limit(20).execute())
-            _all_today = _r.data or []
+                  .limit(30))
             if school:
-                _all_today = [s for s in _all_today
-                              if s.get("school_name", "") == school or not school]
-            _sessions_today = _all_today
+                _q = _q.eq("school_name", school)
+            _sessions_today = _q.execute().data or []
         except Exception:
             pass
 
@@ -2954,42 +2952,44 @@ def tab_parent_view(api_key: str = ""):
                 unsafe_allow_html=True)
     if db_ok():
         try:
-            _hist_r = (_get_sb().table("checklist_sessions")
-                       .select("check_date,check_type,pass_count,total_items,alert_level")
-                       .in_("check_type", ["ban_giam_sat", "kiem_thuc_3_buoc"])
-                       .order("check_date", desc=True).limit(50).execute())
-            _hist = _hist_r.data or []
+            _hq = (_get_sb().table("checklist_sessions")
+                   .select("check_date,check_type,pass_count,total_items,alert_level")
+                   .in_("check_type", ["ban_giam_sat", "kiem_thuc_3_buoc"])
+                   .order("check_date", desc=True).limit(60))
             if school:
-                _hist = [h for h in _hist
-                         if (_get_sb().table("checklist_sessions")
-                             .select("school_name").eq("check_date", h["check_date"])
-                             .limit(1).execute().data or [{}])[0].get("school_name", "") == school]
+                _hq = _hq.eq("school_name", school)
+            _hist = _hq.execute().data or []
         except Exception:
             _hist = []
 
         if _hist:
-            # Group by date, tính average pct mỗi ngày
+            # Group by date, tính average pct — hiện 7 ngày gần nhất
             _by_date: dict = {}
             for h in _hist:
-                _d = h["check_date"]
-                _p = h["pass_count"] / max(h["total_items"], 1) * 100
-                if _d not in _by_date:
-                    _by_date[_d] = []
-                _by_date[_d].append(_p)
+                _d = h.get("check_date", "")
+                _ti = h.get("total_items") or 0
+                if not _d or _ti == 0:
+                    continue
+                _p = h["pass_count"] / _ti * 100
+                _by_date.setdefault(_d, []).append(_p)
             _dates = sorted(_by_date.keys())[-7:]
-            _cols = st.columns(len(_dates))
-            for i, _d in enumerate(_dates):
-                _avg = round(sum(_by_date[_d]) / len(_by_date[_d]))
-                _ic  = "🟢" if _avg >= 90 else "🟡" if _avg >= 75 else "🔴"
-                _dd  = _d[5:].replace("-", "/")  # MM/DD → format dễ đọc
-                _cols[i].markdown(
-                    f'<div style="text-align:center;padding:8px 4px">'
-                    f'<div style="font-size:1.4rem">{_ic}</div>'
-                    f'<div style="font-size:0.7rem;color:#64748B;margin-top:2px">{_dd}</div>'
-                    f'<div style="font-size:0.75rem;font-weight:700;color:#1E293B">{_avg}%</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+            if _dates:
+                _cols = st.columns(len(_dates))
+                for i, _d in enumerate(_dates):
+                    _avg = round(sum(_by_date[_d]) / len(_by_date[_d]))
+                    _ic  = "🟢" if _avg >= 90 else "🟡" if _avg >= 75 else "🔴"
+                    # Định dạng DD/MM (chuẩn Việt Nam)
+                    _dd  = f"{_d[8:10]}/{_d[5:7]}" if len(_d) >= 10 else _d
+                    _cols[i].markdown(
+                        f'<div style="text-align:center;padding:8px 4px">'
+                        f'<div style="font-size:1.4rem">{_ic}</div>'
+                        f'<div style="font-size:0.7rem;color:#64748B;margin-top:2px">{_dd}</div>'
+                        f'<div style="font-size:0.75rem;font-weight:700;color:#1E293B">{_avg}%</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.caption("Chưa có lịch sử kiểm tra.")
         else:
             st.caption("Chưa có lịch sử kiểm tra.")
     else:
