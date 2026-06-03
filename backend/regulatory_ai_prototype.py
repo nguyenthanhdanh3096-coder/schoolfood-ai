@@ -2153,11 +2153,21 @@ def tab_checklist(api_key: str = ""):
         </div>
     </div>""", unsafe_allow_html=True)
 
-    # Chọn cấp học — ảnh hưởng C12, C13
-    level_key = st.selectbox(
-        "Cấp học đang kiểm tra (ảnh hưởng tiêu chuẩn dinh dưỡng C12, C13)",
-        list(NUTRITION.keys()), key="cl_level",
-    )
+    # Cấp học — lấy từ profile (locked) hoặc cho chọn nếu demo/admin
+    _cl_default_lvl = st.session_state.get("user_profile", {}).get("default_level") or "Tiểu Học (6–11 tuổi)"
+    _cl_is_locked = bool(st.session_state.get("auth_user")) and not st.session_state.get("is_super", False) and not st.session_state.get("auth_user", {}).get("demo", False)
+    if _cl_is_locked and _cl_default_lvl in list(NUTRITION.keys()):
+        level_key = _cl_default_lvl
+        st.markdown(
+            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+            f'padding:6px 14px;font-size:0.82rem;color:#166534;margin-bottom:6px">'
+            f'📚 Cấp học: <b>{_cl_default_lvl}</b> (theo tài khoản)</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        level_key = st.selectbox(
+            "📚 Cấp học đang kiểm tra", list(NUTRITION.keys()), key="cl_level",
+        )
     n = NUTRITION[level_key]
 
     # Banner dinh dưỡng — thu gọn để không che checklist chính
@@ -3463,15 +3473,24 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     </div>""", unsafe_allow_html=True)
 
     # ── Chọn cấp học + Tiêu chuẩn dinh dưỡng (collapsible) ──────────────────
-    _kt_levels = ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"]
+    _kt_levels  = ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"]
     _kt_default = st.session_state.get("user_profile", {}).get("default_level") or level
-    _kt_lvl_idx = _kt_levels.index(_kt_default) if _kt_default in _kt_levels else 0
-    _kt_level = st.selectbox(
-        "📚 Cấp học đang kiểm thực",
-        _kt_levels, index=_kt_lvl_idx, key="kt_level_selector",
-        help="Chọn cấp học để xem tiêu chuẩn dinh dưỡng phù hợp (B1_04, khẩu phần...)",
-    )
-    # Cập nhật level cho phần còn lại của tab
+    _kt_locked  = bool(st.session_state.get("auth_user")) and not st.session_state.get("is_super", False) and not st.session_state.get("auth_user", {}).get("demo", False)
+    if _kt_locked and _kt_default in _kt_levels:
+        _kt_level = _kt_default
+        st.markdown(
+            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+            f'padding:6px 14px;font-size:0.82rem;color:#166534;margin-bottom:6px">'
+            f'📚 Cấp học: <b>{_kt_default}</b> (theo tài khoản)</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        _kt_lvl_idx = _kt_levels.index(_kt_default) if _kt_default in _kt_levels else 0
+        _kt_level = st.selectbox(
+            "📚 Cấp học đang kiểm thực", _kt_levels, index=_kt_lvl_idx,
+            key="kt_level_selector",
+            help="Cấp học ảnh hưởng tiêu chuẩn dinh dưỡng",
+        )
     level = _kt_level
 
     n_yte = NUTRITION.get(level, NUTRITION[list(NUTRITION.keys())[0]])
@@ -4740,35 +4759,34 @@ def tab_history(role: str = "", school_filter: str = ""):
 
     # ── Bộ lọc ────────────────────────────────────────────────────────────────
     # Nếu đã đăng nhập và không phải BGH → khóa theo trường của mình
-    _is_bgh   = st.session_state.get("is_bgh", True)
     _lock     = bool(school_filter) and not st.session_state.get("is_super", False) and bool(st.session_state.get("auth_user"))
 
-    col_f, col_r = st.columns([3, 1])
-    with col_f:
-        if _lock:
-            # Non-BGH: chỉ thấy dữ liệu trường mình, không thay đổi được
-            st.markdown(
-                f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-                f'padding:8px 14px;font-size:0.85rem;color:#166534">'
-                f'🏫 Dữ liệu trường: <b>{school_filter}</b></div>',
-                unsafe_allow_html=True,
-            )
-            _school_sel = school_filter
-        else:
-            # BGH hoặc demo: selectbox chọn tự do
-            _schools_db  = db_get_schools()
-            _school_opts = ["Tất cả trường"] + _schools_db
-            _default_idx = (_school_opts.index(school_filter)
-                            if school_filter and school_filter in _school_opts else 0)
-            _school_sel  = st.selectbox(
-                "Lọc theo tên trường",
-                options=_school_opts,
-                index=_default_idx,
-                help="Gõ tên trường để tìm nhanh — danh sách lấy từ database",
-            )
-    view_mode = col_r.selectbox(
-        "Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"]
-    )
+    if _lock:
+        # Locked: hiện tên trường + view_mode cùng 1 hàng compact
+        _lk1, _lk2 = st.columns([3, 1])
+        _lk1.markdown(
+            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
+            f'padding:8px 14px;font-size:0.85rem;color:#166534;line-height:2.5">'
+            f'🏫 Dữ liệu trường: <b>{school_filter}</b></div>',
+            unsafe_allow_html=True,
+        )
+        view_mode = _lk2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
+                                    label_visibility="collapsed")
+        _school_sel = school_filter
+    else:
+        # Admin/BGH: selectbox chọn trường + view_mode
+        _fl1, _fl2 = st.columns([3, 1])
+        _schools_db  = db_get_schools()
+        _school_opts = ["Tất cả trường"] + _schools_db
+        _default_idx = (_school_opts.index(school_filter)
+                        if school_filter and school_filter in _school_opts else 0)
+        _school_sel  = _fl1.selectbox(
+            "Lọc theo tên trường", options=_school_opts, index=_default_idx,
+            label_visibility="collapsed",
+            help="Gõ tên trường để tìm nhanh",
+        )
+        view_mode = _fl2.selectbox("Hiển thị", ["Tất cả", "🍱 Bữa ăn", "🏭 Nhà Cung Cấp"],
+                                    label_visibility="collapsed")
 
     school_input = "" if _school_sel == "Tất cả trường" else _school_sel
     sessions = db_get_sessions(school=school_input, limit=200)
@@ -4827,12 +4845,18 @@ def tab_history(role: str = "", school_filter: str = ""):
         except Exception:
             pass
 
+        # Chỉ hiện banner khi có THỰC SỰ có alert — không hiện "0 cảnh báo"
         if _quick_alerts:
             _crit_cnt = sum(1 for lvl, _ in _quick_alerts if lvl == "🚨")
-            _warn_cnt = len(_quick_alerts) - _crit_cnt
+            _warn_cnt = sum(1 for lvl, _ in _quick_alerts if lvl == "⏰")
             _top_bg   = "#FEF2F2" if _crit_cnt > 0 else "#FFFBEB"
             _top_bd   = "#FCA5A5" if _crit_cnt > 0 else "#FCD34D"
             _top_tc   = "#991B1B" if _crit_cnt > 0 else "#78350F"
+            # Tiêu đề: chỉ nêu số > 0
+            _title_parts = []
+            if _crit_cnt > 0: _title_parts.append(f"{_crit_cnt} vấn đề nghiêm trọng")
+            if _warn_cnt > 0: _title_parts.append(f"{_warn_cnt} cảnh báo")
+            _title_str = " · ".join(_title_parts) + " — cần xử lý"
             _alert_html = "".join(
                 f'<div style="margin:3px 0;font-size:0.85rem">{lvl} {msg}</div>'
                 for lvl, msg in _quick_alerts
@@ -4841,11 +4865,8 @@ def tab_history(role: str = "", school_filter: str = ""):
                 f'<div style="background:{_top_bg};border:2px solid {_top_bd};'
                 f'border-radius:12px;padding:14px 18px;margin-bottom:12px">'
                 f'<div style="font-weight:700;color:{_top_tc};margin-bottom:6px;font-size:0.92rem">'
-                f'{"🚨" if _crit_cnt > 0 else "⚠️"} '
-                f'{_crit_cnt} vấn đề nghiêm trọng · {_warn_cnt} cảnh báo — cần xử lý ngay</div>'
+                f'{"🚨" if _crit_cnt > 0 else "⚠️"} {_title_str}</div>'
                 f'{_alert_html}'
-                f'<div style="font-size:0.75rem;color:{_top_tc};margin-top:6px;opacity:0.8">'
-                f'Chi tiết đầy đủ → xem mục 🔍 Phát hiện bất thường bên dưới</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -5682,11 +5703,12 @@ def tab_history(role: str = "", school_filter: str = ""):
             _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
             st.dataframe(_dn, use_container_width=True, hide_index=True)
 
-        # ── Cross-validation & Anomaly Detection (chỉ hiện với BGH/Admin) ────────
-        if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
+        # ── Cross-validation & Anomaly Detection — CHỈ BGH ────────────────────
+        # BGS và Y Tế không thấy phần này
+        if role == "Ban Giám Hiệu" or st.session_state.get("is_super"):
             _anomalies = []
 
-            # 1. Điểm quá đều trong 30 lần liên tiếp (≥ 19/20)
+            # 1-3. Kiểm tra chất lượng dữ liệu (cần có df_meal)
             if show_meal and not df_meal.empty:
                 _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
                 if _streak_high >= 10 and len(df_meal) >= 10:
@@ -5724,69 +5746,48 @@ def tab_history(role: str = "", school_filter: str = ""):
                 except Exception:
                     pass
 
-            # 4. BGS + Y Tế không kiểm tra đủ tần suất — cả 2 đều cần escalate BGH
-            if show_meal and not df_meal.empty:
-                try:
-                    _now_dt = pd.Timestamp(now_vn().date())
+            # 4. BGS + Y Tế tần suất — dùng sessions trực tiếp (không cần df_meal)
+            # → Fix: luôn chạy kể cả khi chưa có dữ liệu trong view hiện tại
+            try:
+                _now_dt2 = pd.Timestamp(now_vn().date())
+                # Lấy dates từ raw sessions (đã fetch ở trên, không cần thêm DB call)
+                _s_bgs_dates = sorted([s["check_date"] for s in sessions
+                                       if s.get("check_type") == "ban_giam_sat" and s.get("check_date")],
+                                      reverse=True)
+                _s_yte_dates = sorted([s["check_date"] for s in sessions
+                                       if s.get("check_type") == "kiem_thuc_3_buoc" and s.get("check_date")],
+                                      reverse=True)
 
-                    # ── BGS: yêu cầu 2 lần/tuần (NĐ 15/2018) ────────────────
-                    _bgs_only = df_meal[df_meal["Loại"] == "Ban Giám Sát"].copy()
-                    if not _bgs_only.empty:
-                        _bgs_only["Ngày_dt"] = pd.to_datetime(_bgs_only["Ngày"], errors="coerce")
-                        _bgs_7d = _bgs_only[_bgs_only["Ngày_dt"] >= _now_dt - pd.Timedelta(days=7)]
-                        _last_bgs = _bgs_only["Ngày_dt"].max()
-                        _bgs_gap  = (_now_dt - _last_bgs).days if pd.notna(_last_bgs) else 99
-                        if _bgs_gap > 7:
-                            _anomalies.append(
-                                f"🚨 <b>[BGH → BGS] Không kiểm tra</b>: "
-                                f"Ban Giám Sát chưa kiểm tra <b>{_bgs_gap} ngày</b> — "
-                                f"vi phạm NĐ 15/2018 (tối thiểu 2 lần/tuần). "
-                                f"Ban Giám Hiệu cần liên hệ ngay."
-                            )
-                        elif len(_bgs_7d) < 2:
-                            _anomalies.append(
-                                f"⏰ <b>[BGH → BGS] Tần suất thấp</b>: "
-                                f"7 ngày qua Ban Giám Sát chỉ kiểm tra <b>{len(_bgs_7d)} lần</b> "
-                                f"(yêu cầu ≥ 2 lần/tuần). Ban Giám Hiệu cần nhắc nhở."
-                            )
-                    else:
-                        _anomalies.append(
-                            "🚨 <b>[BGH → BGS] Chưa có kiểm tra nào</b>: "
-                            "Ban Giám Sát chưa thực hiện kiểm tra trong kỳ này. "
-                            "Liên hệ ngay để lên lịch."
-                        )
+                # BGS tần suất
+                if _s_bgs_dates:
+                    _s_bgs_last = pd.Timestamp(_s_bgs_dates[0])
+                    _s_bgs_gap  = (_now_dt2 - _s_bgs_last).days
+                    _s_bgs_7d   = sum(1 for d in _s_bgs_dates
+                                      if pd.Timestamp(d) >= _now_dt2 - pd.Timedelta(days=7))
+                    if _s_bgs_gap > 7:
+                        _anomalies.append(f"🚨 <b>[BGH → BGS] Không kiểm tra</b>: "
+                                          f"Ban Giám Sát chưa kiểm tra <b>{_s_bgs_gap} ngày</b> — "
+                                          f"vi phạm NĐ 15/2018 (≥ 2 lần/tuần). Liên hệ ngay.")
+                    elif _s_bgs_7d < 2:
+                        _anomalies.append(f"⏰ <b>[BGH → BGS] Tần suất thấp</b>: "
+                                          f"7 ngày qua chỉ {_s_bgs_7d} lần (yêu cầu ≥ 2 lần/tuần).")
+                else:
+                    _anomalies.append("🚨 <b>[BGH → BGS] Chưa có kiểm tra nào</b>: "
+                                      "Ban Giám Sát chưa thực hiện. Liên hệ ngay để lên lịch.")
 
-                    # ── Y Tế: yêu cầu HÀNG NGÀY (TTLT 13/2016 Điều 9) ────────
-                    _yte_only = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"].copy()
-                    if not _yte_only.empty:
-                        _yte_only["Ngày_dt"] = pd.to_datetime(_yte_only["Ngày"], errors="coerce")
-                        # Đếm ngày làm việc trong 7 ngày gần nhất (Thứ 2-6)
-                        _yte_7d = _yte_only[_yte_only["Ngày_dt"] >= _now_dt - pd.Timedelta(days=7)]
-                        _last_yte = _yte_only["Ngày_dt"].max()
-                        _yte_gap  = (_now_dt - _last_yte).days if pd.notna(_last_yte) else 99
-                        _workdays_7d = sum(1 for d in pd.date_range(_now_dt - pd.Timedelta(days=6), _now_dt)
-                                           if d.weekday() < 5)  # Thứ 2-6
-                        if _yte_gap > 3:
-                            _anomalies.append(
-                                f"🚨 <b>[BGH → Y Tế] Không kiểm thực</b>: "
-                                f"Y Tế Học Đường chưa kiểm thực <b>{_yte_gap} ngày</b> — "
-                                f"vi phạm TTLT 13/2016 Điều 9 (yêu cầu HÀNG NGÀY). "
-                                f"Ban Giám Hiệu cần xử lý ngay."
-                            )
-                        elif len(_yte_7d) < max(1, _workdays_7d - 1):
-                            _anomalies.append(
-                                f"⏰ <b>[BGH → Y Tế] Bỏ sót kiểm thực</b>: "
-                                f"7 ngày qua Y Tế chỉ kiểm thực <b>{len(_yte_7d)}/{_workdays_7d} ngày làm việc</b> "
-                                f"(TTLT 13/2016: bắt buộc hàng ngày). Ban Giám Hiệu cần theo dõi."
-                            )
-                    else:
-                        _anomalies.append(
-                            "🚨 <b>[BGH → Y Tế] Chưa có kiểm thực</b>: "
-                            "Y Tế Học Đường chưa thực hiện kiểm thực 3 bước. "
-                            "Vi phạm TTLT 13/2016 — cần giải trình ngay."
-                        )
-                except Exception:
-                    pass
+                # Y Tế tần suất
+                if _s_yte_dates:
+                    _s_yte_last = pd.Timestamp(_s_yte_dates[0])
+                    _s_yte_gap  = (_now_dt2 - _s_yte_last).days
+                    if _s_yte_gap > 3:
+                        _anomalies.append(f"🚨 <b>[BGH → Y Tế] Không kiểm thực</b>: "
+                                          f"Y Tế chưa kiểm thực <b>{_s_yte_gap} ngày</b> — "
+                                          f"vi phạm TTLT 13/2016 Điều 9 (hàng ngày). Cần xử lý ngay.")
+                else:
+                    _anomalies.append("🚨 <b>[BGH → Y Tế] Chưa có kiểm thực</b>: "
+                                      "Y Tế chưa thực hiện kiểm thực 3 bước. Vi phạm TTLT 13/2016.")
+            except Exception:
+                pass
 
             if _anomalies:
                 st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Chi tiết</div>',
