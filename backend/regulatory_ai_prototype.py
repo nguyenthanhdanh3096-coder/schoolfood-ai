@@ -3263,18 +3263,36 @@ def tab_parent_view(api_key: str = ""):
     else:
         st.caption("Kết nối database để xem phản hồi.")
 
-    # ── Section 6: Quyền pháp lý ─────────────────────────────────────────────
-    with st.expander("⚖️ Quyền của Phụ Huynh theo pháp luật"):
-        for _title, _desc in [
-            ("Xem thực đơn", "Nhà trường phải công khai thực đơn hàng ngày — bảng thông báo trước phòng bếp hoặc ứng dụng này."),
-            ("Yêu cầu Ban Đại Diện PHHS giám sát", "Phụ Huynh có quyền đề nghị Ban Đại Diện PHHS kiểm tra đột xuất bếp ăn bất kỳ lúc nào."),
-            ("Phản ánh chất lượng", "Gửi phản hồi qua form bên trên hoặc liên hệ trực tiếp Hiệu Trưởng."),
-            ("Tiếp cận kết quả kiểm tra", "Báo cáo kiểm tra ATTP là tài liệu công khai — yêu cầu Ban Giám Hiệu cung cấp khi cần."),
-        ]:
-            st.markdown(f'<div class="sf-card" style="padding:10px 16px;margin:5px 0">'
-                        f'<b style="font-size:0.88rem">{_title}</b>'
-                        f'<div style="font-size:0.82rem;color:#475569;margin-top:3px">{_desc}</div>'
-                        f'</div>', unsafe_allow_html=True)
+    # ── Section 6: Quyền pháp lý + liên kết AI ──────────────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#EFF6FF,#F5F3FF);'
+        'border-radius:12px;padding:16px 20px;margin:14px 0 8px 0;'
+        'border:1px solid #DBEAFE">'
+        '<div style="font-size:0.95rem;font-weight:700;color:#1E293B;margin-bottom:8px">'
+        '⚖️ Quyền của Phụ Huynh theo pháp luật</div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+        + "".join([
+            f'<div style="background:white;border-radius:8px;padding:10px 14px">'
+            f'<b style="font-size:0.85rem;color:#1E293B">{t}</b>'
+            f'<div style="font-size:0.78rem;color:#64748B;margin-top:3px">{d}</div>'
+            f'</div>'
+            for t, d in [
+                ("📋 Xem thực đơn hàng ngày", "Nhà trường phải công khai thực đơn — bảng trước phòng bếp hoặc app này."),
+                ("👥 Yêu cầu giám sát độc lập", "Đề nghị Ban Đại Diện PHHS kiểm tra đột xuất bếp ăn bất kỳ lúc nào."),
+                ("📤 Phản ánh chất lượng", "Gửi phản hồi qua form bên trên hoặc liên hệ trực tiếp Hiệu Trưởng."),
+                ("📊 Tiếp cận kết quả kiểm tra", "Báo cáo ATTP là tài liệu công khai — yêu cầu Ban Giám Hiệu cung cấp."),
+            ]
+        ])
+        + '</div>'
+        + '<div style="margin-top:12px;background:rgba(124,58,237,0.08);border-radius:8px;'
+          'padding:10px 14px;font-size:0.82rem;color:#5B21B6;display:flex;align-items:center;gap:8px">'
+          '💬 <b>Có thắc mắc về quyền phụ huynh, ATTP, hay cách xử lý khi con bị ảnh hưởng?</b>'
+          '&nbsp; → Dùng tab <b>💬 Hỏi đáp AI</b> để đặt câu hỏi bất kỳ lúc nào — '
+          'AI trả lời dựa trên pháp luật Việt Nam.'
+          '</div>'
+        + '</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── Hỏi đáp AI ────────────────────────────────────────────────────────────
     if api_key:
@@ -4480,7 +4498,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
         _all_fb    = db_get_all_feedbacks(school=school_input, limit=200)
         _is_bgh_fb = (role == "Ban Giám Hiệu")
-        _is_bgs_fb = role in ("Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường")
+        # Chỉ Y Tế Học Đường được thêm minh chứng (kiểm tra trực tiếp bằng role)
         _user_name = st.session_state.get("user_profile", {}).get("full_name", role)
 
         def _fmt_date_fb(iso_str: str) -> str:
@@ -4570,12 +4588,24 @@ def tab_history(role: str = "", school_filter: str = ""):
             with _fc2:
                 # Donut: by category
                 try:
+                    # Keywords mapping để legend ngắn gọn rõ ràng
+                    _CAT_KW = {
+                        "Chất lượng": "Chất lượng thức ăn",
+                        "Vệ sinh":    "Vệ sinh bếp ăn",
+                        "Nghi ngờ":   "Nghi ngờ ngộ độc",
+                        "Thiếu":      "Thiếu dinh dưỡng",
+                        "Thực đơn":   "Thực đơn không khớp",
+                        "Góp ý":      "Góp ý khác",
+                        "Khác":       "Khác",
+                    }
                     _cats_fb = {}
                     for f in _all_fb:
-                        # Bỏ emoji đầu, dùng text ngắn gọn làm label
                         _raw_c = (f.get("category","") or "Khác")
-                        _text_c = _re_fb.sub(r'^[\U00010000-\U0010ffff\U00002600-\U000027BF\U0001F300-\U0001F9FF]\s*', '', _raw_c).strip()
-                        _c = _text_c[:22] + "…" if len(_text_c) > 22 else (_text_c or "Khác")
+                        # Map sang keyword cố định
+                        _c = "Khác"
+                        for _kw, _lbl in _CAT_KW.items():
+                            if _kw.lower() in _raw_c.lower():
+                                _c = _lbl; break
                         _cats_fb[_c] = _cats_fb.get(_c, 0) + 1
                     _fig_pie_fb = _go_fb.Figure(_go_fb.Pie(
                         labels=list(_cats_fb.keys()), values=list(_cats_fb.values()),
@@ -4660,43 +4690,46 @@ def tab_history(role: str = "", school_filter: str = ""):
                     )
 
                     # Form action theo vai trò
-                    if _is_bgs_fb:
-                        _ev_lbl = ("📝 Cập nhật minh chứng" if _fevtx
-                                   else "📝 Thêm minh chứng / diễn giải")
-                        with st.expander(f"{_ev_lbl} — {_fcat[:30]}"):
+                    # Chỉ Y Tế Học Đường mới thêm minh chứng (họ có mặt trực tiếp)
+                    if role == "Y Tế Học Đường":
+                        _ev_lbl = "📝 Cập nhật minh chứng" if _fevtx else "📝 Thêm minh chứng"
+                        with st.expander(_ev_lbl):
                             if _fevtx:
                                 st.markdown(
                                     f'<div style="background:#EFF6FF;border-radius:6px;'
                                     f'padding:8px 12px;font-size:0.82rem;color:#1D4ED8;margin-bottom:8px">'
-                                    f'📋 <b>Minh chứng hiện tại ({_fevby}):</b> {_fevtx}</div>',
+                                    f'📋 <b>Minh chứng đã gửi ({_fevby}):</b> {_fevtx}</div>',
                                     unsafe_allow_html=True,
                                 )
                             _evtxt_new = st.text_area(
-                                "Diễn giải / Mô tả hành động đã thực hiện",
+                                "Mô tả hành động đã thực hiện / kiểm tra",
                                 key=f"ev_{_fid}", height=90,
-                                placeholder="VD: Đã kiểm tra lô hàng cá ngày 03/06, xác nhận cá nhận lúc 10:30 nhiệt độ 62°C đạt chuẩn. Mùi vị bình thường khi thử. Đã báo cáo lên BGH...",
+                                placeholder="VD: Đã kiểm tra lô hàng cá ngày 03/06 lúc 10:30, nhiệt độ 62°C đạt chuẩn. Mùi vị bình thường. Đã báo cáo Ban Giám Hiệu...",
                             )
-                            _ev_img = st.file_uploader(
-                                "📷 Ảnh minh chứng (tuỳ chọn · jpg/png ≤ 5MB)",
-                                type=["jpg","jpeg","png"], key=f"ev_img_{_fid}",
-                                accept_multiple_files=False,
+                            _ev_file = st.file_uploader(
+                                "📎 Tải lên minh chứng (ảnh / PDF ≤ 5MB)",
+                                type=["jpg","jpeg","png","pdf"],
+                                key=f"ev_file_{_fid}", accept_multiple_files=False,
                             )
-                            _ev_img_note = ""
-                            if _ev_img:
-                                st.image(_ev_img, width=200, caption="Ảnh đính kèm")
-                                _ev_img_note = f" [Kèm ảnh: {_ev_img.name}]"
+                            _ev_file_note = ""
+                            if _ev_file:
+                                if _ev_file.type.startswith("image"):
+                                    st.image(_ev_file, width=220, caption="Ảnh đính kèm")
+                                else:
+                                    st.caption(f"📄 File đính kèm: {_ev_file.name}")
+                                _ev_file_note = f" [File: {_ev_file.name}]"
                             if st.button("📤 Gửi minh chứng", key=f"ev_btn_{_fid}",
                                          type="primary", use_container_width=True):
-                                _final_ev = (_evtxt_new.strip() or _fevtx) + _ev_img_note
+                                _final_ev = (_evtxt_new.strip() or _fevtx or "") + _ev_file_note
                                 if _final_ev.strip():
                                     if db_add_evidence(_fid, _final_ev, _user_name):
-                                        st.success("✅ Đã gửi minh chứng — Ban Giám Hiệu sẽ xem xét.")
+                                        st.success("✅ Đã gửi — Ban Giám Hiệu sẽ xem xét.")
                                         st.rerun()
                                 else:
-                                    st.warning("Vui lòng nhập nội dung diễn giải.")
+                                    st.warning("Vui lòng nhập mô tả hoặc tải file.")
 
                     elif _is_bgh_fb:
-                        with st.expander(f"🔒 Đóng task & ghi phản hồi chính thức — {_fcat[:30]}"):
+                        with st.expander("🔒 Đóng task & ghi phản hồi chính thức"):
                             if _fevtx:
                                 st.markdown(
                                     f'<div style="background:#EFF6FF;border-radius:6px;'
@@ -4724,41 +4757,49 @@ def tab_history(role: str = "", school_filter: str = ""):
             if _closed_fb:
                 st.markdown(
                     '<div style="background:linear-gradient(135deg,#1E293B,#334155);'
-                    'border-radius:10px;padding:10px 18px;margin:16px 0 8px 0;'
-                    'display:flex;align-items:center;gap:10px">'
-                    '<span style="color:white;font-size:0.9rem;font-weight:700">'
-                    f'✅ {len(_closed_fb)} phản hồi đã đóng gần nhất</span>'
-                    '<span style="color:#94A3B8;font-size:0.75rem">(lưu để traceback)</span>'
+                    'border-radius:10px;padding:10px 18px;margin:16px 0 8px 0">'
+                    f'<span style="color:white;font-size:0.9rem;font-weight:700">'
+                    f'✅ {len(_closed_fb)} phản hồi đã xử lý gần nhất</span>'
                     '</div>',
                     unsafe_allow_html=True,
                 )
                 for _cf in _closed_fb:
                     _cdt  = _fmt_date_fb(_cf.get("created_at",""))
-                    _ccat = _re_fb.sub(r'^[\U00010000-\U0010ffff\U00002600-\U000027BF\U0001F300-\U0001F9FF]\s*','',
-                                       _cf.get("category","")).strip()[:30]
-                    _ccnt = _cf.get("content","")
-                    _crep = _cf.get("response_text","") or ""
-                    _crby = _cf.get("response_by","") or ""
+                    # Keyword ngắn cho category
+                    _ccat_raw = _cf.get("category","")
+                    _ccat = "Khác"
+                    for _kw2, _lbl2 in _CAT_KW.items():
+                        if _kw2.lower() in _ccat_raw.lower():
+                            _ccat = _lbl2; break
+                    _ccnt = (_cf.get("content","") or "").strip()
+                    _crep = (_cf.get("response_text","") or "").strip()
+                    _crby = (_cf.get("response_by","") or "").strip()
                     _crev = _fmt_date_fb(_cf.get("reviewed_at",""))
-                    _cev  = _cf.get("evidence_text","") or ""
-                    _ceby = _cf.get("evidence_by","") or ""
+                    _cev  = (_cf.get("evidence_text","") or "").strip()
+                    _ceby = (_cf.get("evidence_by","") or "").strip()
                     st.markdown(
-                        f'<div style="background:#F1F5F9;border:1px solid #CBD5E1;'
-                        f'border-radius:8px;padding:10px 14px;margin:4px 0">'
+                        f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;'
+                        f'border-radius:8px;padding:12px 16px;margin:5px 0">'
                         f'<div style="display:flex;justify-content:space-between;'
-                        f'align-items:center;margin-bottom:5px">'
-                        f'<span style="font-size:0.75rem;color:#64748B">📅 {_cdt} · {_ccat}</span>'
-                        f'<span style="background:#E2E8F0;color:#475569;font-size:0.7rem;'
-                        f'font-weight:600;padding:2px 10px;border-radius:8px">'
+                        f'align-items:center;margin-bottom:6px">'
+                        f'<span style="font-size:0.75rem;color:#64748B;font-weight:600">'
+                        f'📅 {_cdt} &nbsp;·&nbsp; {_ccat}</span>'
+                        f'<span style="background:#DCFCE7;color:#166534;font-size:0.7rem;'
+                        f'font-weight:700;padding:2px 10px;border-radius:8px">'
                         f'✅ Đóng {_crev}</span>'
                         f'</div>'
-                        f'<div style="font-size:0.83rem;color:#475569;font-style:italic">'
+                        f'<div style="font-size:0.88rem;color:#334155;margin-bottom:6px">'
                         f'"{_ccnt}"</div>'
-                        + (f'<div style="font-size:0.75rem;color:#3B82F6;margin-top:4px">'
-                           f'📋 Minh chứng ({_ceby}): {_cev}</div>' if _cev else '')
+                        + (f'<div style="background:#EFF6FF;border-radius:6px;'
+                           f'padding:5px 10px;margin-bottom:4px;font-size:0.78rem;color:#1D4ED8">'
+                           f'📋 <b>Minh chứng Y Tế ({_ceby}):</b> {_cev}</div>'
+                           if _cev and _ceby else '')
                         + (f'<div style="background:#F0FDF4;border-radius:6px;'
-                           f'padding:5px 10px;margin-top:5px;font-size:0.75rem;color:#166534">'
-                           f'💬 BGH ({_crby}): {_crep}</div>' if _crep else '')
+                           f'padding:5px 10px;font-size:0.78rem;color:#166534">'
+                           f'💬 <b>BGH phản hồi ({_crby}):</b> {_crep}</div>'
+                           if _crep else
+                           '<div style="font-size:0.75rem;color:#94A3B8;font-style:italic">'
+                           'BGH chưa ghi phản hồi văn bản</div>')
                         + '</div>',
                         unsafe_allow_html=True,
                     )
