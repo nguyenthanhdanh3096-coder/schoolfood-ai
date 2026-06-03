@@ -1601,6 +1601,47 @@ Trả lời JSON array (không thêm text khác):
         return []
 
 
+# ── Anti-Fraud: Câu hỏi ngẫu nhiên chỉ người có mặt mới trả lời được ─────────
+def generate_anti_fraud_questions(menu: str, school: str, date_str: str,
+                                   school_level: str, api_key: str) -> list:
+    """
+    Tạo 2-3 câu hỏi xác thực ngẫu nhiên dựa trên bối cảnh thực tế hôm nay.
+    Chỉ người THỰC SỰ có mặt tại bếp mới trả lời được — chống gian lận.
+    Câu hỏi thay đổi mỗi ngày, không thể đoán trước.
+    """
+    try:
+        _now = now_vn()
+        _day_vn = ["Thứ Hai","Thứ Ba","Thứ Tư","Thứ Năm","Thứ Sáu","Thứ Bảy","Chủ Nhật"][_now.weekday()]
+        _time_ctx = f"{_now.strftime('%H:%M')} {_day_vn}"
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=MODEL, max_tokens=500,
+            messages=[{"role": "user", "content": f"""Bạn là kiểm tra viên ATTP đang ở tại bếp trường.
+Bối cảnh: {school} · {_day_vn} {date_str} {_time_ctx} · Cấp {school_level}
+Thực đơn hôm nay: {menu}
+
+Tạo ĐÚNG 2 câu hỏi xác thực ngẫu nhiên — câu hỏi phải:
+- Chỉ người ĐANG CÓ MẶT tại bếp lúc này mới biết đáp án
+- Dựa trên quan sát trực tiếp (màu sắc, mùi, nhiệt kế, số lượng thực tế hôm nay...)
+- KHÔNG thể trả lời bằng cách nhìn vào form hay đoán mò
+- Thay đổi mỗi ngày, không lặp lại
+
+Ví dụ tốt: "Nhiệt kế trên tủ lạnh số 1 đang hiển thị bao nhiêu độ?"
+Ví dụ xấu: "Nhiệt độ tủ lạnh phải là bao nhiêu?" (đây là câu hỏi kiến thức, không xác thực)
+
+Trả về JSON array (không thêm text):
+[
+  {{"q": "Câu hỏi quan sát cụ thể?", "hint": "Gợi ý nơi cần quan sát"}},
+  {{"q": "Câu hỏi quan sát cụ thể khác?", "hint": "Gợi ý nơi cần quan sát"}}
+]"""}]
+        )
+        text = resp.content[0].text.strip()
+        s, e = text.find("["), text.rfind("]") + 1
+        return json.loads(text[s:e]) if s != -1 and e > s else []
+    except Exception:
+        return []
+
+
 # ── AI #3: Báo cáo ngôn ngữ tự nhiên ────────────────────────────────────────
 def generate_ai_narrative(results: dict, notes: dict, alert_level: str,
                            school: str, date_str: str, menu: str,
@@ -2172,6 +2213,73 @@ def tab_checklist(api_key: str = ""):
     else:
         st.caption("🔌 Kết nối API key ở thanh cài đặt phía trên để dùng tính năng tạo câu hỏi theo thực đơn.")
 
+    # ── Anti-Fraud: Câu hỏi xác thực ngẫu nhiên ──────────────────────────────
+    if ai_on and menu and school:
+        if "cl_af_questions" not in st.session_state:
+            st.session_state.cl_af_questions = []
+        if "cl_af_answers" not in st.session_state:
+            st.session_state.cl_af_answers = {}
+        if "cl_af_verified" not in st.session_state:
+            st.session_state.cl_af_verified = False
+
+        with st.expander("🔐 Xác thực hiện diện — Chống gian lận", expanded=False):
+            st.markdown(
+                '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;'
+                'padding:10px 14px;font-size:0.82rem;color:#92400E;margin-bottom:8px">'
+                '⚠️ <b>Anti-Fraud:</b> AI tạo câu hỏi ngẫu nhiên dựa trên bối cảnh thực tế hôm nay. '
+                'Chỉ người <b>đang có mặt tại bếp</b> mới trả lời được. '
+                'Câu hỏi thay đổi mỗi lần — không thể đoán trước hoặc copy từ lần trước.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            _af_col1, _af_col2 = st.columns([2, 1])
+            if _af_col1.button("🎲 Tạo câu hỏi xác thực ngẫu nhiên", key="gen_af",
+                                use_container_width=True):
+                with st.spinner("AI đang tạo câu hỏi dựa trên bối cảnh hôm nay..."):
+                    _af_qs = generate_anti_fraud_questions(
+                        menu=menu, school=school,
+                        date_str=str(date), school_level=level_key, api_key=api_key
+                    )
+                st.session_state.cl_af_questions = _af_qs
+                st.session_state.cl_af_answers = {}
+                st.session_state.cl_af_verified = False
+
+            if st.session_state.cl_af_questions:
+                st.markdown("**Trả lời dựa trên quan sát TRỰC TIẾP tại bếp:**")
+                _all_answered = True
+                for _qi, _q in enumerate(st.session_state.cl_af_questions):
+                    st.markdown(
+                        f'<div style="background:#F8FAFC;border-radius:6px;padding:8px 12px;'
+                        f'margin:4px 0;font-size:0.85rem;font-weight:600;color:#1E293B">'
+                        f'❓ {_q["q"]}</div>'
+                        f'<div style="font-size:0.75rem;color:#64748B;padding:0 4px 4px">'
+                        f'💡 {_q.get("hint","")}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    _ans = st.text_input(
+                        f"Câu trả lời {_qi+1}",
+                        key=f"af_ans_{_qi}",
+                        placeholder="Nhập kết quả quan sát trực tiếp...",
+                        label_visibility="collapsed",
+                    )
+                    st.session_state.cl_af_answers[_qi] = _ans
+                    if not _ans.strip():
+                        _all_answered = False
+
+                if _all_answered:
+                    if st.button("✅ Xác nhận đã kiểm tra trực tiếp", key="af_confirm",
+                                 type="primary", use_container_width=True):
+                        st.session_state.cl_af_verified = True
+                        st.success("✅ Đã xác thực hiện diện — kết quả kiểm tra được ghi nhận.")
+
+                if st.session_state.cl_af_verified:
+                    st.markdown(
+                        '<div style="background:#DCFCE7;border-radius:6px;padding:6px 12px;'
+                        'font-size:0.8rem;color:#166534;font-weight:600">'
+                        '🛡️ Đã xác thực — Câu trả lời được lưu vào báo cáo</div>',
+                        unsafe_allow_html=True,
+                    )
+
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     cl = get_checklist(level_key)
 
@@ -2664,6 +2772,18 @@ def _build_report(school, date, insp, menu, level_key, results, notes,
         lines.append(f"   {code}{crit:<12} [{status:<12}] {desc}{note_str}")
 
     notify_str = "\n".join(f"     • {n}" for n in a.get("notify", []))
+
+    # Anti-fraud verification section
+    _af_qs = cl.get("af_questions", []) if isinstance(cl, dict) else []
+    _af_verified = cl.get("af_verified", False) if isinstance(cl, dict) else False
+    _af_section = ""
+    if _af_qs or _af_verified:
+        _af_section = "\n   XÁC THỰC HIỆN DIỆN (Anti-Fraud):\n"
+        for i, q in enumerate(_af_qs):
+            _ans = cl.get(f"af_ans_{i}", "—") if isinstance(cl, dict) else "—"
+            _af_section += f"     Q{i+1}: {q.get('q','')}\n     A{i+1}: {_ans}\n"
+        _af_section += f"     Trạng thái: {'✓ Đã xác thực' if _af_verified else '⚠ Chưa xác thực'}\n"
+
     lines += [
         "", "-" * 64,
         "   THÔNG BÁO ĐẾN:", notify_str,
