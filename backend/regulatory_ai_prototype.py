@@ -2547,6 +2547,7 @@ def tab_checklist(api_key: str = ""):
         type="primary" if can_submit else "secondary",
         disabled=not can_submit,
         use_container_width=True,
+        key="cl_submit_btn",
     ):
         alert_key = determine_alert(st.session_state.cl_r, cl)
         date_vn   = date.strftime("%d/%m/%Y")
@@ -2594,7 +2595,7 @@ def tab_checklist(api_key: str = ""):
             )
             if session_id:
                 st.session_state[_save_guard_key] = True   # Đánh dấu đã lưu
-                st.success(f"💾 Đã lưu vào database (ID: `{session_id[:8]}...`)")
+                # DB saved silently
             elif db_ok():
                 st.warning("⚠️ Lưu database thất bại — báo cáo vẫn tải được bình thường")
         else:
@@ -3757,7 +3758,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
             )
             if sid_kt:
                 st.session_state[_kt_guard_key] = True
-                st.success(f"💾 Đã lưu vào database (ID: `{sid_kt[:8]}...`)")
+                # DB saved silently
         else:
             st.info("💾 Sổ kiểm thực này đã được lưu trước đó.")
 
@@ -6071,7 +6072,8 @@ def tab_supplier(api_key: str = "", role: str = ""):
         st.warning("⚠️ Chưa đủ điều kiện tạo báo cáo: " + " · ".join(_miss))
 
     if st.button("📄 Tải báo cáo", type="primary",
-                 disabled=not can_submit, use_container_width=True):
+                 disabled=not can_submit, use_container_width=True,
+                 key="sup_submit_btn"):
         guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
         already_saved = st.session_state.get(guard_key, False)
 
