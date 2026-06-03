@@ -2905,8 +2905,8 @@ def tab_parent_view(api_key: str = ""):
             '<div class="sf-card" style="border-left:4px solid #94A3B8">'
             '<div style="font-size:0.85rem;color:#64748B;line-height:1.7">'
             '📋 Thực đơn hôm nay chưa được cập nhật trên hệ thống.<br>'
-            '👉 Xem thực đơn tại <b>bảng thông báo trước phòng bếp/căng tin</b> '
-            'hoặc hỏi Y Tế Học Đường / giáo viên chủ nhiệm.'
+            '👉 Xem thực đơn tại bảng thông báo trước phòng bếp '
+            'hoặc hỏi Y tế học đường, giáo viên chủ nhiệm.'
             '</div></div>',
             unsafe_allow_html=True,
         )
@@ -2991,8 +2991,7 @@ def tab_parent_view(api_key: str = ""):
     # ── Section 5: Theo dõi phản hồi trong trường ────────────────────────────
     st.markdown('<div class="sec-hdr">📬 Phản hồi cộng đồng — Phụ Huynh trong trường</div>',
                 unsafe_allow_html=True)
-    st.caption("Tất cả phản hồi từ phụ huynh trong trường (ẩn danh người gửi). "
-               "Trạng thái: ⏳ Chờ xử lý · ✅ Đã xử lý")
+    st.caption("Trạng thái: ⏳ Chờ xử lý · ✅ Đã xử lý")
 
     if db_ok() and (school or st.session_state.get("kt_school")):
         _fb_school = school or st.session_state.get("kt_school", "")
@@ -5616,8 +5615,12 @@ def show_login_page():
             '</div>',
             unsafe_allow_html=True,
         )
+        # Lấy email đã lưu từ lần đăng nhập trước (trong cùng phiên trình duyệt)
+        _saved_email = st.session_state.get("last_login_email", "")
+
         with st.form("login_form", clear_on_submit=False):
-            _email    = st.text_input("📧 Email", placeholder="ten@truong.edu.vn")
+            _email    = st.text_input("📧 Email", value=_saved_email,
+                                       placeholder="ten@truong.edu.vn")
             _password = st.text_input("🔒 Mật khẩu", type="password", placeholder="••••••••")
             _submit   = st.form_submit_button("Đăng nhập →", type="primary",
                                                use_container_width=True)
@@ -5643,6 +5646,8 @@ def show_login_page():
                             }).eq("id", _user["id"]).execute()
                         except Exception:
                             pass
+                        # Ghi nhớ email cho lần sau (trong cùng phiên trình duyệt)
+                        st.session_state.last_login_email = _email.strip().lower()
                         st.session_state.auth_user    = _user
                         st.session_state.user_profile = _profile
                         st.rerun()
@@ -5715,7 +5720,12 @@ def tab_user_management(school: str = ""):
             "Vai trò": ROLE_VN.get(p.get("role", ""), p.get("role", "")),
             "Trường": p.get("school_name", ""),
             "Trạng thái": "✅ Hoạt động" if p.get("is_active") else "🔒 Tạm khóa",
-            "Đăng nhập cuối": (p.get("last_login", "") or "")[:16],
+            "Đăng nhập cuối": (
+                __import__("datetime").datetime.fromisoformat(
+                    (p.get("last_login") or "")[:19].replace("Z", "")
+                ).strftime("%d/%m/%Y %H:%M")
+                if p.get("last_login") else "—"
+            ),
         } for p in _profiles])
         st.dataframe(_df_um, use_container_width=True, hide_index=True)
 
@@ -5751,10 +5761,18 @@ def tab_user_management(school: str = ""):
         _nu_name  = _nu_c2.text_input("👤 Họ và tên đầy đủ", placeholder="Nguyễn Văn A")
         _nu_c3, _nu_c4 = st.columns(2)
 
-        # Vai trò: BGH không tạo được tài khoản BGH khác (chỉ 3 vai trò còn lại)
-        _nu_roles_allowed = (list(ROLE_VN.values()) if _caller_is_super
-                             else [v for k, v in ROLE_VN.items() if k != "ban_giam_hieu"])
+        # Vai trò: BGH được tạo BGH khác (tối đa 2/trường); super admin không giới hạn
+        _bgh_count = sum(1 for p in _profiles if p.get("role") == "ban_giam_hieu")
+        _bgh_full  = (not _caller_is_super) and (_bgh_count >= 2)
+        if _caller_is_super:
+            _nu_roles_allowed = list(ROLE_VN.values())
+        else:
+            # BGH được tạo tất cả vai trò kể cả BGH (nhưng tối đa 2 BGH/trường)
+            _nu_roles_allowed = [v for k, v in ROLE_VN.items()
+                                 if not (k == "ban_giam_hieu" and _bgh_full)]
         _nu_role = _nu_c3.selectbox("Vai trò", _nu_roles_allowed)
+        if _bgh_full and not _caller_is_super:
+            st.caption("⚠️ Trường này đã có 2 tài khoản Ban Giám Hiệu — tối đa cho phép.")
 
         # Trường: Super Admin tự nhập, BGH bị khóa theo trường mình
         if _caller_is_super:
@@ -5921,7 +5939,7 @@ def main():
                   f'{_pf.get("full_name","")}</span>'
                 + f'<span style="font-size:0.78rem;color:#64748B">{_auth_user.get("email","")}</span>'
                 + (f'<span style="font-size:0.78rem;color:#475569">🏫 {_school_pf}</span>'
-                   if _school_pf else '')
+                   if _school_pf and not _is_super else '')
                 + ('</div>'),
                 unsafe_allow_html=True,
             )
