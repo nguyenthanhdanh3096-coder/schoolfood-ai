@@ -3206,45 +3206,58 @@ def tab_parent_view(api_key: str = ""):
                     _st_clr = "#2563EB" if _st=="reviewed" else "#D97706"
                     _st_bg  = "#EFF6FF" if _st=="reviewed" else "#FFFBEB"
                     _ev = _fb.get("evidence_text","") or ""
-                    _dt = (_fb.get("created_at") or "")[:10]
+                    _dt_ph = f"{(_fb.get('created_at') or '')[:10].replace('-','/')[8:10]}/{(_fb.get('created_at') or '')[:10][5:7]}/{(_fb.get('created_at') or '')[:10][:4]}"
+                    _cat_ph = _fb.get("category","")
                     st.markdown(
-                        f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
-                        f'border-left:3px solid {_st_clr}">'
-                        f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-                        f'<span style="font-size:0.75rem;color:#64748B">{_dt} · {_fb.get("category","")}</span>'
-                        f'<span style="background:{_st_bg};color:{_st_clr};font-size:0.7rem;'
-                        f'font-weight:700;padding:2px 10px;border-radius:10px">{_st_lbl}</span>'
+                        f'<div style="background:{_st_bg};border:1.5px solid {_st_clr}40;'
+                        f'border-left:4px solid {_st_clr};border-radius:10px;'
+                        f'padding:12px 16px;margin:6px 0">'
+                        f'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">📅 {_dt_ph} · {_cat_ph}</span>'
+                        f'<span style="background:white;color:{_st_clr};font-size:0.7rem;'
+                        f'font-weight:700;padding:2px 10px;border-radius:10px;'
+                        f'border:1px solid {_st_clr}40">{_st_lbl}</span>'
                         f'</div>'
-                        f'<div style="font-size:0.85rem;color:#1E293B">{_fb.get("content","")}</div>'
-                        + (f'<div style="font-size:0.75rem;color:#2563EB;margin-top:4px">'
-                           f'📋 Minh chứng từ nhà trường: {_ev}</div>' if _ev else '')
+                        f'<div style="font-size:0.9rem;color:#1E293B;font-weight:500">'
+                        f'{_fb.get("content","")}</div>'
+                        + (f'<div style="font-size:0.78rem;color:#2563EB;margin-top:6px;'
+                           f'background:white;border-radius:6px;padding:5px 10px">'
+                           f'📋 Nhà trường đang xem xét: {_ev}</div>' if _ev else '')
                         + '</div>',
                         unsafe_allow_html=True,
                     )
 
-            # Phản hồi đã xử lý (hiện 5 gần nhất)
+            # Phản hồi đã xử lý — kiểu khác biệt hoàn toàn
             if _ph_closed:
-                with st.expander(f"✅ Đã xử lý ({len(_ph_closed)} phản hồi)"):
-                    for _fb in _ph_closed[:5]:
-                        _rep = _fb.get("response_text","") or ""
-                        _rby = _fb.get("response_by","") or ""
-                        _dt  = (_fb.get("created_at") or "")[:10]
-                        _rdt = (_fb.get("reviewed_at") or "")[:10]
-                        st.markdown(
-                            f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
-                            f'border-left:3px solid #16A34A;opacity:0.85">'
-                            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-                            f'<span style="font-size:0.75rem;color:#64748B">{_dt} · {_fb.get("category","")}</span>'
-                            f'<span style="font-size:0.7rem;color:#16A34A;font-weight:700">'
-                            f'✅ Đã xử lý {_rdt}</span>'
-                            f'</div>'
-                            f'<div style="font-size:0.85rem;color:#334155">{_fb.get("content","")}</div>'
-                            + (f'<div style="font-size:0.78rem;color:#166534;margin-top:5px;'
-                               f'background:#F0FDF4;border-radius:6px;padding:5px 10px">'
-                               f'💬 Phản hồi từ BGH ({_rby}): {_rep}</div>' if _rep else '')
-                            + '</div>',
-                            unsafe_allow_html=True,
-                        )
+                st.markdown(
+                    f'<div style="background:#1E293B;border-radius:8px;padding:8px 14px;'
+                    f'margin:14px 0 6px;font-size:0.82rem;color:#94A3B8">'
+                    f'✅ Đã xử lý xong — {len(_ph_closed)} phản hồi</div>',
+                    unsafe_allow_html=True,
+                )
+                for _fb in _ph_closed[:5]:
+                    _rep = _fb.get("response_text","") or ""
+                    _rby = _fb.get("response_by","") or ""
+                    _raw_dt = (_fb.get("created_at") or "")[:10]
+                    _dt_c  = f"{_raw_dt[8:10]}/{_raw_dt[5:7]}/{_raw_dt[:4]}" if len(_raw_dt)>=10 else _raw_dt
+                    _raw_rdt = (_fb.get("reviewed_at") or "")[:10]
+                    _rdt_c = f"{_raw_rdt[8:10]}/{_raw_rdt[5:7]}/{_raw_rdt[:4]}" if len(_raw_rdt)>=10 else _raw_rdt
+                    st.markdown(
+                        f'<div style="background:#F8FAFC;border:1px solid #E2E8F0;'
+                        f'border-radius:8px;padding:10px 14px;margin:4px 0">'
+                        f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+                        f'<span style="font-size:0.73rem;color:#94A3B8">📅 {_dt_c} · {_fb.get("category","")}</span>'
+                        f'<span style="font-size:0.7rem;color:#16A34A;font-weight:600">'
+                        f'✅ Đóng ngày {_rdt_c}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.82rem;color:#64748B;font-style:italic">'
+                        f'"{_fb.get("content","")}"</div>'
+                        + (f'<div style="font-size:0.75rem;color:#166534;margin-top:5px;'
+                           f'background:#F0FDF4;border-radius:5px;padding:4px 8px">'
+                           f'💬 BGH ({_rby}): {_rep}</div>' if _rep else '')
+                        + '</div>',
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("Chưa có phản hồi nào. Hãy là người đầu tiên gửi ý kiến!")
     else:
@@ -4463,14 +4476,32 @@ def tab_history(role: str = "", school_filter: str = ""):
     # ── Hệ thống Complaint — luôn hiện TRƯỚC early return ────────────────────
     if role in ("Ban Giám Hiệu", "Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường") and db_ok():
         import plotly.graph_objects as _go_fb
+        import re as _re_fb
+
         _all_fb    = db_get_all_feedbacks(school=school_input, limit=200)
         _is_bgh_fb = (role == "Ban Giám Hiệu")
         _is_bgs_fb = role in ("Ban Giám Sát (Đại Diện PHHS)", "Y Tế Học Đường")
         _user_name = st.session_state.get("user_profile", {}).get("full_name", role)
 
-        # Header + visualize
-        st.markdown('<div class="sec-hdr">📬 Phản hồi Phụ Huynh — Quản lý & Theo dõi</div>',
-                    unsafe_allow_html=True)
+        def _fmt_date_fb(iso_str: str) -> str:
+            """ISO date → DD/MM/YYYY chuẩn Việt Nam."""
+            d = (iso_str or "")[:10]
+            return f"{d[8:10]}/{d[5:7]}/{d[:4]}" if len(d) >= 10 else d
+
+        # ── Header nổi bật (giống section Bữa Ăn/NCC) ─────────────────────────
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);'
+            'border-radius:12px;padding:14px 22px;margin:20px 0 14px 0">'
+            '<div style="color:white;font-size:1.05rem;font-weight:700;margin-bottom:2px">'
+            '📬 PHẢN HỒI PHỤ HUYNH — QUẢN LÝ & THEO DÕI</div>'
+            '<div style="color:#DDD6FE;font-size:0.8rem">'
+            + ("BGH: Đọc minh chứng từ BGS/Y Tế → Đóng task & ghi phản hồi chính thức"
+               if _is_bgh_fb else
+               "Thêm minh chứng/diễn giải để hỗ trợ Ban Giám Hiệu xử lý phản hồi")
+            + ' &nbsp;·&nbsp; Luồng: ⏳ Chờ → 💬 Đang xem (BGS thêm minh chứng) → ✅ Đóng (BGH)'
+            + '</div></div>',
+            unsafe_allow_html=True,
+        )
 
         if _all_fb:
             # ── Metrics tổng quan ─────────────────────────────────────────────
@@ -4541,7 +4572,10 @@ def tab_history(role: str = "", school_filter: str = ""):
                 try:
                     _cats_fb = {}
                     for f in _all_fb:
-                        _c = (f.get("category","") or "Khác").split(" ")[0]
+                        # Bỏ emoji đầu, dùng text ngắn gọn làm label
+                        _raw_c = (f.get("category","") or "Khác")
+                        _text_c = _re_fb.sub(r'^[\U00010000-\U0010ffff\U00002600-\U000027BF\U0001F300-\U0001F9FF]\s*', '', _raw_c).strip()
+                        _c = _text_c[:22] + "…" if len(_text_c) > 22 else (_text_c or "Khác")
                         _cats_fb[_c] = _cats_fb.get(_c, 0) + 1
                     _fig_pie_fb = _go_fb.Figure(_go_fb.Pie(
                         labels=list(_cats_fb.keys()), values=list(_cats_fb.values()),
@@ -4626,61 +4660,108 @@ def tab_history(role: str = "", school_filter: str = ""):
                     )
 
                     # Form action theo vai trò
-                    if _is_bgs_fb and not _fevtx:
-                        with st.expander(f"📝 Thêm minh chứng / diễn giải [{_fid[:8]}]"):
-                            _evtxt = st.text_area("Diễn giải / Mô tả đã xử lý",
-                                                   key=f"ev_{_fid}", height=80,
-                                                   placeholder="Mô tả tình huống, hành động đã thực hiện, kết quả...")
+                    if _is_bgs_fb:
+                        _ev_lbl = ("📝 Cập nhật minh chứng" if _fevtx
+                                   else "📝 Thêm minh chứng / diễn giải")
+                        with st.expander(f"{_ev_lbl} — {_fcat[:30]}"):
+                            if _fevtx:
+                                st.markdown(
+                                    f'<div style="background:#EFF6FF;border-radius:6px;'
+                                    f'padding:8px 12px;font-size:0.82rem;color:#1D4ED8;margin-bottom:8px">'
+                                    f'📋 <b>Minh chứng hiện tại ({_fevby}):</b> {_fevtx}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                            _evtxt_new = st.text_area(
+                                "Diễn giải / Mô tả hành động đã thực hiện",
+                                key=f"ev_{_fid}", height=90,
+                                placeholder="VD: Đã kiểm tra lô hàng cá ngày 03/06, xác nhận cá nhận lúc 10:30 nhiệt độ 62°C đạt chuẩn. Mùi vị bình thường khi thử. Đã báo cáo lên BGH...",
+                            )
+                            _ev_img = st.file_uploader(
+                                "📷 Ảnh minh chứng (tuỳ chọn · jpg/png ≤ 5MB)",
+                                type=["jpg","jpeg","png"], key=f"ev_img_{_fid}",
+                                accept_multiple_files=False,
+                            )
+                            _ev_img_note = ""
+                            if _ev_img:
+                                st.image(_ev_img, width=200, caption="Ảnh đính kèm")
+                                _ev_img_note = f" [Kèm ảnh: {_ev_img.name}]"
                             if st.button("📤 Gửi minh chứng", key=f"ev_btn_{_fid}",
-                                         type="primary"):
-                                if _evtxt.strip():
-                                    if db_add_evidence(_fid, _evtxt.strip(), _user_name):
+                                         type="primary", use_container_width=True):
+                                _final_ev = (_evtxt_new.strip() or _fevtx) + _ev_img_note
+                                if _final_ev.strip():
+                                    if db_add_evidence(_fid, _final_ev, _user_name):
                                         st.success("✅ Đã gửi minh chứng — Ban Giám Hiệu sẽ xem xét.")
                                         st.rerun()
                                 else:
-                                    st.warning("Vui lòng nhập nội dung minh chứng.")
+                                    st.warning("Vui lòng nhập nội dung diễn giải.")
 
                     elif _is_bgh_fb:
-                        with st.expander(f"✅ Đóng complaint & phản hồi chính thức [{_fid[:8]}]"):
-                            _reptxt = st.text_area("Phản hồi chính thức của Ban Giám Hiệu",
-                                                    key=f"rep_{_fid}", height=80,
-                                                    placeholder="Nhà trường đã xử lý vấn đề...")
+                        with st.expander(f"🔒 Đóng task & ghi phản hồi chính thức — {_fcat[:30]}"):
+                            if _fevtx:
+                                st.markdown(
+                                    f'<div style="background:#EFF6FF;border-radius:6px;'
+                                    f'padding:8px 12px;font-size:0.82rem;color:#1D4ED8;margin-bottom:8px">'
+                                    f'📋 <b>Minh chứng từ {_fevby}:</b> {_fevtx}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                            _reptxt = st.text_area(
+                                "Phản hồi chính thức của Ban Giám Hiệu",
+                                key=f"rep_{_fid}", height=80,
+                                placeholder="VD: Nhà trường đã xem xét và xác nhận. Sẽ yêu cầu nhà cung cấp đổi lô hàng và kiểm tra thêm. Cảm ơn phụ huynh đã phản ánh.",
+                            )
                             if st.button("🔒 Đóng task & lưu phản hồi", key=f"rep_btn_{_fid}",
-                                         type="primary"):
+                                         type="primary", use_container_width=True):
                                 _rtext = _reptxt.strip() or "Ban Giám Hiệu đã xem xét và xử lý."
                                 if db_resolve_complaint(_fid, _rtext, _user_name):
-                                    st.success("✅ Đã đóng task và lưu phản hồi!")
+                                    st.success("✅ Đã đóng task!")
                                     st.rerun()
 
             else:
                 st.success("✅ Tất cả phản hồi đã được xử lý!")
 
-            # ── 10 complaint đã đóng gần nhất ─────────────────────────────────
+            # ── Phần đã đóng — phân biệt rõ với phần mở ─────────────────────
             _closed_fb = [f for f in _all_fb if f.get("status") == "resolved"][:10]
             if _closed_fb:
-                with st.expander(f"📋 {len(_closed_fb)} phản hồi đã xử lý gần nhất"):
-                    for _cf in _closed_fb:
-                        _cdt  = (_cf.get("created_at","") or "")[:10]
-                        _ccat = _cf.get("category","")
-                        _ccnt = _cf.get("content","")
-                        _crep = _cf.get("response_text","") or ""
-                        _crby = _cf.get("response_by","") or ""
-                        _crev = (_cf.get("reviewed_at","") or "")[:10]
-                        st.markdown(
-                            f'<div class="sf-card" style="padding:10px 16px;margin:4px 0;'
-                            f'border-left:3px solid #16A34A;opacity:0.85">'
-                            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-                            f'<span style="font-size:0.75rem;color:#64748B">{_cdt} · {_ccat}</span>'
-                            f'<span style="font-size:0.72rem;color:#16A34A;font-weight:600">'
-                            f'✅ Đóng {_crev}</span>'
-                            f'</div>'
-                            f'<div style="font-size:0.85rem;color:#334155">{_ccnt}</div>'
-                            + (f'<div style="font-size:0.78rem;color:#475569;margin-top:4px;'
-                               f'background:#F0FDF4;border-radius:6px;padding:4px 8px">'
-                               f'💬 BGH ({_crby}): {_crep}</div>' if _crep else '')
-                            + '</div>',
-                            unsafe_allow_html=True,
-                        )
+                st.markdown(
+                    '<div style="background:linear-gradient(135deg,#1E293B,#334155);'
+                    'border-radius:10px;padding:10px 18px;margin:16px 0 8px 0;'
+                    'display:flex;align-items:center;gap:10px">'
+                    '<span style="color:white;font-size:0.9rem;font-weight:700">'
+                    f'✅ {len(_closed_fb)} phản hồi đã đóng gần nhất</span>'
+                    '<span style="color:#94A3B8;font-size:0.75rem">(lưu để traceback)</span>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                for _cf in _closed_fb:
+                    _cdt  = _fmt_date_fb(_cf.get("created_at",""))
+                    _ccat = _re_fb.sub(r'^[\U00010000-\U0010ffff\U00002600-\U000027BF\U0001F300-\U0001F9FF]\s*','',
+                                       _cf.get("category","")).strip()[:30]
+                    _ccnt = _cf.get("content","")
+                    _crep = _cf.get("response_text","") or ""
+                    _crby = _cf.get("response_by","") or ""
+                    _crev = _fmt_date_fb(_cf.get("reviewed_at",""))
+                    _cev  = _cf.get("evidence_text","") or ""
+                    _ceby = _cf.get("evidence_by","") or ""
+                    st.markdown(
+                        f'<div style="background:#F1F5F9;border:1px solid #CBD5E1;'
+                        f'border-radius:8px;padding:10px 14px;margin:4px 0">'
+                        f'<div style="display:flex;justify-content:space-between;'
+                        f'align-items:center;margin-bottom:5px">'
+                        f'<span style="font-size:0.75rem;color:#64748B">📅 {_cdt} · {_ccat}</span>'
+                        f'<span style="background:#E2E8F0;color:#475569;font-size:0.7rem;'
+                        f'font-weight:600;padding:2px 10px;border-radius:8px">'
+                        f'✅ Đóng {_crev}</span>'
+                        f'</div>'
+                        f'<div style="font-size:0.83rem;color:#475569;font-style:italic">'
+                        f'"{_ccnt}"</div>'
+                        + (f'<div style="font-size:0.75rem;color:#3B82F6;margin-top:4px">'
+                           f'📋 Minh chứng ({_ceby}): {_cev}</div>' if _cev else '')
+                        + (f'<div style="background:#F0FDF4;border-radius:6px;'
+                           f'padding:5px 10px;margin-top:5px;font-size:0.75rem;color:#166534">'
+                           f'💬 BGH ({_crby}): {_crep}</div>' if _crep else '')
+                        + '</div>',
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("Chưa có phản hồi nào từ Phụ Huynh.")
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
