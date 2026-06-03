@@ -1040,6 +1040,44 @@ def inject_css():
         .metric-num { font-size: 1.2rem !important; }
     }
 
+    /* ── G6: Mobile tab navigation — cuộn ngang thay vì xuống dòng ── */
+    @media (max-width: 768px) {
+        /* Tab bar cuộn ngang, không xuống dòng */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            flex-wrap: nowrap !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            padding-bottom: 2px !important;
+        }
+        .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none !important; }
+        .stTabs [data-baseweb="tab"] {
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            padding: 8px 12px !important;
+            font-size: 0.78rem !important;
+        }
+        /* Safe area cho iPhone có notch */
+        .main .block-container {
+            padding-bottom: max(1.5rem, env(safe-area-inset-bottom)) !important;
+        }
+        /* Nút bấm tối thiểu 44px (WCAG AA touch target) */
+        .stButton > button {
+            min-height: 44px !important;
+        }
+        /* Giảm padding header trên mobile */
+        [data-testid="stMarkdownContainer"] div[style*="border-radius:16px"] {
+            padding: 18px 16px !important;
+        }
+    }
+    @media (max-width: 480px) {
+        .stTabs [data-baseweb="tab"] {
+            font-size: 0.72rem !important;
+            padding: 6px 10px !important;
+        }
+    }
+
     /* ── Checklist segmented control animations (CSS-only, no JS needed) ── */
     /* Áp dụng cho cả direct children và div-wrapped children (tuỳ BaseWeb version) */
     [data-baseweb="button-group"] button {
@@ -5592,6 +5630,91 @@ def tab_supplier(api_key: str = "", role: str = ""):
             st.error(f"Lỗi tạo Word: {_we}")
 
 
+def show_onboarding_banner(school: str, profiles: list, sessions_count: int):
+    """G5: Banner hướng dẫn bắt đầu cho trường mới — hiện đầu trang BGH."""
+    if st.session_state.get("onboarding_dismissed"):
+        return
+
+    # Kiểm tra mức độ hoàn thành setup
+    _has_yte  = any(p.get("role") == "y_te_hoc_duong"  for p in profiles)
+    _has_bgs  = any(p.get("role") == "ban_giam_sat"    for p in profiles)
+    _has_ph   = any(p.get("role") == "phu_huynh"       for p in profiles)
+    _has_data = sessions_count > 0
+    _steps = [_has_yte, _has_bgs, _has_ph, _has_data]
+    _done  = sum(_steps)
+
+    if _done == 4:
+        # Tất cả bước hoàn thành — ẩn banner
+        st.session_state.onboarding_dismissed = True
+        return
+
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#0F2651 0%,#1D4ED8 100%);'
+        'border-radius:14px;padding:20px 24px;margin-bottom:16px">'
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;'
+        'flex-wrap:wrap;gap:12px">'
+        '<div>'
+        '<div style="color:white;font-size:1.05rem;font-weight:700;margin-bottom:4px">'
+        f'🎉 Chào mừng {school} đến với SchoolFood AI!</div>'
+        '<div style="color:#BFDBFE;font-size:0.82rem">'
+        f'Đã hoàn thành {_done}/4 bước thiết lập — hoàn tất để kích hoạt đầy đủ tính năng</div>'
+        '</div>'
+        f'<div style="background:rgba(255,255,255,0.15);border-radius:20px;padding:4px 14px;'
+        f'color:white;font-size:0.82rem;font-weight:700">{_done}/4 bước</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Progress bar
+    _pct = int(_done / 4 * 100)
+    st.markdown(
+        f'<div style="background:#E2E8F0;border-radius:4px;height:6px;margin:-8px 0 12px 0">'
+        f'<div style="background:#16A34A;height:6px;border-radius:4px;width:{_pct}%;'
+        f'transition:width 0.5s"></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # 4 bước setup
+    _step_defs = [
+        ("🏥 Tạo tài khoản Y Tế Học Đường",
+         "Người kiểm thực 3 bước hàng ngày — vai trò quan trọng nhất",
+         _has_yte),
+        ("👥 Tạo tài khoản Ban Giám Sát (Đại Diện PHHS)",
+         "Người thực hiện checklist 20 điểm — 2 lần/tuần",
+         _has_bgs),
+        ("👨‍👩‍👧 Tạo tài khoản Phụ Huynh (tuỳ chọn)",
+         "Phụ huynh xem kết quả và gửi phản hồi",
+         _has_ph),
+        ("✅ Thực hiện kiểm tra bữa ăn đầu tiên",
+         "Sau khi có đủ tài khoản, mời Y Tế / BGS đăng nhập và bắt đầu kiểm tra",
+         _has_data),
+    ]
+
+    _c1, _c2 = st.columns(2)
+    for i, (title, desc, done) in enumerate(_step_defs):
+        _col = _c1 if i % 2 == 0 else _c2
+        _icon = "✅" if done else "⬜"
+        _bg   = "#F0FDF4" if done else "#F8FAFC"
+        _bd   = "#86EFAC" if done else "#E2E8F0"
+        _col.markdown(
+            f'<div style="background:{_bg};border:1px solid {_bd};border-radius:8px;'
+            f'padding:10px 14px;margin:4px 0">'
+            f'<div style="font-size:0.83rem;font-weight:600;color:#1E293B">'
+            f'{_icon} {title}</div>'
+            f'<div style="font-size:0.75rem;color:#64748B;margin-top:2px">{desc}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    _ob1, _ob2 = st.columns([3, 1])
+    _ob1.caption("💡 Bước 1–3: Vào tab **👤 Quản lý tài khoản** → Thêm người dùng mới")
+    if _ob2.button("✕ Ẩn hướng dẫn", key="dismiss_onboarding"):
+        st.session_state.onboarding_dismissed = True
+        st.rerun()
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+
+
 def show_login_page():
     """Trang đăng nhập — hiển thị trước khi vào app chính."""
     # Logo + tiêu đề
@@ -5842,6 +5965,58 @@ def main():
                        layout="wide", initial_sidebar_state="collapsed")
     inject_css()
 
+    # ── G7: Dark mode CSS ────────────────────────────────────────────────────
+    if st.session_state.get("dark_mode"):
+        st.markdown("""<style>
+        .stApp, [data-testid="stAppViewContainer"] {
+            background-color: #0F172A !important;
+        }
+        .stApp > header { background-color: #0F172A !important; }
+        .sf-card, .metric-box, .schedule-card {
+            background: #1E293B !important;
+            border-color: #334155 !important;
+            color: #E2E8F0 !important;
+        }
+        .sf-card-title, .sec-hdr, .metric-lbl { color: #CBD5E1 !important; }
+        .sf-card-body, .alert-body            { color: #94A3B8 !important; }
+        .metric-num                            { color: #F1F5F9 !important; }
+        .stMarkdown, .stText, p, span, div, label { color: #CBD5E1; }
+        .stTextInput input, .stTextArea textarea, .stSelectbox select,
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea    {
+            background: #1E293B !important;
+            color: #E2E8F0 !important;
+            border-color: #334155 !important;
+        }
+        .stTabs [data-baseweb="tab-list"]      { background: #1E293B !important; }
+        .stTabs [data-baseweb="tab"]           { color: #94A3B8 !important; }
+        .stTabs [aria-selected="true"]         { color: #38BDF8 !important; }
+        .main .block-container                 { background: #0F172A !important; }
+        [data-testid="stSidebar"]              { background: #1E293B !important; }
+        .stButton > button                     {
+            background: #1E293B !important;
+            color: #E2E8F0 !important;
+            border-color: #334155 !important;
+        }
+        .stButton > button[kind="primary"]     {
+            background: #2563EB !important;
+            color: white !important;
+        }
+        .stDataFrame, .stTable                 {
+            background: #1E293B !important;
+            color: #E2E8F0 !important;
+        }
+        [data-baseweb="select"] > div          {
+            background: #1E293B !important;
+            color: #E2E8F0 !important;
+            border-color: #334155 !important;
+        }
+        .alert-ok      { background: #052e16 !important; border-color: #166534 !important; }
+        .alert-minor   { background: #1c1a00 !important; border-color: #854d0e !important; }
+        .alert-major   { background: #1c0a00 !important; border-color: #7c2d12 !important; }
+        .alert-critical{ background: #1a0000 !important; border-color: #991b1b !important; }
+        </style>""", unsafe_allow_html=True)
+
     # Header chính — không dùng HTML comments để tránh Streamlit hiển thị raw text
     _circles = (
         '<div style="position:absolute;top:-40px;right:-40px;width:220px;height:220px;'
@@ -5971,10 +6146,16 @@ def main():
                 st.session_state.pop(_k, None)
             st.rerun()
 
-        level = st.selectbox(
+        # ── G7: Dark mode toggle ──────────────────────────────────────────────
+        _dm_on = st.session_state.get("dark_mode", False)
+        _dm_c1, _dm_c2, _dm_c3 = st.columns([2, 1, 1])
+        level = _dm_c1.selectbox(
             "Cấp trường", ["Tiểu Học (6–11 tuổi)", "THCS (12–15 tuổi)", "THPT (16–18 tuổi)"],
             label_visibility="collapsed",
         )
+        if _dm_c3.button("🌙 Tối" if not _dm_on else "☀️ Sáng", use_container_width=True):
+            st.session_state.dark_mode = not _dm_on
+            st.rerun()
         loc = _school_pf or "TP.HCM"
         # Lưu session_state để các tab khác dùng
         st.session_state.user_school  = _school_pf
@@ -6074,6 +6255,13 @@ def main():
 
     # Hiển thị banner nhắc nhở nổi bật nếu trong 15 phút
     show_reminder_banner(role)
+
+    # ── G5: Onboarding cho BGH mới ───────────────────────────────────────────
+    if role == "Ban Giám Hiệu" and _use_auth and _school_pf:
+        _ob_profiles = db_get_all_profiles(school=_school_pf)
+        _ob_profiles = [p for p in _ob_profiles if not p.get("is_super_admin", False)]
+        _ob_sessions = len(db_get_sessions(school=_school_pf, limit=5))
+        show_onboarding_banner(_school_pf, _ob_profiles, _ob_sessions)
 
     # Lịch sử — gắn cờ đỏ nếu có CRITICAL gần đây
     _hist_label = "📊 Lịch sử" + (" 🔴" if db_ok() and
