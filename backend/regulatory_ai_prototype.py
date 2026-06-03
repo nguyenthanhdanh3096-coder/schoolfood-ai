@@ -2158,12 +2158,7 @@ def tab_checklist(api_key: str = ""):
     _cl_is_locked = bool(st.session_state.get("auth_user")) and not st.session_state.get("is_super", False) and not st.session_state.get("auth_user", {}).get("demo", False)
     if _cl_is_locked and _cl_default_lvl in list(NUTRITION.keys()):
         level_key = _cl_default_lvl
-        st.markdown(
-            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-            f'padding:6px 14px;font-size:0.82rem;color:#166534;margin-bottom:6px">'
-            f'📚 Cấp học: <b>{_cl_default_lvl}</b> (theo tài khoản)</div>',
-            unsafe_allow_html=True,
-        )
+        st.caption(f"📚 Cấp học: **{_cl_default_lvl}** · _Theo tài khoản_")
     else:
         level_key = st.selectbox(
             "📚 Cấp học đang kiểm tra", list(NUTRITION.keys()), key="cl_level",
@@ -3478,12 +3473,7 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     _kt_locked  = bool(st.session_state.get("auth_user")) and not st.session_state.get("is_super", False) and not st.session_state.get("auth_user", {}).get("demo", False)
     if _kt_locked and _kt_default in _kt_levels:
         _kt_level = _kt_default
-        st.markdown(
-            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-            f'padding:6px 14px;font-size:0.82rem;color:#166534;margin-bottom:6px">'
-            f'📚 Cấp học: <b>{_kt_default}</b> (theo tài khoản)</div>',
-            unsafe_allow_html=True,
-        )
+        st.caption(f"📚 Cấp học: **{_kt_default}** · _Theo tài khoản_")
     else:
         _kt_lvl_idx = _kt_levels.index(_kt_default) if _kt_default in _kt_levels else 0
         _kt_level = st.selectbox(
@@ -5520,17 +5510,35 @@ def tab_history(role: str = "", school_filter: str = ""):
         # ══════════════════════════════════════════════════════════════════════════
     # SECTION 2: NHÀ CUNG CẤP
     # ══════════════════════════════════════════════════════════════════════════
-    if show_ncc:
+    # NCC section — hiện banner tím dù có hay không có data
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#3B0764 0%,#7C3AED 100%);'
+        'border-radius:12px;padding:14px 22px;margin:24px 0 14px 0">'
+        '<div style="color:white;font-size:1.05rem;font-weight:700;margin-bottom:2px">'
+        '🏭 KẾT QUẢ ĐÁNH GIÁ NHÀ CUNG CẤP</div>'
+        '<div style="color:#DDD6FE;font-size:0.8rem">'
+        'Checklist 12 điểm giao hàng · Xếp loại A (≥10/12) · B (8–9/12) · C (<8)'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    if not show_ncc:
+        # Empty state — hiện thông tin hướng dẫn thay vì trống
+        _ncc_empty_bg = "#F5F3FF" if view_mode in ("Tất cả","🏭 Nhà Cung Cấp") else "transparent"
         st.markdown(
-            '<div style="background:linear-gradient(135deg,#3B0764 0%,#7C3AED 100%);'
-            'border-radius:12px;padding:14px 22px;margin:24px 0 14px 0">'
-            '<div style="color:white;font-size:1.05rem;font-weight:700;margin-bottom:2px">'
-            '🏭 KẾT QUẢ ĐÁNH GIÁ NHÀ CUNG CẤP</div>'
-            '<div style="color:#DDD6FE;font-size:0.8rem">'
-            'Checklist 12 điểm giao hàng &nbsp;·&nbsp; Xếp loại A (≥10/12) · B (8–9/12) · C (<8 hoặc vi phạm bắt buộc)'
-            '</div></div>',
+            f'<div style="background:{_ncc_empty_bg};border:1px dashed #DDD6FE;'
+            f'border-radius:12px;padding:24px;text-align:center;margin:4px 0">'
+            f'<div style="font-size:2rem;margin-bottom:8px">🏭</div>'
+            f'<div style="font-size:0.95rem;font-weight:600;color:#5B21B6;margin-bottom:6px">'
+            f'Chưa có kết quả đánh giá Nhà Cung Cấp</div>'
+            f'<div style="font-size:0.82rem;color:#64748B;line-height:1.7">'
+            f'Y Tế Học Đường kiểm tra giao hàng hàng ngày (S03–S12 · 10 điểm)<br>'
+            f'Ban Giám Sát kiểm tra toàn diện 1 lần/tháng (S01–S12 · 12 điểm)<br>'
+            f'<b>→ Vào tab 🏭 Nhà Cung Cấp để bắt đầu đánh giá lần đầu</b>'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
+    elif show_ncc:
 
         ncc_total = len(df_ncc)
         ncc_a = sum(1 for v in df_ncc["Xếp loại"] if v == "Loại A")
@@ -5703,166 +5711,167 @@ def tab_history(role: str = "", school_filter: str = ""):
             _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
             st.dataframe(_dn, use_container_width=True, hide_index=True)
 
-        # ── Cross-validation & Anomaly Detection — CHỈ BGH ────────────────────
-        # BGS và Y Tế không thấy phần này
-        if role == "Ban Giám Hiệu" or st.session_state.get("is_super"):
-            _anomalies = []
 
-            # 1-3. Kiểm tra chất lượng dữ liệu (cần có df_meal)
-            if show_meal and not df_meal.empty:
-                _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
-                if _streak_high >= 10 and len(df_meal) >= 10:
+    # ── Cross-validation & Anomaly Detection — CHỈ BGH ────────────────────
+    # BGS và Y Tế không thấy phần này
+    if role == "Ban Giám Hiệu" or st.session_state.get("is_super"):
+        _anomalies = []
+
+        # 1-3. Kiểm tra chất lượng dữ liệu (cần có df_meal)
+        if show_meal and not df_meal.empty:
+            _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
+            if _streak_high >= 10 and len(df_meal) >= 10:
+                _anomalies.append(
+                    f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
+                    "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
+                )
+
+        # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
+        if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
+            _bgs_df = df_meal[df_meal["Loại"] == "Ban Giám Sát"]
+            _yte_df = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"]
+            if not _bgs_df.empty and not _yte_df.empty:
+                _bgs_avg = _bgs_df["Tỷ lệ đạt (%)"].mean()
+                _yte_avg = _yte_df["Tỷ lệ đạt (%)"].mean()
+                if abs(_bgs_avg - _yte_avg) > 20:
                     _anomalies.append(
-                        f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
-                        "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
+                        f"⚠️ <b>Chênh lệch BGS vs Y Tế</b>: BGS trung bình {_bgs_avg:.0f}% — "
+                        f"Y Tế {_yte_avg:.0f}% (chênh {abs(_bgs_avg-_yte_avg):.0f}%). "
+                        "Cần đối chiếu để đảm bảo tính trung thực."
                     )
 
-            # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
-            if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
-                _bgs_df = df_meal[df_meal["Loại"] == "Ban Giám Sát"]
-                _yte_df = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"]
-                if not _bgs_df.empty and not _yte_df.empty:
-                    _bgs_avg = _bgs_df["Tỷ lệ đạt (%)"].mean()
-                    _yte_avg = _yte_df["Tỷ lệ đạt (%)"].mean()
-                    if abs(_bgs_avg - _yte_avg) > 20:
-                        _anomalies.append(
-                            f"⚠️ <b>Chênh lệch BGS vs Y Tế</b>: BGS trung bình {_bgs_avg:.0f}% — "
-                            f"Y Tế {_yte_avg:.0f}% (chênh {abs(_bgs_avg-_yte_avg):.0f}%). "
-                            "Cần đối chiếu để đảm bảo tính trung thực."
-                        )
-
-            # 3. Feedback tăng đột biến trong khi điểm vẫn cao
-            if db_ok() and show_meal and not df_meal.empty:
-                try:
-                    _sch = school_input if school_input else ""
-                    _fb_count = len(db_get_feedback(school=_sch, status="pending"))
-                    _avg_score = df_meal["Tỷ lệ đạt (%)"].mean()
-                    if _fb_count >= 3 and _avg_score >= 90:
-                        _anomalies.append(
-                            f"📣 <b>Mâu thuẫn phản hồi</b>: {_fb_count} phản hồi phụ huynh chưa xử lý "
-                            f"trong khi điểm kiểm tra trung bình {_avg_score:.0f}%. "
-                            "Điều tra nguyên nhân bất cân xứng."
-                        )
-                except Exception:
-                    pass
-
-            # 4. BGS + Y Tế tần suất — dùng sessions trực tiếp (không cần df_meal)
-            # → Fix: luôn chạy kể cả khi chưa có dữ liệu trong view hiện tại
+        # 3. Feedback tăng đột biến trong khi điểm vẫn cao
+        if db_ok() and show_meal and not df_meal.empty:
             try:
-                _now_dt2 = pd.Timestamp(now_vn().date())
-                # Lấy dates từ raw sessions (đã fetch ở trên, không cần thêm DB call)
-                _s_bgs_dates = sorted([s["check_date"] for s in sessions
-                                       if s.get("check_type") == "ban_giam_sat" and s.get("check_date")],
-                                      reverse=True)
-                _s_yte_dates = sorted([s["check_date"] for s in sessions
-                                       if s.get("check_type") == "kiem_thuc_3_buoc" and s.get("check_date")],
-                                      reverse=True)
-
-                # BGS tần suất
-                if _s_bgs_dates:
-                    _s_bgs_last = pd.Timestamp(_s_bgs_dates[0])
-                    _s_bgs_gap  = (_now_dt2 - _s_bgs_last).days
-                    _s_bgs_7d   = sum(1 for d in _s_bgs_dates
-                                      if pd.Timestamp(d) >= _now_dt2 - pd.Timedelta(days=7))
-                    if _s_bgs_gap > 7:
-                        _anomalies.append(f"🚨 <b>[BGH → BGS] Không kiểm tra</b>: "
-                                          f"Ban Giám Sát chưa kiểm tra <b>{_s_bgs_gap} ngày</b> — "
-                                          f"vi phạm NĐ 15/2018 (≥ 2 lần/tuần). Liên hệ ngay.")
-                    elif _s_bgs_7d < 2:
-                        _anomalies.append(f"⏰ <b>[BGH → BGS] Tần suất thấp</b>: "
-                                          f"7 ngày qua chỉ {_s_bgs_7d} lần (yêu cầu ≥ 2 lần/tuần).")
-                else:
-                    _anomalies.append("🚨 <b>[BGH → BGS] Chưa có kiểm tra nào</b>: "
-                                      "Ban Giám Sát chưa thực hiện. Liên hệ ngay để lên lịch.")
-
-                # Y Tế tần suất
-                if _s_yte_dates:
-                    _s_yte_last = pd.Timestamp(_s_yte_dates[0])
-                    _s_yte_gap  = (_now_dt2 - _s_yte_last).days
-                    if _s_yte_gap > 3:
-                        _anomalies.append(f"🚨 <b>[BGH → Y Tế] Không kiểm thực</b>: "
-                                          f"Y Tế chưa kiểm thực <b>{_s_yte_gap} ngày</b> — "
-                                          f"vi phạm TTLT 13/2016 Điều 9 (hàng ngày). Cần xử lý ngay.")
-                else:
-                    _anomalies.append("🚨 <b>[BGH → Y Tế] Chưa có kiểm thực</b>: "
-                                      "Y Tế chưa thực hiện kiểm thực 3 bước. Vi phạm TTLT 13/2016.")
+                _sch = school_input if school_input else ""
+                _fb_count = len(db_get_feedback(school=_sch, status="pending"))
+                _avg_score = df_meal["Tỷ lệ đạt (%)"].mean()
+                if _fb_count >= 3 and _avg_score >= 90:
+                    _anomalies.append(
+                        f"📣 <b>Mâu thuẫn phản hồi</b>: {_fb_count} phản hồi phụ huynh chưa xử lý "
+                        f"trong khi điểm kiểm tra trung bình {_avg_score:.0f}%. "
+                        "Điều tra nguyên nhân bất cân xứng."
+                    )
             except Exception:
                 pass
 
-            if _anomalies:
-                st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Chi tiết</div>',
-                            unsafe_allow_html=True)
-                for _a in _anomalies:
-                    _is_crit_a = _a.startswith("🚨")
-                    _a_bg  = "#FEF2F2" if _is_crit_a else "#FFFBEB"
-                    _a_bd  = "#FCA5A5" if _is_crit_a else "#FCD34D"
-                    _a_clr = "#991B1B" if _is_crit_a else "#78350F"
-                    st.markdown(
-                        f'<div style="background:{_a_bg};border:1.5px solid {_a_bd};'
-                        f'border-radius:8px;padding:10px 16px;margin:5px 0;'
-                        f'font-size:0.85rem;color:{_a_clr}">'
-                        f'{_a}</div>',
-                        unsafe_allow_html=True,
-                    )
+        # 4. BGS + Y Tế tần suất — dùng sessions trực tiếp (không cần df_meal)
+        # → Fix: luôn chạy kể cả khi chưa có dữ liệu trong view hiện tại
+        try:
+            _now_dt2 = pd.Timestamp(now_vn().date())
+            # Lấy dates từ raw sessions (đã fetch ở trên, không cần thêm DB call)
+            _s_bgs_dates = sorted([s["check_date"] for s in sessions
+                                   if s.get("check_type") == "ban_giam_sat" and s.get("check_date")],
+                                  reverse=True)
+            _s_yte_dates = sorted([s["check_date"] for s in sessions
+                                   if s.get("check_type") == "kiem_thuc_3_buoc" and s.get("check_date")],
+                                  reverse=True)
 
-                # ── Claude AI phân tích tổng hợp bất thường ─────────────────
-                _api_key_hist = st.session_state.get("api_key_stored", "")
-                import os as _os_hist
-                _api_key_hist = (
-                    (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else "")
-                    or _os_hist.environ.get("ANTHROPIC_API_KEY","")
+            # BGS tần suất
+            if _s_bgs_dates:
+                _s_bgs_last = pd.Timestamp(_s_bgs_dates[0])
+                _s_bgs_gap  = (_now_dt2 - _s_bgs_last).days
+                _s_bgs_7d   = sum(1 for d in _s_bgs_dates
+                                  if pd.Timestamp(d) >= _now_dt2 - pd.Timedelta(days=7))
+                if _s_bgs_gap > 7:
+                    _anomalies.append(f"🚨 <b>[BGH → BGS] Không kiểm tra</b>: "
+                                      f"Ban Giám Sát chưa kiểm tra <b>{_s_bgs_gap} ngày</b> — "
+                                      f"vi phạm NĐ 15/2018 (≥ 2 lần/tuần). Liên hệ ngay.")
+                elif _s_bgs_7d < 2:
+                    _anomalies.append(f"⏰ <b>[BGH → BGS] Tần suất thấp</b>: "
+                                      f"7 ngày qua chỉ {_s_bgs_7d} lần (yêu cầu ≥ 2 lần/tuần).")
+            else:
+                _anomalies.append("🚨 <b>[BGH → BGS] Chưa có kiểm tra nào</b>: "
+                                  "Ban Giám Sát chưa thực hiện. Liên hệ ngay để lên lịch.")
+
+            # Y Tế tần suất
+            if _s_yte_dates:
+                _s_yte_last = pd.Timestamp(_s_yte_dates[0])
+                _s_yte_gap  = (_now_dt2 - _s_yte_last).days
+                if _s_yte_gap > 3:
+                    _anomalies.append(f"🚨 <b>[BGH → Y Tế] Không kiểm thực</b>: "
+                                      f"Y Tế chưa kiểm thực <b>{_s_yte_gap} ngày</b> — "
+                                      f"vi phạm TTLT 13/2016 Điều 9 (hàng ngày). Cần xử lý ngay.")
+            else:
+                _anomalies.append("🚨 <b>[BGH → Y Tế] Chưa có kiểm thực</b>: "
+                                  "Y Tế chưa thực hiện kiểm thực 3 bước. Vi phạm TTLT 13/2016.")
+        except Exception:
+            pass
+
+        if _anomalies:
+            st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Chi tiết</div>',
+                        unsafe_allow_html=True)
+            for _a in _anomalies:
+                _is_crit_a = _a.startswith("🚨")
+                _a_bg  = "#FEF2F2" if _is_crit_a else "#FFFBEB"
+                _a_bd  = "#FCA5A5" if _is_crit_a else "#FCD34D"
+                _a_clr = "#991B1B" if _is_crit_a else "#78350F"
+                st.markdown(
+                    f'<div style="background:{_a_bg};border:1.5px solid {_a_bd};'
+                    f'border-radius:8px;padding:10px 16px;margin:5px 0;'
+                    f'font-size:0.85rem;color:{_a_clr}">'
+                    f'{_a}</div>',
+                    unsafe_allow_html=True,
                 )
-                if _api_key_hist:
-                    st.markdown(
-                        '<div style="background:#F5F3FF;border:1px solid #DDD6FE;'
-                        'border-radius:8px;padding:10px 14px;margin-top:8px;'
-                        'font-size:0.8rem;color:#5B21B6">'
-                        '🤖 <b>AI Cross-Validation</b>: Claude phân tích tổng hợp tất cả bất thường, '
-                        'đánh giá mức độ rủi ro thực sự và đề xuất hành động ưu tiên.</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button("🤖 Claude phân tích bất thường tổng hợp",
-                                 key="ai_anomaly_analysis", use_container_width=False):
-                        _anom_text = "\n".join(f"- {a}" for a in _anomalies)
-                        _stats_txt = ""
-                        if show_meal and not df_meal.empty:
-                            _stats_txt = (
-                                f"Tổng {len(df_meal)} lần kiểm tra · "
-                                f"Trung bình {df_meal['Tỷ lệ đạt (%)'].mean():.0f}% · "
-                                f"CRITICAL: {(df_meal['Cấp cảnh báo']=='CRITICAL').sum()} lần"
-                            )
-                        _ai_prompt = (
-                            f"Bạn là chuyên gia ATTP trường học Việt Nam. Dưới đây là các bất thường "
-                            f"phát hiện tự động trong hệ thống giám sát bữa ăn học đường:\n\n"
-                            f"{_anom_text}\n\n"
-                            f"Thống kê tổng hợp: {_stats_txt}\n\n"
-                            f"Hãy phân tích:\n"
-                            f"1. Đánh giá mức độ rủi ro thực sự (thấp/trung/cao/nguy hiểm)\n"
-                            f"2. Mối liên hệ giữa các bất thường (có phải cùng 1 nguyên nhân không)\n"
-                            f"3. 3 hành động ưu tiên nhất cần thực hiện ngay\n"
-                            f"4. Dấu hiệu nào cần giám sát thêm\n"
-                            f"Trả lời ngắn gọn, súc tích bằng tiếng Việt (~200 từ)."
-                        )
-                        try:
-                            with st.spinner("🤖 Claude đang phân tích..."):
-                                _ai_client = anthropic.Anthropic(api_key=_api_key_hist)
-                                _ai_resp = _ai_client.messages.create(
-                                    model=MODEL, max_tokens=600,
-                                    messages=[{"role": "user", "content": _ai_prompt}]
-                                )
-                            _ai_analysis = _ai_resp.content[0].text if _ai_resp.content else ""
-                            st.markdown(
-                                f'<div style="background:#F5F3FF;border:1px solid #7C3AED;'
-                                f'border-radius:10px;padding:14px 16px;margin-top:8px">'
-                                f'<div style="font-size:0.85rem;font-weight:700;color:#6D28D9;'
-                                f'margin-bottom:8px">🤖 Claude AI — Phân tích Cross-Validation</div>'
-                                f'<div style="font-size:0.85rem;color:#1E293B;line-height:1.7">'
-                                f'{_ai_analysis}</div></div>',
-                                unsafe_allow_html=True,
-                            )
-                        except Exception as _ae:
-                            st.error(f"Lỗi AI: {_ae}")
 
+            # ── Claude AI phân tích tổng hợp bất thường ─────────────────
+            _api_key_hist = st.session_state.get("api_key_stored", "")
+            import os as _os_hist
+            _api_key_hist = (
+                (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else "")
+                or _os_hist.environ.get("ANTHROPIC_API_KEY","")
+            )
+            if _api_key_hist:
+                st.markdown(
+                    '<div style="background:#F5F3FF;border:1px solid #DDD6FE;'
+                    'border-radius:8px;padding:10px 14px;margin-top:8px;'
+                    'font-size:0.8rem;color:#5B21B6">'
+                    '🤖 <b>AI Cross-Validation</b>: Claude phân tích tổng hợp tất cả bất thường, '
+                    'đánh giá mức độ rủi ro thực sự và đề xuất hành động ưu tiên.</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("🤖 Claude phân tích bất thường tổng hợp",
+                             key="ai_anomaly_analysis", use_container_width=False):
+                    _anom_text = "\n".join(f"- {a}" for a in _anomalies)
+                    _stats_txt = ""
+                    if show_meal and not df_meal.empty:
+                        _stats_txt = (
+                            f"Tổng {len(df_meal)} lần kiểm tra · "
+                            f"Trung bình {df_meal['Tỷ lệ đạt (%)'].mean():.0f}% · "
+                            f"CRITICAL: {(df_meal['Cấp cảnh báo']=='CRITICAL').sum()} lần"
+                        )
+                    _ai_prompt = (
+                        f"Bạn là chuyên gia ATTP trường học Việt Nam. Dưới đây là các bất thường "
+                        f"phát hiện tự động trong hệ thống giám sát bữa ăn học đường:\n\n"
+                        f"{_anom_text}\n\n"
+                        f"Thống kê tổng hợp: {_stats_txt}\n\n"
+                        f"Hãy phân tích:\n"
+                        f"1. Đánh giá mức độ rủi ro thực sự (thấp/trung/cao/nguy hiểm)\n"
+                        f"2. Mối liên hệ giữa các bất thường (có phải cùng 1 nguyên nhân không)\n"
+                        f"3. 3 hành động ưu tiên nhất cần thực hiện ngay\n"
+                        f"4. Dấu hiệu nào cần giám sát thêm\n"
+                        f"Trả lời ngắn gọn, súc tích bằng tiếng Việt (~200 từ)."
+                    )
+                    try:
+                        with st.spinner("🤖 Claude đang phân tích..."):
+                            _ai_client = anthropic.Anthropic(api_key=_api_key_hist)
+                            _ai_resp = _ai_client.messages.create(
+                                model=MODEL, max_tokens=600,
+                                messages=[{"role": "user", "content": _ai_prompt}]
+                            )
+                        _ai_analysis = _ai_resp.content[0].text if _ai_resp.content else ""
+                        st.markdown(
+                            f'<div style="background:#F5F3FF;border:1px solid #7C3AED;'
+                            f'border-radius:10px;padding:14px 16px;margin-top:8px">'
+                            f'<div style="font-size:0.85rem;font-weight:700;color:#6D28D9;'
+                            f'margin-bottom:8px">🤖 Claude AI — Phân tích Cross-Validation</div>'
+                            f'<div style="font-size:0.85rem;color:#1E293B;line-height:1.7">'
+                            f'{_ai_analysis}</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                    except Exception as _ae:
+                        st.error(f"Lỗi AI: {_ae}")
+    
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
     try:
@@ -6983,9 +6992,9 @@ def tab_user_management(school: str = ""):
             "Trạng thái": "✅ Hoạt động" if p.get("is_active") else "🔒 Tạm khóa",
             "Đăng nhập cuối": (
                 __import__("datetime").datetime.fromisoformat(
-                    (p.get("last_login") or "")[:19].replace("Z", "")
+                    (p.get("last_login") or "")[:19].replace("T", " ")
                 ).strftime("%d/%m/%Y %H:%M")
-                if p.get("last_login") else "—"
+                if p.get("last_login") and len(p.get("last_login","")) >= 16 else "—"
             ),
         } for p in _profiles])
         st.dataframe(_df_um, use_container_width=True, hide_index=True)
