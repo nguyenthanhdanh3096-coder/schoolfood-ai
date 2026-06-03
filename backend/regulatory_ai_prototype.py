@@ -3030,6 +3030,16 @@ def tab_emergency(api_key: str = ""):
             with st.expander("Xem biên bản"):
                 st.text(log_text)
 
+        # Khi kết thúc sự cố → lưu ngày để Phase 2 tự điền
+        if not st.session_state.incident_active and st.session_state.incident_log:
+            st.session_state["incident_trace_date"] = now_vn().strftime("%Y-%m-%d")
+            st.markdown(
+                '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
+                'padding:10px 16px;margin:8px 0;font-size:0.85rem;color:#991B1B">'
+                '🔍 <b>Sự cố đã ghi nhận.</b> Tiếp theo: Dùng công cụ '
+                '"Điều tra & Báo cáo" bên dưới để truy vết nguyên nhân và tạo báo cáo gửi cấp trên.'
+                '</div>', unsafe_allow_html=True,
+            )
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
         st.markdown("**Hoặc dùng hướng dẫn tĩnh bên dưới:**")
     steps = [
@@ -3058,22 +3068,28 @@ def tab_emergency(api_key: str = ""):
     if _can_trace and db_ok():
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
         st.markdown(
-            '<div style="background:linear-gradient(135deg,#7F1D1D,#DC2626);'
+            '<div style="background:linear-gradient(135deg,#1E3A5F,#7F1D1D);'
             'border-radius:12px;padding:14px 20px;margin-bottom:12px">'
-            '<div style="color:white;font-size:1rem;font-weight:700">🔍 Truy vết sự cố ngộ độc</div>'
+            '<div style="color:white;font-size:1rem;font-weight:700">'
+            '🔍 Giai đoạn 2 — Điều tra & Báo cáo</div>'
             '<div style="color:#FECACA;font-size:0.8rem">'
-            'Nhập ngày nghi ngờ → truy xuất toàn bộ dữ liệu: bữa ăn, NCC, kết quả kiểm tra, mẫu lưu'
-            '</div></div>',
+            'Truy vết nguyên nhân: bữa ăn, NCC, kết quả kiểm tra ngày đó · '
+            'Claude AI soạn báo cáo gửi cấp trên</div></div>',
             unsafe_allow_html=True,
         )
+        # Auto pre-fill từ ngày sự cố Phase 1
+        _tr_default = now_vn().date()
+        if st.session_state.get("incident_trace_date"):
+            try:
+                import datetime as _dtem
+                _tr_default = _dtem.date.fromisoformat(st.session_state["incident_trace_date"])
+            except Exception: pass
         _tr_c1, _tr_c2 = st.columns([1, 2])
-        _tr_date = _tr_c1.date_input("📅 Ngày nghi ngờ", value=now_vn().date(),
-                                      key="tr_date_em", format="DD/MM/YYYY",
-                                      label_visibility="visible")
+        _tr_date = _tr_c1.date_input("📅 Ngày sự cố", value=_tr_default,
+                                      key="tr_date_em", format="DD/MM/YYYY")
         _tr_school = _tr_c2.text_input("🏫 Trường",
                                         value=st.session_state.get("user_school",""),
-                                        key="tr_school_em", placeholder="Tên trường...",
-                                        label_visibility="visible")
+                                        key="tr_school_em", placeholder="Tên trường...")
 
         if st.button("🔍 Truy vết ngay", key="tr_search_em", type="primary"):
             _tr_ds = str(_tr_date)
@@ -3657,19 +3673,10 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     st.markdown('<div class="sec-hdr">Thông tin ca kiểm thực</div>', unsafe_allow_html=True)
     _us_kt = st.session_state.get("user_school", "")
     kc1, kc2, kc3, kc4 = st.columns(4)
-    # Tên trường — locked nếu đã đăng nhập với trường cụ thể
-    if _us_kt:
-        kc1.markdown("**Tên trường**", unsafe_allow_html=False)
-        kc1.markdown(
-            f'<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;'
-            f'padding:8px 12px;font-size:0.88rem;font-weight:600;color:#166534">'
-            f'🏫 {_us_kt}</div>',
-            unsafe_allow_html=True,
-        )
-        kt_school = _us_kt
-    else:
-        kt_school = kc1.text_input("Tên trường", value="",
-                                    placeholder="TH Nguyễn Du, Q.1", key="kt_school")
+    # Tên trường — disabled khi đã có từ profile (đồng nhất style với Ngày/Y Tế/Thực đơn)
+    kt_school = kc1.text_input("Tên trường", value=_us_kt,
+                                disabled=bool(_us_kt),
+                                placeholder="TH Nguyễn Du, Q.1", key="kt_school")
     kt_date   = kc2.date_input("Ngày", value=datetime.today(), format="DD/MM/YYYY",
                                 key="kt_date")
     kt_name   = kc3.text_input("Y Tế Học Đường",
@@ -5483,35 +5490,52 @@ def tab_history(role: str = "", school_filter: str = ""):
             f'{trend_icon}<br><span style="font-size:0.75rem;font-weight:700">{trend_text}</span></div>'
             f'</div>', unsafe_allow_html=True,
         )
-        # Task#8: Benchmark ẩn danh (sau KPI, trước expander)
+        # So sánh tháng này vs tháng trước (thay benchmark 1 dòng)
         try:
-            _bm_all = (_get_sb().table("checklist_sessions")
-                       .select("school_name,pass_count,total_items")
-                       .in_("check_type",["ban_giam_sat","kiem_thuc_3_buoc"])
-                       .gte("check_date",f"{now_vn().year}-01-01").execute().data or [])
-            if len(_bm_all) >= 10:
-                import collections as _col
-                _bm_map = _col.defaultdict(list)
-                for _r in _bm_all:
-                    _ti = _r.get("total_items",1) or 1
-                    _bm_map[_r.get("school_name","")].append(_r.get("pass_count",0)/_ti*100)
-                _bm_means = {k: sum(v)/len(v) for k, v in _bm_map.items() if v}
-                _my_sc = school_input or st.session_state.get("user_school","")
-                if _my_sc and _my_sc in _bm_means and len(_bm_means) >= 3:
-                    _bm_v  = _bm_means[_my_sc]
-                    _bm_p  = round(sum(1 for a in _bm_means.values() if a <= _bm_v)/len(_bm_means)*100)
-                    _bm_ic = "🏆" if _bm_p>=80 else "📊" if _bm_p>=50 else "📈"
-                    _bm_c  = "#16A34A" if _bm_p>=80 else "#2563EB" if _bm_p>=50 else "#D97706"
-                    st.markdown(
-                        f'<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
-                        f'padding:8px 14px;margin:6px 0;display:flex;align-items:center;gap:10px">'
-                        f'<span style="font-size:1.5rem">{_bm_ic}</span>'
-                        f'<div><b style="color:{_bm_c};font-size:0.85rem">'
-                        f'Top {100-_bm_p+1}% trong hệ thống</b>'
-                        f'<span style="font-size:0.75rem;color:#64748B;margin-left:8px">'
-                        f'TB {_bm_v:.0f}% · {len(_bm_means)} trường</span></div></div>',
-                        unsafe_allow_html=True,
-                    )
+            _now_cmp = now_vn()
+            _cur_m   = _now_cmp.strftime("%Y-%m")
+            import datetime as _dt_cmp
+            _prev_dt = (_now_cmp.replace(day=1) - _dt_cmp.timedelta(days=1))
+            _prev_m  = _prev_dt.strftime("%Y-%m")
+
+            def _month_avg(m_str):
+                _rs = [s for s in sessions
+                       if (s.get("check_date","") or "").startswith(m_str)
+                       and s.get("check_type") in ("ban_giam_sat","kiem_thuc_3_buoc")]
+                if not _rs: return None
+                return sum(r["pass_count"]/max(r["total_items"],1)*100 for r in _rs)/len(_rs)
+
+            _cur_avg  = _month_avg(_cur_m)
+            _prev_avg = _month_avg(_prev_m)
+
+            if _cur_avg is not None and _prev_avg is not None:
+                _delta = _cur_avg - _prev_avg
+                _cmp_ic  = "📈" if _delta > 0 else "📉" if _delta < -1 else "➡️"
+                _cmp_c   = "#16A34A" if _delta > 0 else "#DC2626" if _delta < -1 else "#64748B"
+                _cmp_txt = f"+{_delta:.1f}%" if _delta > 0 else f"{_delta:.1f}%"
+                st.markdown(
+                    f'<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
+                    f'padding:8px 14px;margin:6px 0;display:flex;align-items:center;gap:12px">'
+                    f'<span style="font-size:1.5rem">{_cmp_ic}</span>'
+                    f'<div style="flex:1">'
+                    f'<b style="font-size:0.85rem;color:#1E293B">'
+                    f'Tháng {_now_cmp.month:02d}: {_cur_avg:.0f}%</b>'
+                    f'<span style="font-size:0.78rem;color:#64748B;margin-left:8px">'
+                    f'vs tháng {_prev_dt.month:02d}: {_prev_avg:.0f}%</span>'
+                    f'</div>'
+                    f'<span style="font-size:0.85rem;font-weight:700;color:{_cmp_c}">{_cmp_txt}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            elif _cur_avg is not None:
+                st.markdown(
+                    f'<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
+                    f'padding:8px 14px;margin:6px 0">'
+                    f'📅 <b>Tháng {_now_cmp.month:02d}:</b> TB {_cur_avg:.0f}% '
+                    f'<span style="color:#64748B;font-size:0.78rem">'
+                    f'(Chưa có dữ liệu tháng trước để so sánh)</span></div>',
+                    unsafe_allow_html=True,
+                )
         except Exception:
             pass
 
@@ -7076,6 +7100,204 @@ def tab_supplier(api_key: str = "", role: str = ""):
             } for n in _ncc_view]), use_container_width=True, hide_index=True)
 
 
+def tab_ncc_bgh(school: str = ""):
+    """Tab 🏭 Nhà Cung Cấp — Dashboard tổng hợp dành riêng cho Ban Giám Hiệu."""
+    import pandas as _pd_ncc
+    import plotly.graph_objects as _go_ncc
+    import plotly.express as _px_ncc
+
+    # ── Banner header ──────────────────────────────────────────────────────────
+    st.markdown(
+        '<div style="background:linear-gradient(135deg,#3B0764 0%,#7C3AED 60%,#4C1D95 100%);'
+        'border-radius:12px;padding:14px 22px;margin-bottom:14px">'
+        '<div style="color:white;font-size:1.05rem;font-weight:700">🏭 Quản lý Nhà Cung Cấp</div>'
+        '<div style="color:#DDD6FE;font-size:0.8rem">'
+        'Hồ sơ chứng nhận · Hiệu suất đánh giá · Cảnh báo hết hạn · Lịch kiểm tra'
+        '</div></div>', unsafe_allow_html=True,
+    )
+
+    if not db_ok():
+        st.warning("Cần kết nối database để xem thông tin nhà cung cấp.")
+        return
+
+    _today = now_vn().date()
+
+    # ── Alert: cert expiry ─────────────────────────────────────────────────────
+    _reg = db_get_ncc_registry(school=school)
+    _exp_alerts = []
+    for _n in _reg:
+        for _f, _l in [("license_expiry","Giấy phép"), ("attp_expiry","Chứng nhận ATTP")]:
+            _e = _n.get(_f)
+            if _e:
+                try:
+                    import datetime as _dtn
+                    _ed = _dtn.date.fromisoformat(_e)
+                    _dl = (_ed - _today).days
+                    if _dl <= 30:
+                        _exp_alerts.append(
+                            f"{'🚨' if _dl <= 0 else '⚠️'} <b>{_n['ncc_name']}</b> — "
+                            f"{_l} {'HẾT HẠN' if _dl <= 0 else f'còn {_dl} ngày'} "
+                            f"({_ed.strftime('%d/%m/%Y')})"
+                        )
+                except Exception: pass
+
+    # Alert: monthly check
+    _this_m = now_vn().strftime("%Y-%m")
+    try:
+        _ncc_month_ses = _get_sb().table("checklist_sessions").select("check_date")\
+            .eq("check_type","nha_cung_cap").eq("school_name",school)\
+            .gte("check_date",f"{_this_m}-01").execute().data or []
+    except Exception:
+        _ncc_month_ses = []
+    if not _ncc_month_ses:
+        _exp_alerts.append(f"⏰ Tháng {now_vn().month:02d}/{now_vn().year} chưa có đánh giá NCC toàn diện (12 điểm)")
+
+    if _exp_alerts:
+        st.markdown(
+            '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
+            'padding:12px 16px;margin-bottom:12px">'
+            '<div style="font-weight:700;color:#991B1B;margin-bottom:6px">🚨 Cảnh báo NCC</div>'
+            + "".join(f'<div style="font-size:0.85rem;color:#991B1B;margin:3px 0">{a}</div>'
+                       for a in _exp_alerts)
+            + '</div>', unsafe_allow_html=True,
+        )
+
+    # ── NCC Performance Dashboard ──────────────────────────────────────────────
+    try:
+        _ncc_ses = _get_sb().table("checklist_sessions")\
+            .select("check_date,pass_count,total_items,alert_level,menu_today")\
+            .eq("check_type","nha_cung_cap").eq("school_name",school)\
+            .order("check_date",desc=True).limit(100).execute().data or []
+    except Exception:
+        _ncc_ses = []
+
+    if _ncc_ses:
+        _ncc_df = _pd_ncc.DataFrame([{
+            "Ngày": s["check_date"],
+            "Tỷ lệ": round(s["pass_count"]/max(s["total_items"],1)*100, 1),
+            "NCC": (s.get("menu_today","") or "").replace("NCC:","").strip()[:30],
+            "Loại": ("A" if s.get("pass_count",0) >= 10
+                     else "B" if s.get("pass_count",0) >= 8 else "C"),
+        } for s in _ncc_ses])
+
+        # KPI tổng quan
+        _ncc_total = len(_ncc_df)
+        _ncc_a = (_ncc_df["Loại"]=="A").sum()
+        _ncc_b = (_ncc_df["Loại"]=="B").sum()
+        _ncc_c = (_ncc_df["Loại"]=="C").sum()
+        _ncc_avg = _ncc_df["Tỷ lệ"].mean()
+
+        k1,k2,k3,k4 = st.columns(4)
+        for _kc, _kv, _kl, _kclr in [
+            (k1, _ncc_total, "Tổng lần đánh giá", "c-blue"),
+            (k2, _ncc_a, "✅ Loại A (≥83%)", "c-green"),
+            (k3, _ncc_b, "🟡 Loại B (67–82%)", "c-orange"),
+            (k4, _ncc_c, "🔴 Loại C (<67%)", "c-red" if _ncc_c>0 else "c-green"),
+        ]:
+            _kc.markdown(f'<div class="metric-box"><div class="metric-lbl">{_kl}</div>'
+                          f'<div class="metric-num {_kclr}">{_kv}</div></div>',
+                          unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Charts: Donut A/B/C + Trend line
+        _ch1, _ch2 = st.columns(2)
+        with _ch1:
+            _fig_pie = _go_ncc.Figure(_go_ncc.Pie(
+                labels=["Loại A","Loại B","Loại C"],
+                values=[_ncc_a, _ncc_b, _ncc_c], hole=0.45,
+                marker_colors=["#16A34A","#F59E0B","#DC2626"],
+                textfont_size=13, textinfo="percent+label",
+                hovertemplate="%{label}: %{value} lần<extra></extra>",
+            ))
+            _fig_pie.update_layout(
+                plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                font=dict(family="Inter",size=12), margin=dict(l=10,r=10,t=30,b=10),
+                height=260, title=dict(text="Phân bố xếp loại NCC", font=dict(size=13)),
+                showlegend=False,
+                annotations=[dict(text=f"<b>{_ncc_avg:.0f}%</b><br>TB", x=0.5, y=0.5,
+                                   showarrow=False, font_size=14)],
+            )
+            st.plotly_chart(_fig_pie, use_container_width=True)
+
+        with _ch2:
+            try:
+                _ncc_trend = _ncc_df.sort_values("Ngày").tail(20).copy()
+                _ncc_trend["Ngày_fmt"] = _pd_ncc.to_datetime(_ncc_trend["Ngày"])\
+                    .dt.strftime("%d/%m")
+                _fig_trend = _go_ncc.Figure(_go_ncc.Scatter(
+                    x=_ncc_trend["Ngày_fmt"], y=_ncc_trend["Tỷ lệ"],
+                    mode="lines+markers",
+                    line=dict(color="#7C3AED", width=2.5),
+                    marker=dict(size=8, color=["#16A34A" if v>=83 else "#F59E0B" if v>=67 else "#DC2626"
+                                               for v in _ncc_trend["Tỷ lệ"]]),
+                    hovertemplate="Ngày %{x}<br>Tỷ lệ: %{y:.0f}%<extra></extra>",
+                ))
+                _fig_trend.add_hline(y=83, line_dash="dot", line_color="#16A34A",
+                                      annotation_text=" Loại A", annotation_font_size=10)
+                _fig_trend.add_hline(y=67, line_dash="dot", line_color="#F59E0B",
+                                      annotation_text=" Loại B", annotation_font_size=10)
+                _fig_trend.update_layout(
+                    plot_bgcolor="white", paper_bgcolor="#F8FAFC",
+                    font=dict(family="Inter",size=11), margin=dict(l=10,r=10,t=30,b=10),
+                    height=260, title=dict(text="Xu hướng điểm NCC theo thời gian", font=dict(size=13)),
+                    xaxis=dict(showgrid=False), yaxis=dict(range=[0,110], ticksuffix="%"),
+                    showlegend=False,
+                )
+                st.plotly_chart(_fig_trend, use_container_width=True)
+            except Exception: pass
+
+        # Bảng lịch sử
+        with st.expander(f"📋 Lịch sử {_ncc_total} lần đánh giá NCC"):
+            _ncc_show = _ncc_df.copy()
+            try:
+                _ncc_show["Ngày"] = _pd_ncc.to_datetime(_ncc_show["Ngày"])\
+                    .dt.strftime("%d/%m/%Y")
+            except Exception: pass
+            st.dataframe(_ncc_show, use_container_width=True, hide_index=True)
+    else:
+        st.markdown(
+            '<div style="background:#F5F3FF;border:1px dashed #DDD6FE;border-radius:12px;'
+            'padding:24px;text-align:center;margin:8px 0">'
+            '<div style="font-size:2rem;margin-bottom:8px">🏭</div>'
+            '<div style="font-size:0.95rem;font-weight:600;color:#5B21B6;margin-bottom:6px">'
+            'Chưa có kết quả đánh giá NCC</div>'
+            '<div style="font-size:0.82rem;color:#64748B">'
+            '→ Vào tab 🏭 Nhà Cung Cấp (BGS/Y Tế) để thực hiện đánh giá đầu tiên'
+            '</div></div>', unsafe_allow_html=True,
+        )
+
+    # ── NCC Registry: Hồ sơ & Chứng nhận ─────────────────────────────────────
+    st.markdown('<div class="sec-hdr">📋 Hồ sơ & Chứng nhận</div>', unsafe_allow_html=True)
+    if _reg:
+        _reg_df = _pd_ncc.DataFrame([{
+            "Tên NCC": n["ncc_name"], "Số GP": n.get("license_no","—"),
+            "Hết hạn GP": (n.get("license_expiry","") or "—")[:10],
+            "Hết hạn ATTP": (n.get("attp_expiry","") or "—")[:10],
+            "SĐT": n.get("phone","—"),
+        } for n in _reg])
+        st.dataframe(_reg_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("Chưa có hồ sơ NCC nào. Thêm bên dưới.")
+
+    with st.expander("➕ Thêm / Cập nhật hồ sơ NCC"):
+        _r1, _r2 = st.columns(2)
+        _rn = _r1.text_input("Tên NCC", placeholder="Công ty TNHH Bếp Xanh", key="rncc_nm")
+        _rl = _r2.text_input("Số giấy phép", placeholder="01/GPCSSX-2024", key="rncc_lic")
+        _r3, _r4, _r5 = st.columns(3)
+        _rle = _r3.date_input("Hết hạn Giấy phép", value=None, key="rncc_le", format="DD/MM/YYYY")
+        _rae = _r4.date_input("Hết hạn ATTP cert", value=None, key="rncc_ae", format="DD/MM/YYYY")
+        _rph = _r5.text_input("SĐT", placeholder="0901...", key="rncc_ph")
+        if st.button("💾 Lưu hồ sơ NCC", key="rncc_save", type="primary"):
+            if _rn.strip():
+                if db_save_ncc_registry(school or st.session_state.get("user_school",""),
+                                         _rn.strip(), _rl.strip(),
+                                         str(_rle) if _rle else "", str(_rae) if _rae else "",
+                                         _rph.strip()):
+                    st.success(f"✅ Đã lưu hồ sơ: {_rn}"); st.rerun()
+            else:
+                st.warning("Điền tên nhà cung cấp.")
+
+
 def show_onboarding_banner(school: str, profiles: list, sessions_count: int):
     """G5: Banner hướng dẫn bắt đầu cho trường mới — hiện đầu trang BGH."""
     if st.session_state.get("onboarding_dismissed"):
@@ -7867,19 +8089,20 @@ def main():
         with _tabs[6]: tab_guide()
 
     else:  # Ban Giám Hiệu
-        # BGH: duyệt tổng quan + lịch chuẩn mực + quản lý tài khoản
-        _bgh_tabs = ["💬 Hỏi đáp AI", _hist_label, "📅 Lịch & Chuẩn mực",
-                     "🚨 Khẩn cấp", "📖 Hướng dẫn"]
+        # BGH: dashboard + NCC tab riêng + lịch + khẩn cấp + hướng dẫn + quản lý TK
+        _bgh_tabs = ["💬 Hỏi đáp AI", _hist_label, "🏭 Nhà Cung Cấp",
+                     "📅 Lịch & Chuẩn mực", "🚨 Khẩn cấp", "📖 Hướng dẫn"]
         if _use_auth:
             _bgh_tabs.append("👤 Quản lý tài khoản")
         _tabs = st.tabs(_bgh_tabs)
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_history(role=role, school_filter="" if _is_super else _school_pf)
-        with _tabs[2]: tab_schedule()
-        with _tabs[3]: tab_emergency(api_key)
-        with _tabs[4]: tab_guide()
-        if _use_auth and len(_tabs) > 5:
-            with _tabs[5]: tab_user_management(school=_school_pf)
+        with _tabs[2]: tab_ncc_bgh(school="" if _is_super else _school_pf)
+        with _tabs[3]: tab_schedule()
+        with _tabs[4]: tab_emergency(api_key)
+        with _tabs[5]: tab_guide()
+        if _use_auth and len(_tabs) > 6:
+            with _tabs[6]: tab_user_management(school=_school_pf)
 
 
 if __name__ == "__main__":
