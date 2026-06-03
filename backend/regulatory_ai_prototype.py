@@ -2078,32 +2078,44 @@ def generate_word_incident(incident_log: list, school: str = "") -> bytes:
 # ── AI #7: Trợ lý ứng phó sự cố ngộ độc ─────────────────────────────────────
 def incident_ai_response(client: anthropic.Anthropic,
                           history: list, user_msg: str) -> str:
-    """AI dẫn dắt xử lý sự cố ngộ độc từng bước, ghi nhận timeline."""
-    INCIDENT_SYSTEM = """Bạn là chuyên gia ATTP khẩn cấp đang hỗ trợ xử lý sự cố ngộ độc thực phẩm học đường.
-Nhiệm vụ: Dẫn dắt người dùng từng bước qua quy trình xử lý, hỏi thông tin còn thiếu, ghi nhận timeline.
+    """AI dẫn dắt xử lý sự cố ngộ độc — tự động chuyển từ Ứng phó sang Điều tra & Báo cáo."""
+    INCIDENT_SYSTEM = """Bạn là chuyên gia ATTP khẩn cấp đang hỗ trợ xử lý sự cố ngộ độc thực phẩm học đường Việt Nam.
 
-QUY TRÌNH CHUẨN (TTLT 13/2016):
-1. Dừng bữa ăn ngay
-2. Gọi 115 nếu triệu chứng nặng (khó thở, co giật)
-3. Giữ nguyên mẫu thức ăn (không vứt, không rửa)
-4. Báo Hiệu trưởng + Y tế học đường ngay
-5. Ghi chép số học sinh, triệu chứng, thời gian
-6. Báo Sở Y tế trong 24h (bắt buộc nếu ≥2 người)
+=== GIAI ĐOẠN 1 — ỨNG PHÓ NGAY ===
+Dẫn dắt người dùng qua 6 bước chuẩn (TTLT 13/2016):
+1. Dừng bữa ăn ngay — hỏi: đã thực hiện chưa?
+2. Gọi 115 nếu triệu chứng nặng (khó thở, co giật, mất ý thức)
+3. Giữ nguyên mẫu thức ăn — KHÔNG vứt, KHÔNG rửa
+4. Báo Hiệu trưởng + Y tế học đường ngay lập tức
+5. Ghi chép: số học sinh, triệu chứng cụ thể, thời gian bắt đầu
+6. Báo Sở Y tế trong 24h (bắt buộc nếu ≥2 người bị)
+
+=== GIAI ĐOẠN 2 — ĐIỀU TRA NGUYÊN NHÂN ===
+Khi tình huống đã ổn định (các bước 1-4 đã xong), chuyển sang điều tra:
+- Hỏi thực đơn ngày hôm đó cụ thể
+- Hỏi nhà cung cấp giao hàng hôm đó
+- Hỏi kết quả kiểm thực 3 bước (Y Tế đã làm chưa, phát hiện gì)
+- Phân tích nguy cơ: thực phẩm nào có khả năng gây vấn đề cao nhất
+
+=== GIAI ĐOẠN 3 — TẠO TÀI LIỆU ===
+Khi đã có đủ thông tin, tự động soạn:
+- Biên bản sự cố (timeline đầy đủ)
+- Báo cáo gửi cấp trên (theo chuẩn hành chính VN)
 
 CÁCH PHẢN HỒI:
-- Luôn xác nhận bước đã làm
-- Hỏi thông tin cụ thể còn thiếu (số học sinh, triệu chứng, thời gian)
-- Đưa ra bước tiếp theo rõ ràng
-- Ghi nhận thông tin vào "SỔ GHI SỰ CỐ" format: [HH:MM] - nội dung
-- Nếu tình huống nghiêm trọng (khó thở, co giật) → ưu tiên gọi 115 NGAY"""
+- Ngắn gọn, rõ ràng, từng bước một
+- Dùng định dạng: [HH:MM] khi ghi nhận timeline
+- Sau ~5-6 lượt trao đổi mà tình huống ổn định → chủ động hỏi "Tình huống đã kiểm soát chưa? Tôi bắt đầu điều tra nguyên nhân nhé?"
+- Khi hỏi xong Phase 2 → gợi ý: "Tôi có thể soạn biên bản và báo cáo gửi cấp trên ngay bây giờ"
+- KHÔNG hỏi nhiều câu cùng lúc — từng câu một"""
 
     messages = history + [{"role": "user", "content": user_msg}]
     try:
         resp = client.messages.create(
             model=MODEL,
-            max_tokens=500,   # Giảm từ 600 — hướng dẫn từng bước ngắn gọn
+            max_tokens=600,
             system=[{"type": "text", "text": INCIDENT_SYSTEM,
-                     "cache_control": {"type": "ephemeral"}}],  # Cache system prompt
+                     "cache_control": {"type": "ephemeral"}}],
             messages=messages,
         )
         return resp.content[0].text
@@ -3019,27 +3031,57 @@ def tab_emergency(api_key: str = ""):
                 st.rerun()
 
         elif st.session_state.incident_log:
-            # Hiển thị biên bản sau khi kết thúc
+            # Kết thúc sự cố — hiện biên bản + nút tạo báo cáo tổng hợp
             log_text = "\n".join(st.session_state.incident_log)
             st.download_button(
-                "📄 Tải biên bản sự cố (.txt)",
+                "📋 Tải biên bản sự cố (.txt)",
                 data=f"BIÊN BẢN SỰ CỐ ATTP\n{'='*40}\n{log_text}",
                 file_name=f"SuCo_ATTP_{now_vn().strftime('%d-%m-%Y_%H%M')}.txt",
-                mime="text/plain", use_container_width=True,
+                mime="text/plain", use_container_width=False,
             )
-            with st.expander("Xem biên bản"):
-                st.text(log_text)
+            # Nút tạo báo cáo tổng hợp gửi cấp trên
+            if st.button("🤖 AI soạn báo cáo tổng hợp gửi cấp trên", key="gen_full_report",
+                          type="primary", use_container_width=True):
+                _full_prompt = (
+                    f"Dưới đây là toàn bộ log sự cố ngộ độc thực phẩm học đường:\n\n{log_text}\n\n"
+                    f"Dựa trên thông tin trên, hãy soạn:\n"
+                    f"1. BIÊN BẢN SỰ CỐ đầy đủ (timeline, số người, triệu chứng, hành động đã thực hiện)\n"
+                    f"2. BÁO CÁO GỬI CẤP TRÊN theo chuẩn hành chính Việt Nam:\n"
+                    f"   - Quốc hiệu, tiêu đề\n"
+                    f"   - Tóm tắt sự việc\n"
+                    f"   - Diễn biến chi tiết theo timeline\n"
+                    f"   - Nguyên nhân sơ bộ (dựa trên thông tin có)\n"
+                    f"   - Biện pháp đã thực hiện\n"
+                    f"   - Đề xuất và kiến nghị (xét nghiệm, báo Sở Y Tế nếu cần)\n"
+                    f"   - Chữ ký placeholder\n"
+                    f"Viết văn phong hành chính, ngắn gọn, đúng pháp luật TTLT 13/2016."
+                )
+                try:
+                    with st.spinner("🤖 Claude AI đang soạn báo cáo..."):
+                        _rp_client = anthropic.Anthropic(api_key=api_key)
+                        _rp_resp = _rp_client.messages.create(
+                            model=MODEL, max_tokens=1500,
+                            messages=[{"role":"user","content":_full_prompt}]
+                        )
+                        _full_report = _rp_resp.content[0].text if _rp_resp.content else ""
+                    st.session_state["incident_full_report"] = _full_report
+                except Exception as _rpe:
+                    st.error(f"Lỗi AI: {_rpe}")
 
-        # Khi kết thúc sự cố → lưu ngày để Phase 2 tự điền
-        if not st.session_state.incident_active and st.session_state.incident_log:
-            st.session_state["incident_trace_date"] = now_vn().strftime("%Y-%m-%d")
-            st.markdown(
-                '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
-                'padding:10px 16px;margin:8px 0;font-size:0.85rem;color:#991B1B">'
-                '🔍 <b>Sự cố đã ghi nhận.</b> Tiếp theo: Dùng công cụ '
-                '"Điều tra & Báo cáo" bên dưới để truy vết nguyên nhân và tạo báo cáo gửi cấp trên.'
-                '</div>', unsafe_allow_html=True,
-            )
+            if st.session_state.get("incident_full_report"):
+                st.markdown(
+                    '<div style="background:white;border:1px solid #E2E8F0;border-radius:10px;'
+                    'padding:16px;margin-top:8px">'
+                    '<b style="color:#1B3B6F">📄 Báo cáo tổng hợp — Claude AI soạn</b>',
+                    unsafe_allow_html=True,
+                )
+                st.text_area("Nội dung (copy → dán vào Word → in/gửi)",
+                              value=st.session_state["incident_full_report"],
+                              height=320, label_visibility="collapsed",
+                              key="full_report_display")
+                st.caption("💡 Copy → dán vào Word → chỉnh font Times New Roman 13 → in/ký/gửi.")
+                st.markdown('</div>', unsafe_allow_html=True)
+
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
         st.markdown("**Hoặc dùng hướng dẫn tĩnh bên dưới:**")
     steps = [
@@ -3062,128 +3104,6 @@ def tab_emergency(api_key: str = ""):
             <div class="sf-card-body">{body}</div>
         </div>""", unsafe_allow_html=True)
 
-    # ── Task#6: Truy vết sự cố ngộ độc — BGH + Y Tế ────────────────────────
-    _role_em = st.session_state.get("user_role","")
-    _can_trace = _role_em in ("Ban Giám Hiệu","Y Tế Học Đường") or st.session_state.get("is_super")
-    if _can_trace and db_ok():
-        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div style="background:linear-gradient(135deg,#1E3A5F,#7F1D1D);'
-            'border-radius:12px;padding:14px 20px;margin-bottom:12px">'
-            '<div style="color:white;font-size:1rem;font-weight:700">'
-            '🔍 Giai đoạn 2 — Điều tra & Báo cáo</div>'
-            '<div style="color:#FECACA;font-size:0.8rem">'
-            'Truy vết nguyên nhân: bữa ăn, NCC, kết quả kiểm tra ngày đó · '
-            'Claude AI soạn báo cáo gửi cấp trên</div></div>',
-            unsafe_allow_html=True,
-        )
-        # Auto pre-fill từ ngày sự cố Phase 1
-        _tr_default = now_vn().date()
-        if st.session_state.get("incident_trace_date"):
-            try:
-                import datetime as _dtem
-                _tr_default = _dtem.date.fromisoformat(st.session_state["incident_trace_date"])
-            except Exception: pass
-        _tr_c1, _tr_c2 = st.columns([1, 2])
-        _tr_date = _tr_c1.date_input("📅 Ngày sự cố", value=_tr_default,
-                                      key="tr_date_em", format="DD/MM/YYYY")
-        _tr_school = _tr_c2.text_input("🏫 Trường",
-                                        value=st.session_state.get("user_school",""),
-                                        key="tr_school_em", placeholder="Tên trường...")
-
-        if st.button("🔍 Truy vết ngay", key="tr_search_em", type="primary"):
-            _tr_ds = str(_tr_date)
-            try:
-                _tr_ses = (_get_sb().table("checklist_sessions").select("*")
-                           .eq("check_date", _tr_ds)
-                           .eq("school_name", _tr_school).execute().data or [])
-            except Exception:
-                _tr_ses = []
-
-            if _tr_ses:
-                st.markdown(
-                    f'<div style="background:#FFF5F5;border:1px solid #FCA5A5;'
-                    f'border-radius:10px;padding:14px 18px;margin:8px 0">'
-                    f'<div style="font-weight:700;color:#991B1B;margin-bottom:8px">'
-                    f'📋 Kết quả truy vết ngày {_tr_date.strftime("%d/%m/%Y")} — {_tr_school}</div>',
-                    unsafe_allow_html=True,
-                )
-                _tr_summary = []
-                for _s in _tr_ses:
-                    _ct = _s.get("check_type","")
-                    _lbl = {"ban_giam_sat":"BGS Checklist 20 điểm",
-                            "kiem_thuc_3_buoc":"Y Tế Kiểm thực 3 bước",
-                            "nha_cung_cap":"NCC Giao hàng"}.get(_ct, _ct)
-                    _al = _s.get("alert_level","OK")
-                    _alc = "#DC2626" if _al=="CRITICAL" else "#D97706" if _al=="MAJOR" else "#16A34A"
-                    _menu = (_s.get("menu_today","") or "Không có thông tin")[:80]
-                    _insp = _s.get("inspector_name","—")
-                    st.markdown(
-                        f'<div style="background:white;border-radius:6px;padding:8px 12px;'
-                        f'margin:4px 0;border-left:3px solid {_alc}">'
-                        f'<b>{_lbl}</b> · Người KT: {_insp}<br>'
-                        f'Thực đơn: {_menu}<br>'
-                        f'Kết quả: <span style="color:{_alc};font-weight:700">{_al}</span> '
-                        f'({_s.get("pass_count",0)}/{_s.get("total_items",0)} điểm đạt)'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    _tr_summary.append(
-                        f"- {_lbl}: {_al}, {_s.get('pass_count',0)}/{_s.get('total_items',0)} đạt, "
-                        f"thực đơn: {_menu[:50]}"
-                    )
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # AI Report
-                if api_key:
-                    if st.button("🤖 AI tạo báo cáo sự cố gửi cấp trên", key="tr_ai_em",
-                                  type="primary", use_container_width=True):
-                        _tr_prompt = (
-                            f"Bạn là chuyên gia ATTP trường học Việt Nam. "
-                            f"Có nghi ngờ ngộ độc thực phẩm tại trường {_tr_school} ngày {_tr_date.strftime('%d/%m/%Y')}.\n\n"
-                            f"Dữ liệu kiểm tra hệ thống:\n" + "\n".join(_tr_summary) + "\n\n"
-                            f"Hãy viết báo cáo gửi cấp trên theo mẫu văn bản hành chính Việt Nam, gồm:\n"
-                            f"1. Tiêu đề + quốc hiệu\n"
-                            f"2. Tóm tắt sự cố (ngày, địa điểm, số người nghi ngờ)\n"
-                            f"3. Phân tích kết quả kiểm tra trước sự cố (có đáng ngờ không)\n"
-                            f"4. Nguyên nhân có thể (theo HACCP)\n"
-                            f"5. Biện pháp đã/cần thực hiện ngay\n"
-                            f"6. Kiến nghị (tạm dừng, xét nghiệm, báo Sở Y Tế)\n"
-                            f"7. Chữ ký placeholder\n"
-                            f"Văn phong chính thức, súc tích, dẫn điều khoản pháp luật liên quan."
-                        )
-                        with st.spinner("🤖 Claude đang soạn báo cáo..."):
-                            try:
-                                _tr_client = anthropic.Anthropic(api_key=api_key)
-                                _tr_resp = _tr_client.messages.create(
-                                    model=MODEL, max_tokens=1200,
-                                    messages=[{"role":"user","content":_tr_prompt}]
-                                )
-                                _tr_report = _tr_resp.content[0].text if _tr_resp.content else ""
-                                st.session_state["tr_ai_report"] = _tr_report
-                            except Exception as _tre:
-                                st.error(f"Lỗi AI: {_tre}")
-
-                if st.session_state.get("tr_ai_report"):
-                    st.markdown(
-                        '<div style="background:white;border:1px solid #E2E8F0;'
-                        'border-radius:10px;padding:16px 18px;margin-top:8px">'
-                        '<div style="font-weight:700;color:#1B3B6F;margin-bottom:10px">'
-                        '📄 Báo cáo sự cố — Claude AI soạn thảo</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.text_area("Nội dung báo cáo (copy để gửi/in)",
-                                 value=st.session_state["tr_ai_report"],
-                                 height=350, key="tr_report_display",
-                                 label_visibility="collapsed")
-                    st.caption("💡 Copy toàn bộ nội dung, dán vào Word → chỉnh font Times New Roman 13 → in/gửi.")
-                    st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.info(f"Không tìm thấy dữ liệu kiểm tra ngày {_tr_date.strftime('%d/%m/%Y')} tại {_tr_school or '(chọn trường)'}.")
-
-
-
-    st.markdown('<div class="sec-hdr">Số điện thoại quan trọng</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     c1.markdown('<div class="metric-box"><div class="metric-lbl">Cấp Cứu</div><div class="metric-num c-red">115</div><div class="metric-lbl">Miễn phí · 24/7</div></div>', unsafe_allow_html=True)
     c2.markdown('<div class="metric-box"><div class="metric-lbl">Cục ATTP</div><div class="metric-num c-blue" style="font-size:1.4rem">1800 6838</div><div class="metric-lbl">Miễn phí · Giờ hành chính</div></div>', unsafe_allow_html=True)
@@ -7101,199 +7021,162 @@ def tab_supplier(api_key: str = "", role: str = ""):
 
 
 def tab_ncc_bgh(school: str = ""):
-    """Tab 🏭 Nhà Cung Cấp — Dashboard tổng hợp dành riêng cho Ban Giám Hiệu."""
-    import pandas as _pd_ncc
-    import plotly.graph_objects as _go_ncc
-    import plotly.express as _px_ncc
+    """Tab 🏭 Nhà Cung Cấp (BGH) — Hồ sơ công ty + chứng nhận + cảnh báo hết hạn."""
+    import base64 as _b64
+    import datetime as _dtncc
 
-    # ── Banner header ──────────────────────────────────────────────────────────
     st.markdown(
         '<div style="background:linear-gradient(135deg,#3B0764 0%,#7C3AED 60%,#4C1D95 100%);'
         'border-radius:12px;padding:14px 22px;margin-bottom:14px">'
-        '<div style="color:white;font-size:1.05rem;font-weight:700">🏭 Quản lý Nhà Cung Cấp</div>'
+        '<div style="color:white;font-size:1.05rem;font-weight:700">🏭 Hồ sơ Nhà Cung Cấp</div>'
         '<div style="color:#DDD6FE;font-size:0.8rem">'
-        'Hồ sơ chứng nhận · Hiệu suất đánh giá · Cảnh báo hết hạn · Lịch kiểm tra'
+        'Thông tin công ty · Giấy phép & Chứng nhận ATTP · Cảnh báo hết hạn'
         '</div></div>', unsafe_allow_html=True,
     )
 
     if not db_ok():
-        st.warning("Cần kết nối database để xem thông tin nhà cung cấp.")
+        st.warning("Cần kết nối database.")
         return
 
-    _today = now_vn().date()
-
-    # ── Alert: cert expiry ─────────────────────────────────────────────────────
+    _today_ncc = _dtncc.date.today()
     _reg = db_get_ncc_registry(school=school)
-    _exp_alerts = []
+
+    # ── Alert hết hạn ──────────────────────────────────────────────────────────
+    _exp = []
     for _n in _reg:
-        for _f, _l in [("license_expiry","Giấy phép"), ("attp_expiry","Chứng nhận ATTP")]:
+        for _f, _l in [("license_expiry","Giấy phép CSSX"), ("attp_expiry","Chứng nhận ATTP")]:
             _e = _n.get(_f)
             if _e:
                 try:
-                    import datetime as _dtn
-                    _ed = _dtn.date.fromisoformat(_e)
-                    _dl = (_ed - _today).days
+                    _ed = _dtncc.date.fromisoformat(_e)
+                    _dl = (_ed - _today_ncc).days
                     if _dl <= 30:
-                        _exp_alerts.append(
-                            f"{'🚨' if _dl <= 0 else '⚠️'} <b>{_n['ncc_name']}</b> — "
-                            f"{_l} {'HẾT HẠN' if _dl <= 0 else f'còn {_dl} ngày'} "
-                            f"({_ed.strftime('%d/%m/%Y')})"
-                        )
+                        _exp.append(f"{'🚨' if _dl <= 0 else '⚠️'} <b>{_n['ncc_name']}</b> — "
+                                    f"{_l} {'HẾT HẠN' if _dl <= 0 else f'còn {_dl} ngày'} "
+                                    f"({_ed.strftime('%d/%m/%Y')})")
                 except Exception: pass
-
-    # Alert: monthly check
-    _this_m = now_vn().strftime("%Y-%m")
-    try:
-        _ncc_month_ses = _get_sb().table("checklist_sessions").select("check_date")\
-            .eq("check_type","nha_cung_cap").eq("school_name",school)\
-            .gte("check_date",f"{_this_m}-01").execute().data or []
-    except Exception:
-        _ncc_month_ses = []
-    if not _ncc_month_ses:
-        _exp_alerts.append(f"⏰ Tháng {now_vn().month:02d}/{now_vn().year} chưa có đánh giá NCC toàn diện (12 điểm)")
-
-    if _exp_alerts:
+    if _exp:
         st.markdown(
             '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
-            'padding:12px 16px;margin-bottom:12px">'
-            '<div style="font-weight:700;color:#991B1B;margin-bottom:6px">🚨 Cảnh báo NCC</div>'
-            + "".join(f'<div style="font-size:0.85rem;color:#991B1B;margin:3px 0">{a}</div>'
-                       for a in _exp_alerts)
+            'padding:12px 16px;margin-bottom:10px">'
+            '<b style="color:#991B1B">🚨 Chứng nhận cần gia hạn</b><br>'
+            + "<br>".join(f'<span style="font-size:0.85rem;color:#991B1B">{a}</span>' for a in _exp)
             + '</div>', unsafe_allow_html=True,
         )
 
-    # ── NCC Performance Dashboard ──────────────────────────────────────────────
+    # ── Monthly check reminder ─────────────────────────────────────────────────
+    _this_m = now_vn().strftime("%Y-%m")
     try:
-        _ncc_ses = _get_sb().table("checklist_sessions")\
-            .select("check_date,pass_count,total_items,alert_level,menu_today")\
-            .eq("check_type","nha_cung_cap").eq("school_name",school)\
-            .order("check_date",desc=True).limit(100).execute().data or []
+        _ncc_month = _get_sb().table("checklist_sessions").select("id")            .eq("check_type","nha_cung_cap").eq("school_name",school)            .gte("check_date",f"{_this_m}-01").execute().data or []
     except Exception:
-        _ncc_ses = []
-
-    if _ncc_ses:
-        _ncc_df = _pd_ncc.DataFrame([{
-            "Ngày": s["check_date"],
-            "Tỷ lệ": round(s["pass_count"]/max(s["total_items"],1)*100, 1),
-            "NCC": (s.get("menu_today","") or "").replace("NCC:","").strip()[:30],
-            "Loại": ("A" if s.get("pass_count",0) >= 10
-                     else "B" if s.get("pass_count",0) >= 8 else "C"),
-        } for s in _ncc_ses])
-
-        # KPI tổng quan
-        _ncc_total = len(_ncc_df)
-        _ncc_a = (_ncc_df["Loại"]=="A").sum()
-        _ncc_b = (_ncc_df["Loại"]=="B").sum()
-        _ncc_c = (_ncc_df["Loại"]=="C").sum()
-        _ncc_avg = _ncc_df["Tỷ lệ"].mean()
-
-        k1,k2,k3,k4 = st.columns(4)
-        for _kc, _kv, _kl, _kclr in [
-            (k1, _ncc_total, "Tổng lần đánh giá", "c-blue"),
-            (k2, _ncc_a, "✅ Loại A (≥83%)", "c-green"),
-            (k3, _ncc_b, "🟡 Loại B (67–82%)", "c-orange"),
-            (k4, _ncc_c, "🔴 Loại C (<67%)", "c-red" if _ncc_c>0 else "c-green"),
-        ]:
-            _kc.markdown(f'<div class="metric-box"><div class="metric-lbl">{_kl}</div>'
-                          f'<div class="metric-num {_kclr}">{_kv}</div></div>',
-                          unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Charts: Donut A/B/C + Trend line
-        _ch1, _ch2 = st.columns(2)
-        with _ch1:
-            _fig_pie = _go_ncc.Figure(_go_ncc.Pie(
-                labels=["Loại A","Loại B","Loại C"],
-                values=[_ncc_a, _ncc_b, _ncc_c], hole=0.45,
-                marker_colors=["#16A34A","#F59E0B","#DC2626"],
-                textfont_size=13, textinfo="percent+label",
-                hovertemplate="%{label}: %{value} lần<extra></extra>",
-            ))
-            _fig_pie.update_layout(
-                plot_bgcolor="white", paper_bgcolor="#F8FAFC",
-                font=dict(family="Inter",size=12), margin=dict(l=10,r=10,t=30,b=10),
-                height=260, title=dict(text="Phân bố xếp loại NCC", font=dict(size=13)),
-                showlegend=False,
-                annotations=[dict(text=f"<b>{_ncc_avg:.0f}%</b><br>TB", x=0.5, y=0.5,
-                                   showarrow=False, font_size=14)],
-            )
-            st.plotly_chart(_fig_pie, use_container_width=True)
-
-        with _ch2:
-            try:
-                _ncc_trend = _ncc_df.sort_values("Ngày").tail(20).copy()
-                _ncc_trend["Ngày_fmt"] = _pd_ncc.to_datetime(_ncc_trend["Ngày"])\
-                    .dt.strftime("%d/%m")
-                _fig_trend = _go_ncc.Figure(_go_ncc.Scatter(
-                    x=_ncc_trend["Ngày_fmt"], y=_ncc_trend["Tỷ lệ"],
-                    mode="lines+markers",
-                    line=dict(color="#7C3AED", width=2.5),
-                    marker=dict(size=8, color=["#16A34A" if v>=83 else "#F59E0B" if v>=67 else "#DC2626"
-                                               for v in _ncc_trend["Tỷ lệ"]]),
-                    hovertemplate="Ngày %{x}<br>Tỷ lệ: %{y:.0f}%<extra></extra>",
-                ))
-                _fig_trend.add_hline(y=83, line_dash="dot", line_color="#16A34A",
-                                      annotation_text=" Loại A", annotation_font_size=10)
-                _fig_trend.add_hline(y=67, line_dash="dot", line_color="#F59E0B",
-                                      annotation_text=" Loại B", annotation_font_size=10)
-                _fig_trend.update_layout(
-                    plot_bgcolor="white", paper_bgcolor="#F8FAFC",
-                    font=dict(family="Inter",size=11), margin=dict(l=10,r=10,t=30,b=10),
-                    height=260, title=dict(text="Xu hướng điểm NCC theo thời gian", font=dict(size=13)),
-                    xaxis=dict(showgrid=False), yaxis=dict(range=[0,110], ticksuffix="%"),
-                    showlegend=False,
-                )
-                st.plotly_chart(_fig_trend, use_container_width=True)
-            except Exception: pass
-
-        # Bảng lịch sử
-        with st.expander(f"📋 Lịch sử {_ncc_total} lần đánh giá NCC"):
-            _ncc_show = _ncc_df.copy()
-            try:
-                _ncc_show["Ngày"] = _pd_ncc.to_datetime(_ncc_show["Ngày"])\
-                    .dt.strftime("%d/%m/%Y")
-            except Exception: pass
-            st.dataframe(_ncc_show, use_container_width=True, hide_index=True)
-    else:
+        _ncc_month = []
+    if not _ncc_month:
         st.markdown(
-            '<div style="background:#F5F3FF;border:1px dashed #DDD6FE;border-radius:12px;'
-            'padding:24px;text-align:center;margin:8px 0">'
-            '<div style="font-size:2rem;margin-bottom:8px">🏭</div>'
-            '<div style="font-size:0.95rem;font-weight:600;color:#5B21B6;margin-bottom:6px">'
-            'Chưa có kết quả đánh giá NCC</div>'
-            '<div style="font-size:0.82rem;color:#64748B">'
-            '→ Vào tab 🏭 Nhà Cung Cấp (BGS/Y Tế) để thực hiện đánh giá đầu tiên'
-            '</div></div>', unsafe_allow_html=True,
+            f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
+            f'padding:8px 14px;margin-bottom:10px;font-size:0.85rem;color:#92400E">'
+            f'⏰ Tháng {now_vn().month:02d}/{now_vn().year}: Chưa có đánh giá NCC toàn diện (12 điểm) — '
+            f'BGS cần thực hiện trước cuối tháng</div>', unsafe_allow_html=True,
         )
 
-    # ── NCC Registry: Hồ sơ & Chứng nhận ─────────────────────────────────────
-    st.markdown('<div class="sec-hdr">📋 Hồ sơ & Chứng nhận</div>', unsafe_allow_html=True)
-    if _reg:
-        _reg_df = _pd_ncc.DataFrame([{
-            "Tên NCC": n["ncc_name"], "Số GP": n.get("license_no","—"),
-            "Hết hạn GP": (n.get("license_expiry","") or "—")[:10],
-            "Hết hạn ATTP": (n.get("attp_expiry","") or "—")[:10],
-            "SĐT": n.get("phone","—"),
-        } for n in _reg])
-        st.dataframe(_reg_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("Chưa có hồ sơ NCC nào. Thêm bên dưới.")
+    # ── Danh sách NCC + hồ sơ ─────────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">📋 Danh sách nhà cung cấp</div>', unsafe_allow_html=True)
 
-    with st.expander("➕ Thêm / Cập nhật hồ sơ NCC"):
-        _r1, _r2 = st.columns(2)
-        _rn = _r1.text_input("Tên NCC", placeholder="Công ty TNHH Bếp Xanh", key="rncc_nm")
-        _rl = _r2.text_input("Số giấy phép", placeholder="01/GPCSSX-2024", key="rncc_lic")
-        _r3, _r4, _r5 = st.columns(3)
-        _rle = _r3.date_input("Hết hạn Giấy phép", value=None, key="rncc_le", format="DD/MM/YYYY")
-        _rae = _r4.date_input("Hết hạn ATTP cert", value=None, key="rncc_ae", format="DD/MM/YYYY")
-        _rph = _r5.text_input("SĐT", placeholder="0901...", key="rncc_ph")
-        if st.button("💾 Lưu hồ sơ NCC", key="rncc_save", type="primary"):
-            if _rn.strip():
-                if db_save_ncc_registry(school or st.session_state.get("user_school",""),
-                                         _rn.strip(), _rl.strip(),
-                                         str(_rle) if _rle else "", str(_rae) if _rae else "",
-                                         _rph.strip()):
-                    st.success(f"✅ Đã lưu hồ sơ: {_rn}"); st.rerun()
+    if _reg:
+        for _idx, _ncc in enumerate(_reg):
+            _exp_cls = ""
+            for _f, _l in [("license_expiry","GP"), ("attp_expiry","ATTP")]:
+                _e = _ncc.get(_f)
+                if _e:
+                    try:
+                        _ed = _dtncc.date.fromisoformat(_e)
+                        _dl = (_ed - _today_ncc).days
+                        if _dl <= 0: _exp_cls = "background:#FEF2F2;border-color:#FCA5A5"
+                        elif _dl <= 30 and not _exp_cls: _exp_cls = "background:#FFFBEB;border-color:#FCD34D"
+                    except Exception: pass
+
+            with st.expander(f"🏭 {_ncc['ncc_name']} "
+                              f"{'🚨' if 'FEF2F2' in _exp_cls else '⚠️' if _exp_cls else '✅'}"):
+                _nc1, _nc2 = st.columns(2)
+                _nc1.markdown(f"**SĐT**: {_ncc.get('phone','—')}")
+                _nc1.markdown(f"**Địa chỉ**: {_ncc.get('address','—')}")
+                _nc1.markdown(f"**Hợp đồng**: {_ncc.get('contract_no','—')}")
+                _nc2.markdown(f"**Số GP CSSX**: {_ncc.get('license_no','—')}")
+                _nc2.markdown(f"**Hết hạn GP**: {((_ncc.get('license_expiry') or '—'))[:10]}")
+                _nc2.markdown(f"**Hết hạn ATTP**: {((_ncc.get('attp_expiry') or '—'))[:10]}")
+
+                # Cert files
+                _cf = _ncc.get("cert_files") or {}
+                if _cf:
+                    st.markdown("**📎 File đính kèm:**")
+                    for _fname, _fdata in _cf.items():
+                        try:
+                            _fbytes = _b64.b64decode(_fdata)
+                            st.download_button(
+                                f"⬇️ {_fname}", data=_fbytes, file_name=_fname,
+                                key=f"dl_{_ncc['id']}_{_fname[:10]}",
+                                use_container_width=False,
+                            )
+                        except Exception: pass
+
+                # Upload file
+                _upl = st.file_uploader(
+                    "📎 Tải lên file chứng nhận (PDF/JPG ≤ 5MB)",
+                    type=["pdf","jpg","jpeg","png"], key=f"upl_{_ncc['id']}",
+                    accept_multiple_files=False,
+                )
+                if _upl is not None:
+                    _raw = _upl.read()
+                    if len(_raw) <= 5*1024*1024:
+                        _cf_new = dict(_cf)
+                        _cf_new[_upl.name] = _b64.b64encode(_raw).decode()
+                        try:
+                            _get_sb().table("ncc_registry").update({"cert_files": _cf_new})                                .eq("id", _ncc["id"]).execute()
+                            st.success(f"✅ Đã lưu file: {_upl.name}"); st.rerun()
+                        except Exception as _ue:
+                            st.error(f"Lỗi lưu: {_ue}")
+                    else:
+                        st.warning("File vượt 5MB.")
+
+                if _ncc.get("notes"):
+                    st.caption(f"Ghi chú: {_ncc['notes']}")
+    else:
+        st.info("Chưa có hồ sơ NCC. Thêm bên dưới.")
+
+    # ── Form thêm / cập nhật NCC ───────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">➕ Thêm / Cập nhật nhà cung cấp</div>', unsafe_allow_html=True)
+    with st.form("ncc_bgh_form", clear_on_submit=True):
+        _f1, _f2 = st.columns(2)
+        _fn  = _f1.text_input("Tên công ty / cơ sở", placeholder="Công ty TNHH Bếp Xanh")
+        _fco = _f2.text_input("Số hợp đồng", placeholder="HĐ-2025-001")
+        _f3, _f4 = st.columns(2)
+        _flic = _f3.text_input("Số giấy phép CSSX", placeholder="01/GPCSSX-2024")
+        _fph  = _f4.text_input("SĐT liên hệ", placeholder="0901 234 567")
+        _f5, _f6, _f7 = st.columns(3)
+        _fle  = _f5.date_input("Hết hạn Giấy phép", value=None, format="DD/MM/YYYY")
+        _fae  = _f6.date_input("Hết hạn ATTP cert", value=None, format="DD/MM/YYYY")
+        _fadr = _f7.text_input("Địa chỉ", placeholder="Số 1 Lê Lợi, Q.1...")
+        _fnote = st.text_input("Ghi chú", placeholder="Tuỳ chọn...")
+        if st.form_submit_button("💾 Lưu hồ sơ NCC", type="primary"):
+            if _fn.strip():
+                _sc = school or st.session_state.get("user_school","")
+                _data = {
+                    "school_name": _sc, "ncc_name": _fn.strip(),
+                    "contract_no": _fco.strip(), "license_no": _flic.strip(),
+                    "license_expiry": str(_fle) if _fle else None,
+                    "attp_expiry": str(_fae) if _fae else None,
+                    "phone": _fph.strip(), "address": _fadr.strip(),
+                    "notes": _fnote.strip(), "is_active": True,
+                    "updated_at": now_vn().isoformat(),
+                }
+                _ex = _get_sb().table("ncc_registry").select("id")                    .eq("school_name",_sc).eq("ncc_name",_fn.strip()).execute().data
+                try:
+                    if _ex:
+                        _get_sb().table("ncc_registry").update(_data).eq("id",_ex[0]["id"]).execute()
+                    else:
+                        _get_sb().table("ncc_registry").insert(_data).execute()
+                    st.success(f"✅ Đã lưu: {_fn}"); st.rerun()
+                except Exception as _e2:
+                    st.error(f"Lỗi: {_e2}")
             else:
                 st.warning("Điền tên nhà cung cấp.")
 
