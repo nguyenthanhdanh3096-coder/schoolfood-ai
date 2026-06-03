@@ -2376,6 +2376,20 @@ def tab_checklist(api_key: str = ""):
 
     can_submit = len(errors) == 0
 
+    # ── Khóa giờ submit (chống đánh trước/sau giờ quy định) ──────────────────
+    _now_vn   = now_vn()
+    _hour_now = _now_vn.hour + _now_vn.minute / 60
+    _is_super = st.session_state.get("is_super", False)
+    # BGS: 7:00–13:30 | bỏ qua nếu is_super (admin test)
+    _in_window = _is_super or (7.0 <= _hour_now <= 13.5)
+    if not _in_window and can_submit:
+        st.warning(
+            f"⏰ Ngoài giờ kiểm tra hợp lệ (7:00–13:30). Hiện tại: "
+            f"{_now_vn.strftime('%H:%M')} — "
+            "Kết quả nộp ngoài giờ không được tính vào hồ sơ chính thức."
+        )
+        can_submit = False
+
     # ── Hiển thị checklist bổ sung từ AI (nếu có) ────────────────────────────
     if st.session_state.cl_extra:
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
@@ -2775,89 +2789,175 @@ def tab_emergency(api_key: str = ""):
 # ── TAB 5: Về ứng dụng ───────────────────────────────────────────────────────
 # ── Tab riêng cho Phụ Huynh (chỉ xem, không thực hiện checklist) ─────────────
 def tab_parent_view(api_key: str = ""):
-    """View dành cho Phụ Huynh — xem thực đơn, kết quả kiểm tra, gửi phản hồi."""
-    st.markdown("""<div class="sf-card">
-        <div class="sf-card-title">👨‍👩‍👧 Góc Phụ Huynh</div>
-        <div class="sf-card-body">
-            Phụ Huynh có quyền xem thực đơn, đọc kết quả kiểm tra của Ban Giám Sát
-            và gửi phản hồi về bữa ăn. Việc thực hiện checklist thuộc thẩm quyền của
-            <b>Ban Giám Sát (Đại Diện PHHS)</b> được bầu chính thức.
-        </div>
-    </div>""", unsafe_allow_html=True)
+    """View dành cho Phụ Huynh — kết quả từ DB, traffic light, feedback tracking."""
+    import pandas as _pd_pv
 
-    # Phần 1 — Thực đơn hôm nay (đọc từ session_state nếu Y Tế đã nhập)
-    st.markdown('<div class="sec-hdr">📋 Thực đơn hôm nay</div>', unsafe_allow_html=True)
-    menu_today = st.session_state.get("shared_menu", "").strip()
-    if menu_today:
+    school = st.session_state.get("user_school", "")
+    today_str = now_vn().strftime("%Y-%m-%d")
+
+    # ── Section 1: Kết quả an toàn hôm nay (traffic light) ───────────────────
+    st.markdown('<div class="sec-hdr">🛡️ Bữa ăn hôm nay an toàn không?</div>',
+                unsafe_allow_html=True)
+
+    # Lấy kết quả từ DB (Y Tế + BGS cùng ngày)
+    _sessions_today: list = []
+    if db_ok():
+        try:
+            _r = (_get_sb().table("checklist_sessions")
+                  .select("check_type,pass_count,total_items,alert_level,menu_today,check_date")
+                  .eq("check_date", today_str)
+                  .order("created_at", desc=True)
+                  .limit(20).execute())
+            _all_today = _r.data or []
+            if school:
+                _all_today = [s for s in _all_today
+                              if s.get("school_name", "") == school or not school]
+            _sessions_today = _all_today
+        except Exception:
+            pass
+
+    _yte_sessions  = [s for s in _sessions_today if s.get("check_type") == "kiem_thuc_3_buoc"]
+    _bgs_sessions  = [s for s in _sessions_today if s.get("check_type") == "ban_giam_sat"]
+
+    def _avg_pct(sessions):
+        if not sessions: return None
+        pcts = [s["pass_count"] / max(s["total_items"], 1) * 100 for s in sessions
+                if s.get("total_items", 0) > 0]
+        return sum(pcts) / len(pcts) if pcts else None
+
+    _yte_pct = _avg_pct(_yte_sessions)
+    _bgs_pct = _avg_pct(_bgs_sessions)
+
+    # Tính tổng hợp: Y Tế 40%, BGS 60% (BGS độc lập hơn)
+    if _yte_pct is not None and _bgs_pct is not None:
+        _combined_pct = _bgs_pct * 0.60 + _yte_pct * 0.40
+        _source_txt = "Y Tế Học Đường + Ban Giám Sát (kết hợp)"
+    elif _yte_pct is not None:
+        _combined_pct = _yte_pct
+        _source_txt = "Y Tế Học Đường"
+    elif _bgs_pct is not None:
+        _combined_pct = _bgs_pct
+        _source_txt = "Ban Giám Sát (Đại Diện PHHS)"
+    else:
+        _combined_pct = None
+        _source_txt = ""
+
+    if _combined_pct is not None:
+        _pct_r = round(_combined_pct)
+        if _pct_r >= 90:
+            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#DCFCE7", "🟢", "AN TOÀN", "Bữa ăn đạt tiêu chuẩn ATTP"
+        elif _pct_r >= 75:
+            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#FEF9C3", "🟡", "CẦN THEO DÕI", "Có một số điểm cần cải thiện — nhà trường đang xử lý"
+        else:
+            _tl_bg, _tl_icon, _tl_lbl, _tl_sub = "#FEE2E2", "🔴", "CÓ VẤN ĐỀ", "Nhà trường đang tiến hành khắc phục — Ban Giám Hiệu đã được thông báo"
+
         st.markdown(
-            f'<div class="sf-card" style="border-left:4px solid #16A34A">'
-            f'<div style="font-size:0.78rem;color:#16A34A;font-weight:700;margin-bottom:4px">'
-            f'✅ Thực đơn đã được cập nhật</div>'
-            f'<div style="font-size:0.95rem;color:#1E293B;font-weight:500">{menu_today}</div>'
+            f'<div style="background:{_tl_bg};border-radius:14px;padding:20px 24px;'
+            f'text-align:center;margin-bottom:10px">'
+            f'<div style="font-size:3rem;line-height:1.2">{_tl_icon}</div>'
+            f'<div style="font-size:1.3rem;font-weight:800;color:#1E293B;margin-top:6px">'
+            f'{_tl_lbl}</div>'
+            f'<div style="font-size:0.88rem;color:#475569;margin-top:4px">{_tl_sub}</div>'
+            f'<div style="font-size:0.75rem;color:#94A3B8;margin-top:8px">'
+            f'Nguồn: {_source_txt} · Cập nhật: {now_vn().strftime("%H:%M %d/%m")}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            '<div class="sf-card" style="border-left:4px solid #2563EB">'
-            '<div class="sf-card-body">Thực đơn chưa được cập nhật. '
-            'Y Tế Học Đường sẽ nhập thực đơn trước bữa ăn vào tab ✅ Checklist kiểm tra. '
-            'Hoặc xem bảng thực đơn treo tại cổng trường.</div></div>',
+            '<div style="background:#F8FAFC;border:1px dashed #CBD5E1;border-radius:14px;'
+            'padding:24px;text-align:center">'
+            '<div style="font-size:2rem">⏳</div>'
+            '<div style="font-size:1rem;font-weight:600;color:#475569;margin-top:8px">'
+            'Chưa có kết quả kiểm tra hôm nay</div>'
+            '<div style="font-size:0.82rem;color:#94A3B8;margin-top:6px;line-height:1.7">'
+            'Y Tế Học Đường kiểm tra trước bữa ăn (9:30–11:00)<br>'
+            'Ban Giám Sát kiểm tra 2 lần/tuần — kết quả xuất hiện ở đây ngay sau khi hoàn thành'
+            '</div></div>',
             unsafe_allow_html=True,
         )
 
-    # Phần 2 — Kết quả kiểm tra mới nhất
-    st.markdown('<div class="sec-hdr">✅ Kết quả kiểm tra gần nhất</div>',
-                unsafe_allow_html=True)
-    if st.session_state.get("cl_r"):
-        pass_ct = sum(1 for v in st.session_state.cl_r.values() if v == "✅ Đạt")
-        fail_ct = sum(1 for v in st.session_state.cl_r.values() if v == "❌ Không Đạt")
-        total   = pass_ct + fail_ct
-        if total > 0:
-            pct = int(pass_ct / total * 100)
-            from datetime import date
-            c1, c2, c3 = st.columns(3)
-            c1.markdown(f"""<div class="metric-box">
-                <div class="metric-lbl">Điểm đạt</div>
-                <div class="metric-num c-green">{pass_ct}</div>
-                <div class="metric-lbl">/ {total} đã chấm</div>
-            </div>""", unsafe_allow_html=True)
-            c2.markdown(f"""<div class="metric-box">
-                <div class="metric-lbl">Tỷ lệ</div>
-                <div class="metric-num {'c-green' if pct>=90 else 'c-orange' if pct>=75 else 'c-red'}">{pct}%</div>
-                <div class="metric-lbl">đạt chuẩn</div>
-            </div>""", unsafe_allow_html=True)
-            c3.markdown(f"""<div class="metric-box">
-                <div class="metric-lbl">Điểm không đạt</div>
-                <div class="metric-num c-red">{fail_ct}</div>
-                <div class="metric-lbl">điểm</div>
-            </div>""", unsafe_allow_html=True)
-        else:
-            st.info("Ban Giám Sát chưa thực hiện checklist trong phiên này.")
+    # ── Section 2: Thực đơn hôm nay ──────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">🍱 Thực đơn hôm nay</div>', unsafe_allow_html=True)
+
+    # Lấy thực đơn từ session mới nhất trong ngày
+    _menu_today = ""
+    for _s in _sessions_today:
+        _m = (_s.get("menu_today") or "").strip()
+        if _m and not _m.startswith("NCC:") and not _m.startswith("Nhà CC:"):
+            _menu_today = _m
+            break
+    # Fallback: session_state (nếu Y Tế vừa nhập trên cùng thiết bị)
+    if not _menu_today:
+        _menu_today = st.session_state.get("shared_menu", "").strip()
+
+    if _menu_today:
+        st.markdown(
+            f'<div class="sf-card" style="border-left:4px solid #16A34A">'
+            f'<div style="font-size:0.75rem;color:#16A34A;font-weight:700;margin-bottom:4px">'
+            f'✅ Thực đơn đã được cập nhật</div>'
+            f'<div style="font-size:0.95rem;color:#1E293B;font-weight:500">{_menu_today}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.info("Chưa có kết quả kiểm tra. Ban Giám Sát thực hiện kiểm tra 2 lần/tuần.")
+        st.markdown(
+            '<div class="sf-card" style="border-left:4px solid #94A3B8">'
+            '<div style="font-size:0.85rem;color:#64748B;line-height:1.7">'
+            '📋 Thực đơn hôm nay chưa được cập nhật trên hệ thống.<br>'
+            '👉 Xem thực đơn tại <b>bảng thông báo trước phòng bếp/căng tin</b> '
+            'hoặc hỏi Y Tế Học Đường / giáo viên chủ nhiệm.'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    # Phần 3 — Quyền của Phụ Huynh
-    st.markdown('<div class="sec-hdr">⚖️ Quyền của Phụ Huynh theo pháp luật</div>',
+    # ── Section 3: Lịch sử 7 ngày ────────────────────────────────────────────
+    st.markdown('<div class="sec-hdr">📅 Lịch sử 7 ngày gần nhất</div>',
                 unsafe_allow_html=True)
-    rights = [
-        ("Xem thực đơn",
-         "Nhà trường phải công khai thực đơn — yêu cầu Y Tế Học Đường hoặc xem bảng thông báo."),
-        ("Yêu cầu Ban Đại Diện PHHS giám sát",
-         "Phụ Huynh có quyền đề nghị Ban Đại Diện PHHS kiểm tra đột xuất bếp ăn."),
-        ("Phản ánh chất lượng",
-         "Gửi phản hồi qua form bên dưới hoặc liên hệ trực tiếp Hiệu Trưởng."),
-        ("Tiếp cận kết quả kiểm tra",
-         "Báo cáo kiểm tra ATTP là tài liệu có thể được chia sẻ với phụ huynh khi yêu cầu."),
-    ]
-    for title, desc in rights:
-        st.markdown(f"""<div class="sf-card" style="padding:12px 16px;margin:6px 0">
-            <span style="font-weight:600;color:#1E293B;font-size:0.88rem">{title}</span>
-            <div style="font-size:0.83rem;color:#475569;margin-top:3px">{desc}</div>
-        </div>""", unsafe_allow_html=True)
+    if db_ok():
+        try:
+            _hist_r = (_get_sb().table("checklist_sessions")
+                       .select("check_date,check_type,pass_count,total_items,alert_level")
+                       .in_("check_type", ["ban_giam_sat", "kiem_thuc_3_buoc"])
+                       .order("check_date", desc=True).limit(50).execute())
+            _hist = _hist_r.data or []
+            if school:
+                _hist = [h for h in _hist
+                         if (_get_sb().table("checklist_sessions")
+                             .select("school_name").eq("check_date", h["check_date"])
+                             .limit(1).execute().data or [{}])[0].get("school_name", "") == school]
+        except Exception:
+            _hist = []
 
-    # Phần 4 — Gửi phản hồi (không dùng div wrapper — gây thanh trắng rỗng)
-    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        if _hist:
+            # Group by date, tính average pct mỗi ngày
+            _by_date: dict = {}
+            for h in _hist:
+                _d = h["check_date"]
+                _p = h["pass_count"] / max(h["total_items"], 1) * 100
+                if _d not in _by_date:
+                    _by_date[_d] = []
+                _by_date[_d].append(_p)
+            _dates = sorted(_by_date.keys())[-7:]
+            _cols = st.columns(len(_dates))
+            for i, _d in enumerate(_dates):
+                _avg = round(sum(_by_date[_d]) / len(_by_date[_d]))
+                _ic  = "🟢" if _avg >= 90 else "🟡" if _avg >= 75 else "🔴"
+                _dd  = _d[5:].replace("-", "/")  # MM/DD → format dễ đọc
+                _cols[i].markdown(
+                    f'<div style="text-align:center;padding:8px 4px">'
+                    f'<div style="font-size:1.4rem">{_ic}</div>'
+                    f'<div style="font-size:0.7rem;color:#64748B;margin-top:2px">{_dd}</div>'
+                    f'<div style="font-size:0.75rem;font-weight:700;color:#1E293B">{_avg}%</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.caption("Chưa có lịch sử kiểm tra.")
+    else:
+        st.caption("Kết nối database để xem lịch sử.")
+
+    # ── Section 4: Gửi phản hồi ───────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">📤 Gửi phản hồi về bữa ăn</div>',
                 unsafe_allow_html=True)
     loai = st.selectbox("Loại phản hồi", [
@@ -2870,47 +2970,89 @@ def tab_parent_view(api_key: str = ""):
         "Khác",
     ])
     noi_dung = st.text_area(
-        "Mô tả cụ thể (ngày, bữa ăn, triệu chứng nếu có...)",
-        height=120,
-        placeholder="Ví dụ: Hôm nay 01/06, con tôi kể thức ăn có mùi lạ ở bữa trưa...",
+        "Mô tả cụ thể (ngày, bữa ăn, triệu chứng nếu có...)", height=110,
+        placeholder="VD: Hôm nay 03/06, con kể thức ăn có mùi lạ ở bữa trưa...",
     )
-
     if st.button("📤 Gửi phản hồi", type="primary", use_container_width=True):
         if loai == "Chọn loại phản hồi..." or not noi_dung.strip():
-            st.warning("⚠️ Vui lòng chọn loại phản hồi và điền nội dung trước khi gửi.")
+            st.warning("⚠️ Vui lòng chọn loại và điền nội dung.")
         elif "Ngộ độc" in loai:
-            st.error(
-                "🚨 Nếu nghi ngờ ngộ độc: gọi ngay **115** và chuyển sang tab **🚨 Khẩn cấp** "
-                "để biết quy trình xử lý đúng."
-            )
+            st.error("🚨 Nghi ngờ ngộ độc: gọi **115** ngay và xem tab **🚨 Khẩn cấp**.")
         else:
-            # G2: Lưu feedback vào Supabase
-            school_name = st.session_state.get("kt_school", "") or "Chưa nhập"
-            saved = db_save_feedback(school_name, loai, noi_dung)
+            _school_fb = school or st.session_state.get("kt_school", "") or "Chưa nhập"
+            saved = db_save_feedback(_school_fb, loai, noi_dung)
             if saved:
-                st.success(
-                    "✅ Đã ghi nhận phản hồi và lưu vào hệ thống. "
-                    "Ban Giám Hiệu sẽ xem xét và phản hồi trong 1–2 ngày làm việc."
-                )
+                st.session_state["ph_last_feedback"] = {"loai": loai, "noi_dung": noi_dung,
+                                                          "time": now_vn().strftime("%H:%M %d/%m")}
+                st.success("✅ Đã ghi nhận — Ban Giám Hiệu xem xét trong 1–2 ngày làm việc.")
             else:
-                st.success(
-                    "✅ Đã ghi nhận phản hồi. "
-                    "*(Lưu ý: chưa kết nối database — phản hồi chưa được lưu vĩnh viễn)*"
-                )
+                st.warning("Chưa kết nối database — phản hồi chưa được lưu.")
 
-    # Hỏi đáp AI (nếu có)
+    # ── Section 5: Theo dõi phản hồi trong trường ────────────────────────────
+    st.markdown('<div class="sec-hdr">📬 Phản hồi cộng đồng — Phụ Huynh trong trường</div>',
+                unsafe_allow_html=True)
+    st.caption("Tất cả phản hồi từ phụ huynh trong trường (ẩn danh người gửi). "
+               "Trạng thái: ⏳ Chờ xử lý · ✅ Đã xử lý")
+
+    if db_ok() and (school or st.session_state.get("kt_school")):
+        _fb_school = school or st.session_state.get("kt_school", "")
+        try:
+            _fbs = (_get_sb().table("parent_feedback").select("*")
+                    .eq("school_name", _fb_school)
+                    .order("created_at", desc=True).limit(20).execute().data or [])
+        except Exception:
+            _fbs = []
+
+        if _fbs:
+            for _fb in _fbs:
+                _st = _fb.get("status", "pending")
+                _st_badge = ("✅ Đã xử lý" if _st == "resolved"
+                             else "💬 Đang xử lý" if _st == "reviewed" else "⏳ Chờ xử lý")
+                _st_clr   = ("#16A34A" if _st == "resolved"
+                             else "#2563EB" if _st == "reviewed" else "#D97706")
+                _dt = (_fb.get("created_at") or "")[:16].replace("T", " ")
+                st.markdown(
+                    f'<div class="sf-card" style="padding:10px 16px;margin:5px 0">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                    f'flex-wrap:wrap;gap:4px;margin-bottom:5px">'
+                    f'<span style="font-size:0.75rem;font-weight:700;color:#64748B">'
+                    f'{_fb.get("category","")}</span>'
+                    f'<span style="font-size:0.72rem;font-weight:700;color:{_st_clr}">'
+                    f'{_st_badge}</span>'
+                    f'</div>'
+                    f'<div style="font-size:0.88rem;color:#1E293B">{_fb.get("content","")}</div>'
+                    f'<div style="font-size:0.72rem;color:#94A3B8;margin-top:4px">🕐 {_dt}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("Chưa có phản hồi nào trong trường. Hãy là người đầu tiên gửi ý kiến!")
+    else:
+        st.caption("Đăng nhập với tài khoản có trường để xem phản hồi cộng đồng.")
+
+    # ── Section 6: Quyền pháp lý ─────────────────────────────────────────────
+    with st.expander("⚖️ Quyền của Phụ Huynh theo pháp luật"):
+        for _title, _desc in [
+            ("Xem thực đơn", "Nhà trường phải công khai thực đơn hàng ngày — bảng thông báo trước phòng bếp hoặc ứng dụng này."),
+            ("Yêu cầu Ban Đại Diện PHHS giám sát", "Phụ Huynh có quyền đề nghị Ban Đại Diện PHHS kiểm tra đột xuất bếp ăn bất kỳ lúc nào."),
+            ("Phản ánh chất lượng", "Gửi phản hồi qua form bên trên hoặc liên hệ trực tiếp Hiệu Trưởng."),
+            ("Tiếp cận kết quả kiểm tra", "Báo cáo kiểm tra ATTP là tài liệu công khai — yêu cầu Ban Giám Hiệu cung cấp khi cần."),
+        ]:
+            st.markdown(f'<div class="sf-card" style="padding:10px 16px;margin:5px 0">'
+                        f'<b style="font-size:0.88rem">{_title}</b>'
+                        f'<div style="font-size:0.82rem;color:#475569;margin-top:3px">{_desc}</div>'
+                        f'</div>', unsafe_allow_html=True)
+
+    # ── Hỏi đáp AI ────────────────────────────────────────────────────────────
     if api_key:
-        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="sec-hdr">💬 Hỏi AI về quyền Phụ Huynh</div>',
+        st.markdown('<div class="sec-hdr">💬 Hỏi AI về bữa ăn &amp; quyền Phụ Huynh</div>',
                     unsafe_allow_html=True)
-        st.caption("Đặt câu hỏi tự do về ATTP, quyền phụ huynh, xử lý khi nghi ngờ ngộ độc...")
-        q = st.text_input("Câu hỏi của bạn", placeholder="VD: Con tôi đau bụng sau bữa trưa, tôi cần làm gì?")
+        q = st.text_input("Câu hỏi", placeholder="VD: Con đau bụng sau bữa trưa, tôi cần làm gì?")
         if q:
             from anthropic import Anthropic
             with st.spinner("AI đang trả lời..."):
-                sys = build_system_prompt("Phụ Huynh", "tiểu học", "Việt Nam")
-                ans = ask_claude(Anthropic(api_key=api_key), sys, [], q)
-                st.info(ans)
+                _sys = build_system_prompt("Phụ Huynh", "tiểu học", "Việt Nam")
+                st.info(ask_claude(Anthropic(api_key=api_key), _sys, [], q))
 
 
 # ── Kiểm thực 3 bước — Tab dành riêng Y Tế Học Đường ────────────────────────
@@ -3149,7 +3291,13 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
 
         col_btn, col_prog = st.columns([0.4, 0.6])
         with col_btn:
-            can_confirm = (b_answered == b_total)
+            # Kiểm thực Y Tế: chỉ xác nhận 8:00–11:30 (ngoài giờ → warning)
+            _kt_now   = now_vn()
+            _kt_hour  = _kt_now.hour + _kt_now.minute / 60
+            _kt_ok_time = st.session_state.get("is_super", False) or (8.0 <= _kt_hour <= 11.5)
+            can_confirm = (b_answered == b_total) and _kt_ok_time
+            if b_answered == b_total and not _kt_ok_time:
+                st.warning(f"⏰ Ngoài giờ kiểm thực hợp lệ (8:00–11:30) · Hiện: {_kt_now.strftime('%H:%M')}")
 
             if done_t:
                 # ── Đã xác nhận — hiển thị trạng thái hoàn thành rõ ràng ──
@@ -4596,6 +4744,59 @@ def tab_history(role: str = "", school_filter: str = ""):
                     "Xếp loại", "Tỷ lệ đạt (%)", "Điểm đạt", "Điểm không đạt", "Tổng điểm"]
         _dn = _dn[[c for c in _dn_cols if c in _dn.columns]]
         st.dataframe(_dn, use_container_width=True, hide_index=True)
+
+    # ── Cross-validation & Anomaly Detection (chỉ hiện với BGH/Admin) ────────
+    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
+        _anomalies = []
+
+        # 1. Điểm quá đều trong 30 lần liên tiếp (≥ 19/20)
+        if show_meal and not df_meal.empty:
+            _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
+            if _streak_high >= 10 and len(df_meal) >= 10:
+                _anomalies.append(
+                    f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
+                    "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
+                )
+
+        # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
+        if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
+            _bgs_df = df_meal[df_meal["Loại"] == "Ban Giám Sát"]
+            _yte_df = df_meal[df_meal["Loại"] == "Y Tế (3 bước)"]
+            if not _bgs_df.empty and not _yte_df.empty:
+                _bgs_avg = _bgs_df["Tỷ lệ đạt (%)"].mean()
+                _yte_avg = _yte_df["Tỷ lệ đạt (%)"].mean()
+                if abs(_bgs_avg - _yte_avg) > 20:
+                    _anomalies.append(
+                        f"⚠️ <b>Chênh lệch BGS vs Y Tế</b>: BGS trung bình {_bgs_avg:.0f}% — "
+                        f"Y Tế {_yte_avg:.0f}% (chênh {abs(_bgs_avg-_yte_avg):.0f}%). "
+                        "Cần đối chiếu để đảm bảo tính trung thực."
+                    )
+
+        # 3. Feedback tăng đột biến trong khi điểm vẫn cao
+        if db_ok() and show_meal and not df_meal.empty:
+            try:
+                _sch = school_input if school_input else ""
+                _fb_count = len(db_get_feedback(school=_sch, status="pending"))
+                _avg_score = df_meal["Tỷ lệ đạt (%)"].mean()
+                if _fb_count >= 3 and _avg_score >= 90:
+                    _anomalies.append(
+                        f"📣 <b>Mâu thuẫn phản hồi</b>: {_fb_count} phản hồi phụ huynh chưa xử lý "
+                        f"trong khi điểm kiểm tra trung bình {_avg_score:.0f}%. "
+                        "Điều tra nguyên nhân bất cân xứng."
+                    )
+            except Exception:
+                pass
+
+        if _anomalies:
+            st.markdown('<div class="sec-hdr">🔍 Phát hiện bất thường — Cần chú ý</div>',
+                        unsafe_allow_html=True)
+            for _a in _anomalies:
+                st.markdown(
+                    f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
+                    f'padding:10px 16px;margin:5px 0;font-size:0.85rem;color:#78350F">'
+                    f'{_a}</div>',
+                    unsafe_allow_html=True,
+                )
 
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
