@@ -3058,6 +3058,119 @@ def tab_emergency(api_key: str = ""):
     c2.markdown('<div class="metric-box"><div class="metric-lbl">Cục ATTP</div><div class="metric-num c-blue" style="font-size:1.4rem">1800 6838</div><div class="metric-lbl">Miễn phí · Giờ hành chính</div></div>', unsafe_allow_html=True)
     c3.markdown('<div class="metric-box"><div class="metric-lbl">Cảnh Sát</div><div class="metric-num c-orange">113</div><div class="metric-lbl">Khi có hành vi cố ý</div></div>', unsafe_allow_html=True)
 
+    # ── Task#6: Truy vết sự cố ngộ độc — BGH + Y Tế ────────────────────────
+    _role_em = st.session_state.get("user_role","")
+    _can_trace = _role_em in ("Ban Giám Hiệu","Y Tế Học Đường") or st.session_state.get("is_super")
+    if _can_trace and db_ok():
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="background:linear-gradient(135deg,#7F1D1D,#DC2626);'
+            'border-radius:12px;padding:14px 20px;margin-bottom:12px">'
+            '<div style="color:white;font-size:1rem;font-weight:700">🔍 Truy Vết Sự Cố Ngộ Độc</div>'
+            '<div style="color:#FECACA;font-size:0.8rem">'
+            'Nhập ngày nghi ngờ → truy xuất toàn bộ dữ liệu: bữa ăn, NCC, kết quả kiểm tra, mẫu lưu'
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+        _tr_c1, _tr_c2 = st.columns([1, 2])
+        _tr_date = _tr_c1.date_input("📅 Ngày nghi ngờ", value=now_vn().date(),
+                                      key="tr_date_em", format="DD/MM/YYYY",
+                                      label_visibility="visible")
+        _tr_school = _tr_c2.text_input("🏫 Trường",
+                                        value=st.session_state.get("user_school",""),
+                                        key="tr_school_em", placeholder="Tên trường...",
+                                        label_visibility="visible")
+
+        if st.button("🔍 Truy vết ngay", key="tr_search_em", type="primary"):
+            _tr_ds = str(_tr_date)
+            try:
+                _tr_ses = (_get_sb().table("checklist_sessions").select("*")
+                           .eq("check_date", _tr_ds)
+                           .eq("school_name", _tr_school).execute().data or [])
+            except Exception:
+                _tr_ses = []
+
+            if _tr_ses:
+                st.markdown(
+                    f'<div style="background:#FFF5F5;border:1px solid #FCA5A5;'
+                    f'border-radius:10px;padding:14px 18px;margin:8px 0">'
+                    f'<div style="font-weight:700;color:#991B1B;margin-bottom:8px">'
+                    f'📋 Kết quả truy vết ngày {_tr_date.strftime("%d/%m/%Y")} — {_tr_school}</div>',
+                    unsafe_allow_html=True,
+                )
+                _tr_summary = []
+                for _s in _tr_ses:
+                    _ct = _s.get("check_type","")
+                    _lbl = {"ban_giam_sat":"BGS Checklist 20 điểm",
+                            "kiem_thuc_3_buoc":"Y Tế Kiểm thực 3 bước",
+                            "nha_cung_cap":"NCC Giao hàng"}.get(_ct, _ct)
+                    _al = _s.get("alert_level","OK")
+                    _alc = "#DC2626" if _al=="CRITICAL" else "#D97706" if _al=="MAJOR" else "#16A34A"
+                    _menu = (_s.get("menu_today","") or "Không có thông tin")[:80]
+                    _insp = _s.get("inspector_name","—")
+                    st.markdown(
+                        f'<div style="background:white;border-radius:6px;padding:8px 12px;'
+                        f'margin:4px 0;border-left:3px solid {_alc}">'
+                        f'<b>{_lbl}</b> · Người KT: {_insp}<br>'
+                        f'Thực đơn: {_menu}<br>'
+                        f'Kết quả: <span style="color:{_alc};font-weight:700">{_al}</span> '
+                        f'({_s.get("pass_count",0)}/{_s.get("total_items",0)} điểm đạt)'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    _tr_summary.append(
+                        f"- {_lbl}: {_al}, {_s.get('pass_count',0)}/{_s.get('total_items',0)} đạt, "
+                        f"thực đơn: {_menu[:50]}"
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # AI Report
+                if api_key:
+                    if st.button("🤖 AI tạo báo cáo sự cố gửi cấp trên", key="tr_ai_em",
+                                  type="primary", use_container_width=True):
+                        _tr_prompt = (
+                            f"Bạn là chuyên gia ATTP trường học Việt Nam. "
+                            f"Có nghi ngờ ngộ độc thực phẩm tại trường {_tr_school} ngày {_tr_date.strftime('%d/%m/%Y')}.\n\n"
+                            f"Dữ liệu kiểm tra hệ thống:\n" + "\n".join(_tr_summary) + "\n\n"
+                            f"Hãy viết báo cáo gửi cấp trên theo mẫu văn bản hành chính Việt Nam, gồm:\n"
+                            f"1. Tiêu đề + quốc hiệu\n"
+                            f"2. Tóm tắt sự cố (ngày, địa điểm, số người nghi ngờ)\n"
+                            f"3. Phân tích kết quả kiểm tra trước sự cố (có đáng ngờ không)\n"
+                            f"4. Nguyên nhân có thể (theo HACCP)\n"
+                            f"5. Biện pháp đã/cần thực hiện ngay\n"
+                            f"6. Kiến nghị (tạm dừng, xét nghiệm, báo Sở Y Tế)\n"
+                            f"7. Chữ ký placeholder\n"
+                            f"Văn phong chính thức, súc tích, dẫn điều khoản pháp luật liên quan."
+                        )
+                        with st.spinner("🤖 Claude đang soạn báo cáo..."):
+                            try:
+                                _tr_client = anthropic.Anthropic(api_key=api_key)
+                                _tr_resp = _tr_client.messages.create(
+                                    model=MODEL, max_tokens=1200,
+                                    messages=[{"role":"user","content":_tr_prompt}]
+                                )
+                                _tr_report = _tr_resp.content[0].text if _tr_resp.content else ""
+                                st.session_state["tr_ai_report"] = _tr_report
+                            except Exception as _tre:
+                                st.error(f"Lỗi AI: {_tre}")
+
+                if st.session_state.get("tr_ai_report"):
+                    st.markdown(
+                        '<div style="background:white;border:1px solid #E2E8F0;'
+                        'border-radius:10px;padding:16px 18px;margin-top:8px">'
+                        '<div style="font-weight:700;color:#1B3B6F;margin-bottom:10px">'
+                        '📄 Báo cáo sự cố — Claude AI soạn thảo</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.text_area("Nội dung báo cáo (copy để gửi/in)",
+                                 value=st.session_state["tr_ai_report"],
+                                 height=350, key="tr_report_display",
+                                 label_visibility="collapsed")
+                    st.caption("💡 Copy toàn bộ nội dung, dán vào Word → chỉnh font Times New Roman 13 → in/gửi.")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info(f"Không tìm thấy dữ liệu kiểm tra ngày {_tr_date.strftime('%d/%m/%Y')} tại {_tr_school or '(chọn trường)'}.")
+
 
 # ── TAB 5: Về ứng dụng ───────────────────────────────────────────────────────
 # ── Tab riêng cho Phụ Huynh (chỉ xem, không thực hiện checklist) ─────────────
@@ -4830,6 +4943,14 @@ def tab_history(role: str = "", school_filter: str = ""):
         _now_alert = _pd_alert.Timestamp(now_vn().date())
         _quick_alerts = []
 
+        # Task#7: NCC monthly check
+        _this_m = now_vn().strftime("%Y-%m")
+        _ncc_m = [s for s in sessions if s.get("check_type")=="nha_cung_cap"
+                  and (s.get("check_date","") or "").startswith(_this_m)
+                  and len(s.get("check_date","")) >= 7]
+        if not _ncc_m:
+            _quick_alerts.append(("⏰", f"Tháng {now_vn().month:02d} chưa có đánh giá NCC toàn diện (12 điểm)"))
+
         # BGS tần suất (lấy từ sessions)
         _bgs_dates = sorted([s["check_date"] for s in sessions
                              if s.get("check_type") == "ban_giam_sat" and s.get("check_date")],
@@ -5351,6 +5472,38 @@ def tab_history(role: str = "", school_filter: str = ""):
             f'{trend_icon}<br><span style="font-size:0.75rem;font-weight:700">{trend_text}</span></div>'
             f'</div>', unsafe_allow_html=True,
         )
+        # Task#8: Benchmark ẩn danh (sau KPI, trước expander)
+        try:
+            _bm_all = (_get_sb().table("checklist_sessions")
+                       .select("school_name,pass_count,total_items")
+                       .in_("check_type",["ban_giam_sat","kiem_thuc_3_buoc"])
+                       .gte("check_date",f"{now_vn().year}-01-01").execute().data or [])
+            if len(_bm_all) >= 10:
+                import collections as _col
+                _bm_map = _col.defaultdict(list)
+                for _r in _bm_all:
+                    _ti = _r.get("total_items",1) or 1
+                    _bm_map[_r.get("school_name","")].append(_r.get("pass_count",0)/_ti*100)
+                _bm_means = {k: sum(v)/len(v) for k, v in _bm_map.items() if v}
+                _my_sc = school_input or st.session_state.get("user_school","")
+                if _my_sc and _my_sc in _bm_means and len(_bm_means) >= 3:
+                    _bm_v  = _bm_means[_my_sc]
+                    _bm_p  = round(sum(1 for a in _bm_means.values() if a <= _bm_v)/len(_bm_means)*100)
+                    _bm_ic = "🏆" if _bm_p>=80 else "📊" if _bm_p>=50 else "📈"
+                    _bm_c  = "#16A34A" if _bm_p>=80 else "#2563EB" if _bm_p>=50 else "#D97706"
+                    st.markdown(
+                        f'<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
+                        f'padding:8px 14px;margin:6px 0;display:flex;align-items:center;gap:10px">'
+                        f'<span style="font-size:1.5rem">{_bm_ic}</span>'
+                        f'<div><b style="color:{_bm_c};font-size:0.85rem">'
+                        f'Top {100-_bm_p+1}% trong hệ thống</b>'
+                        f'<span style="font-size:0.75rem;color:#64748B;margin-left:8px">'
+                        f'TB {_bm_v:.0f}% · {len(_bm_means)} trường</span></div></div>',
+                        unsafe_allow_html=True,
+                    )
+        except Exception:
+            pass
+
         st.markdown("<br>", unsafe_allow_html=True)
         with st.expander("📊 Biểu đồ & Bảng chi tiết — Bữa ăn", expanded=False):
 
@@ -6211,187 +6364,7 @@ def tab_history(role: str = "", school_filter: str = ""):
                 st.error(f"Lỗi tạo báo cáo: {_me}")
 
 
-    # ── Task#5: Hồ sơ & Chứng nhận Nhà Cung Cấp ─────────────────────────────
-    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok():
-        st.markdown('<div class="sec-hdr">🏭 Hồ sơ Nhà Cung Cấp — Chứng nhận & Hết hạn</div>',
-                    unsafe_allow_html=True)
-        _ncc_reg = db_get_ncc_registry(school=school_input)
-        _today_dt = now_vn().date()
-
-        # Kiểm tra hết hạn sắp tới (≤ 30 ngày)
-        _ncc_expiring = []
-        for _ncc in _ncc_reg:
-            for _field, _label in [("license_expiry","Giấy phép"), ("attp_expiry","Chứng nhận ATTP")]:
-                _exp = _ncc.get(_field)
-                if _exp:
-                    try:
-                        import datetime as _dt_mod
-                        _exp_dt = _dt_mod.date.fromisoformat(_exp)
-                        _days_left = (_exp_dt - _today_dt).days
-                        if _days_left <= 30:
-                            _ncc_expiring.append(
-                                f"{'🚨' if _days_left <= 0 else '⚠️'} "
-                                f"<b>{_ncc['ncc_name']}</b> — {_label} "
-                                f"{'đã hết hạn' if _days_left <= 0 else f'còn {_days_left} ngày'} "
-                                f"({_exp_dt.strftime('%d/%m/%Y')})"
-                            )
-                    except Exception:
-                        pass
-
-        if _ncc_expiring:
-            st.markdown(
-                '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
-                'padding:10px 16px;margin-bottom:10px">'
-                '<div style="font-weight:700;color:#991B1B;margin-bottom:6px">🚨 Chứng nhận sắp hết hạn</div>'
-                + "".join(f'<div style="font-size:0.85rem;color:#991B1B;margin:3px 0">{a}</div>'
-                           for a in _ncc_expiring)
-                + '</div>',
-                unsafe_allow_html=True,
-            )
-
-        # Danh sách NCC + form thêm mới
-        if _ncc_reg:
-            import pandas as _pd_ncc5
-            _ncc_df = _pd_ncc5.DataFrame([{
-                "Tên NCC": n["ncc_name"],
-                "Giấy phép": n.get("license_no","—"),
-                "Hết hạn GP": (n.get("license_expiry","") or "")[:10] or "—",
-                "Hết hạn ATTP": (n.get("attp_expiry","") or "")[:10] or "—",
-                "SĐT": n.get("phone","—"),
-                "Ghi chú": n.get("notes",""),
-            } for n in _ncc_reg])
-            st.dataframe(_ncc_df, use_container_width=True, hide_index=True)
-
-        with st.expander("➕ Thêm / Cập nhật thông tin NCC"):
-            _nc1, _nc2 = st.columns(2)
-            _ncc_n  = _nc1.text_input("Tên Nhà Cung Cấp", placeholder="VD: Công ty TNHH Bếp Xanh", key="nr_name")
-            _lic_no = _nc2.text_input("Số giấy phép CSSX", placeholder="VD: 01/GPCSSX-2024", key="nr_licno")
-            _nc3, _nc4, _nc5 = st.columns(3)
-            _lic_exp  = _nc3.date_input("Ngày hết hạn Giấy phép",  value=None, key="nr_lic_exp",  format="DD/MM/YYYY")
-            _attp_exp = _nc4.date_input("Ngày hết hạn Chứng nhận ATTP", value=None, key="nr_attp_exp", format="DD/MM/YYYY")
-            _phone    = _nc5.text_input("SĐT liên hệ", placeholder="0901 234 567", key="nr_phone")
-            _notes    = st.text_input("Ghi chú", placeholder="Địa chỉ, người liên hệ...", key="nr_notes")
-            if st.button("💾 Lưu thông tin NCC", key="nr_save", type="primary"):
-                if not _ncc_n.strip():
-                    st.warning("Vui lòng nhập tên Nhà Cung Cấp.")
-                else:
-                    _sc = school_input or st.session_state.get("user_school","")
-                    _ok5 = db_save_ncc_registry(
-                        school=_sc, ncc_name=_ncc_n.strip(),
-                        license_no=_lic_no.strip(),
-                        license_expiry=str(_lic_exp) if _lic_exp else "",
-                        attp_expiry=str(_attp_exp) if _attp_exp else "",
-                        phone=_phone.strip(), notes=_notes.strip()
-                    )
-                    if _ok5:
-                        st.success(f"✅ Đã lưu hồ sơ NCC: {_ncc_n}"); st.rerun()
-                    else:
-                        st.error("❌ Lỗi lưu — kiểm tra kết nối DB.")
-
-    # ── Task#6: Truy vết sự cố ngộ độc (Traceback) ──────────────────────────
-    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok():
-        st.markdown('<div class="sec-hdr">🔍 Truy vết sự cố — Ngộ độc thực phẩm</div>',
-                    unsafe_allow_html=True)
-        st.caption("Nhập ngày nghi ngờ sự cố để truy vết: bữa ăn hôm đó, NCC giao hàng, kết quả kiểm tra, mẫu lưu.")
-        _tb1, _tb2, _tb3 = st.columns([1.5, 1.5, 2])
-        _tb_date = _tb1.date_input("Ngày nghi ngờ", value=now_vn().date(),
-                                    key="tb_date", format="DD/MM/YYYY")
-        _tb_school = _tb2.text_input("Trường", value=school_input or st.session_state.get("user_school",""),
-                                      key="tb_school", placeholder="Tên trường...")
-        if _tb3.button("🔍 Truy vết", key="tb_search", type="primary", use_container_width=True):
-            _tb_date_str = str(_tb_date)
-            # Query sessions ngày đó
-            try:
-                _tb_sessions = [s for s in sessions if s.get("check_date","") == _tb_date_str]
-                if not _tb_sessions:
-                    # Fetch specifically
-                    _tb_sessions = _get_sb().table("checklist_sessions").select("*")\
-                        .eq("check_date", _tb_date_str)\
-                        .eq("school_name", _tb_school or school_input).execute().data or []
-            except Exception:
-                _tb_sessions = []
-
-            st.markdown(
-                f'<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;'
-                f'padding:14px 18px;margin:8px 0">'
-                f'<div style="font-size:0.95rem;font-weight:700;color:#92400E;margin-bottom:10px">'
-                f'📋 Truy vết ngày {_tb_date.strftime("%d/%m/%Y")} — {_tb_school or school_input}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-            if _tb_sessions:
-                for _ts in _tb_sessions:
-                    _ct = _ts.get("check_type","")
-                    _lbl = {"ban_giam_sat":"✅ BGS Checklist","kiem_thuc_3_buoc":"🏥 Kiểm thực Y Tế","nha_cung_cap":"🏭 NCC"}.get(_ct,_ct)
-                    _menu = _ts.get("menu_today","—") or "—"
-                    _al = _ts.get("alert_level","OK")
-                    _al_clr = "#DC2626" if _al=="CRITICAL" else "#D97706" if _al=="MAJOR" else "#16A34A"
-                    st.markdown(
-                        f'<div style="background:white;border-radius:6px;padding:8px 12px;margin:4px 0;'
-                        f'border-left:3px solid {_al_clr}">'
-                        f'<b>{_lbl}</b> · Thực đơn: {_menu[:60]} · '
-                        f'Kết quả: <span style="color:{_al_clr};font-weight:700">{_al}</span> '
-                        f'({_ts.get("pass_count",0)}/{_ts.get("total_items",0)} đạt)'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-            else:
-                st.markdown('<div style="color:#64748B">Không tìm thấy dữ liệu kiểm tra ngày này.</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # ── Task#7+8: Nhắc NCC tháng + Benchmark ─────────────────────────────────
-    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok() and sessions:
-        # Task#7: NCC tháng
-        import pandas as _pd78
-        _this_month = now_vn().strftime("%Y-%m")
-        _ncc_this_month = [s for s in sessions
-                           if s.get("check_type") == "nha_cung_cap"
-                           and (s.get("check_date","") or "").startswith(_this_month)]
-        if not _ncc_this_month:
-            st.markdown(
-                f'<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
-                f'padding:10px 16px;margin:8px 0;font-size:0.85rem;color:#92400E">'
-                f'⏰ <b>Tháng {now_vn().month:02d}/{now_vn().year}</b> chưa có đánh giá NCC toàn diện '
-                f'(S01–S12 · 12 điểm). BGS cần thực hiện trước cuối tháng theo NĐ 15/2018.'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-        # Task#8: Benchmark ẩn danh
-        try:
-            _all_schools_stats = _get_sb().table("checklist_sessions")\
-                .select("school_name,pass_count,total_items")\
-                .in_("check_type",["ban_giam_sat","kiem_thuc_3_buoc"])\
-                .gte("check_date", f"{now_vn().year}-01-01").execute().data or []
-            if len(_all_schools_stats) >= 10:
-                _school_avgs = {}
-                for _ss in _all_schools_stats:
-                    _sn = _ss.get("school_name","")
-                    _ti = _ss.get("total_items",1) or 1
-                    _pct = _ss.get("pass_count",0) / _ti * 100
-                    _school_avgs.setdefault(_sn, []).append(_pct)
-                _school_means = {k: sum(v)/len(v) for k, v in _school_avgs.items() if v}
-                _my_school = school_input or st.session_state.get("user_school","")
-                if _my_school and _my_school in _school_means and len(_school_means) >= 3:
-                    _my_avg = _school_means[_my_school]
-                    _all_avgs = sorted(_school_means.values())
-                    _percentile = round(sum(1 for a in _all_avgs if a <= _my_avg) / len(_all_avgs) * 100)
-                    _bm_icon = "🏆" if _percentile >= 80 else "📊" if _percentile >= 50 else "📉"
-                    _bm_clr = "#16A34A" if _percentile >= 80 else "#2563EB" if _percentile >= 50 else "#D97706"
-                    st.markdown(
-                        f'<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;'
-                        f'padding:10px 16px;margin:8px 0;display:flex;align-items:center;gap:12px">'
-                        f'<span style="font-size:1.8rem">{_bm_icon}</span>'
-                        f'<div><div style="font-size:0.85rem;font-weight:700;color:{_bm_clr}">'
-                        f'Trường bạn đang ở Top {100-_percentile+1}% trong hệ thống</div>'
-                        f'<div style="font-size:0.78rem;color:#64748B">'
-                        f'TB đạt: {_my_avg:.0f}% · So sánh với {len(_school_means)} trường · '
-                        f'(Ẩn danh tên trường)</div></div></div>',
-                        unsafe_allow_html=True,
-                    )
-        except Exception:
-            pass
-
+    # Feedback section đã được chuyển lên trước early return ở đầu hàm
     # Feedback section đã được chuyển lên trước early return ở đầu hàm
 
 def tab_supplier(api_key: str = "", role: str = ""):
@@ -7015,6 +6988,81 @@ def tab_supplier(api_key: str = "", role: str = ""):
             )
         except Exception as _we:
             st.error(f"Lỗi tạo Word: {_we}")
+
+    # ── Task#5: Hồ sơ & Chứng nhận Nhà Cung Cấp (BGH quản lý) ───────────────
+    if (role == "Ban Giám Hiệu" or st.session_state.get("is_super")) and db_ok():
+        st.markdown('<div class="sec-hdr">📋 Hồ sơ Nhà Cung Cấp — Chứng nhận & Hết hạn</div>',
+                    unsafe_allow_html=True)
+        _s5_school = st.session_state.get("user_school","") or sup_school
+        _ncc_reg5  = db_get_ncc_registry(school=_s5_school)
+        _today5    = now_vn().date()
+
+        # Alert hết hạn
+        _exp_warns = []
+        for _n5 in _ncc_reg5:
+            for _f5, _l5 in [("license_expiry","Giấy phép"), ("attp_expiry","Chứng nhận ATTP")]:
+                _e5 = _n5.get(_f5)
+                if _e5:
+                    try:
+                        import datetime as _dt5
+                        _e5d = _dt5.date.fromisoformat(_e5)
+                        _dl5 = (_e5d - _today5).days
+                        if _dl5 <= 30:
+                            _exp_warns.append(
+                                f"{'🚨' if _dl5 <= 0 else '⚠️'} "
+                                f"<b>{_n5['ncc_name']}</b> — {_l5} "
+                                f"{'HẾT HẠN' if _dl5 <= 0 else f'còn {_dl5} ngày'} "
+                                f"({_e5d.strftime('%d/%m/%Y')})"
+                            )
+                    except Exception:
+                        pass
+        if _exp_warns:
+            st.markdown(
+                '<div style="background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:8px;'
+                'padding:10px 16px;margin-bottom:8px">'
+                '<b style="color:#991B1B">🚨 Chứng nhận sắp/đã hết hạn:</b><br>'
+                + "<br>".join(f'<span style="font-size:0.85rem;color:#991B1B">{w}</span>'
+                               for w in _exp_warns)
+                + '</div>', unsafe_allow_html=True,
+            )
+        if _ncc_reg5:
+            import pandas as _pd5
+            st.dataframe(_pd5.DataFrame([{
+                "Tên NCC": n["ncc_name"], "Giấy phép": n.get("license_no","—"),
+                "Hết hạn GP": (n.get("license_expiry","") or "—")[:10],
+                "Hết hạn ATTP": (n.get("attp_expiry","") or "—")[:10],
+                "SĐT": n.get("phone","—"),
+            } for n in _ncc_reg5]), use_container_width=True, hide_index=True)
+        with st.expander("➕ Thêm / Cập nhật NCC"):
+            _n5c1, _n5c2 = st.columns(2)
+            _n5nm  = _n5c1.text_input("Tên NCC", placeholder="Công ty TNHH...", key="n5_name")
+            _n5lic = _n5c2.text_input("Số giấy phép", placeholder="01/GPCSSX-2024", key="n5_lic")
+            _n5c3, _n5c4, _n5c5 = st.columns(3)
+            _n5le  = _n5c3.date_input("Hết hạn Giấy phép", value=None, key="n5_le", format="DD/MM/YYYY")
+            _n5ae  = _n5c4.date_input("Hết hạn ATTP cert", value=None, key="n5_ae", format="DD/MM/YYYY")
+            _n5ph  = _n5c5.text_input("SĐT", placeholder="0901...", key="n5_ph")
+            if st.button("💾 Lưu", key="n5_save", type="primary"):
+                if _n5nm.strip() and _s5_school:
+                    if db_save_ncc_registry(_s5_school, _n5nm.strip(), _n5lic.strip(),
+                                             str(_n5le) if _n5le else "",
+                                             str(_n5ae) if _n5ae else "", _n5ph.strip()):
+                        st.success(f"✅ Đã lưu: {_n5nm}"); st.rerun()
+                else:
+                    st.warning("Điền tên NCC và có tài khoản trường.")
+    elif db_ok():
+        # BGS / Y Tế: chỉ xem
+        _s5_school_view = st.session_state.get("user_school","")
+        _ncc_view = db_get_ncc_registry(school=_s5_school_view)
+        if _ncc_view:
+            st.markdown('<div class="sec-hdr">📋 Danh sách Nhà Cung Cấp được phê duyệt</div>',
+                        unsafe_allow_html=True)
+            import pandas as _pd5v
+            st.dataframe(_pd5v.DataFrame([{
+                "Tên NCC": n["ncc_name"],
+                "Giấy phép": n.get("license_no","—"),
+                "Hết hạn GP": (n.get("license_expiry","") or "—")[:10],
+                "Hết hạn ATTP": (n.get("attp_expiry","") or "—")[:10],
+            } for n in _ncc_view]), use_container_width=True, hide_index=True)
 
 
 def show_onboarding_banner(school: str, profiles: list, sessions_count: int):
