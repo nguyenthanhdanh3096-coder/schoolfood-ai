@@ -1611,7 +1611,7 @@ _REMINDER_TIMES = {
         "hour": 9, "min": 0,
         "days": [0, 1, 2, 3, 4],
         "task": "Xem tổng hợp báo cáo tuần & duyệt checklist",
-        "tab":  "📅 Lịch & thông báo",
+        "tab":  "📐 Quy Chuẩn & Lịch",
         "last_week_only": True,
     },
 }
@@ -4780,20 +4780,78 @@ MANUAL_CONTENT = {
 def tab_guide():
     """Tab hướng dẫn sử dụng đầy đủ — sổ tay điện tử tích hợp trong app."""
     mc = MANUAL_CONTENT
-    st.markdown(f"""<div class="sf-card">
-        <div class="sf-card-title">📖 {mc['title']}</div>
-        <div class="sf-card-body">{mc['subtitle']} · {mc['version']}</div>
+
+    # ── Về SchoolFood AI — Card giới thiệu nổi bật ────────────────────────────
+    st.markdown("""
+    <div style="background:linear-gradient(135deg,#1B3B6F 0%,#1E40AF 60%,#0D9488 100%);
+                border-radius:16px;padding:24px 28px;margin-bottom:16px;color:#fff">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <span style="font-size:2rem">🍱</span>
+            <div>
+                <div style="font-size:1.3rem;font-weight:800;letter-spacing:-0.5px">
+                    SchoolFood AI v2.5</div>
+                <div style="font-size:0.82rem;opacity:0.85">
+                    Nền tảng giám sát ATTP bữa ăn học đường · Hỗ trợ bởi Claude Sonnet 4.6 (Anthropic)</div>
+            </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                ✅ Checklist 20 điểm chuẩn NĐ 15/2018</span>
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                🏥 Kiểm thực 3 bước TTLT 13/2016</span>
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                🤖 AI Vision phân tích ảnh thực phẩm</span>
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                📄 Báo cáo Word chuẩn hành chính</span>
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                📲 Thông báo Zalo OA realtime</span>
+            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
+                         padding:4px 12px;font-size:0.78rem;font-weight:600">
+                🛡️ Chống gian lận AI ngẫu nhiên</span>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:0.8rem;opacity:0.9">
+            <span>⚖️ Luật ATTP 55/2010 · NĐ 15/2018 · TTLT 13/2016 · QĐ 3958/QĐ-BYT 2025</span>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.2);
+                    display:flex;gap:20px;font-size:0.78rem;opacity:0.85">
+            <span>📞 Cục ATTP: <b>1800 6838</b> (miễn phí)</span>
+            <span>🚨 Cấp cứu: <b>115</b></span>
+            <span>🗓️ Cập nhật: 06/2026</span>
+        </div>
     </div>""", unsafe_allow_html=True)
 
-    # Nút tải sổ tay Word
-    if st.button("⬇️ Tải Sổ Tay PDF/Word (.docx) để in và đào tạo",
+    # ── 4 vai trò badges ────────────────────────────────────────────────────────
+    _rc1, _rc2, _rc3, _rc4 = st.columns(4)
+    for _col, _icon, _role, _clr, _bg in [
+        (_rc1, "👨‍👩‍👧", "Phụ Huynh",     "#2563EB", "#EFF6FF"),
+        (_rc2, "👥", "Ban Giám Sát",  "#7C3AED", "#F5F3FF"),
+        (_rc3, "🏥", "Y Tế Học Đường","#0D9488", "#F0FDFA"),
+        (_rc4, "🏫", "Ban Giám Hiệu", "#B45309", "#FFFBEB"),
+    ]:
+        _col.markdown(
+            f'<div style="background:{_bg};border:1px solid {_clr}33;border-radius:10px;'
+            f'padding:10px;text-align:center">'
+            f'<div style="font-size:1.4rem">{_icon}</div>'
+            f'<div style="font-size:0.75rem;font-weight:700;color:{_clr}">{_role}</div>'
+            f'</div>', unsafe_allow_html=True
+        )
+
+    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+
+    # ── Nút tải sổ tay Word ─────────────────────────────────────────────────
+    if st.button("⬇️ Tải Sổ Tay Hướng Dẫn (.docx) để in và đào tạo nội bộ",
                  type="primary", use_container_width=True):
         with st.spinner("Đang tạo file Word..."):
             docx_bytes = generate_manual_docx()
         st.download_button(
-            "📥 Tải ngay — Sổ Tay SchoolFood AI.docx",
+            "📥 Tải ngay — Sổ Tay SchoolFood AI v2.5.docx",
             data=docx_bytes,
-            file_name="So_Tay_SchoolFood_AI_v2.docx",
+            file_name="So_Tay_SchoolFood_AI_v2.5.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
         )
@@ -4853,39 +4911,6 @@ def tab_guide():
                         f'<span style="color:#475569">{definition}</span>'
                         f'</div>', unsafe_allow_html=True
                     )
-
-    # ── Tài liệu pháp luật đã tải vào hệ thống ───────────────────────────────
-    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">📋 Tài liệu pháp luật tích hợp trong app</div>',
-                unsafe_allow_html=True)
-    pdfs = sorted(LEGAL_DIR.glob("*.pdf"))
-    if pdfs:
-        for p in pdfs:
-            st.success(f"✅ {p.name} ({p.stat().st_size // 1024} KB)")
-    else:
-        st.info("Chưa có file PDF trong thư mục 07_Legal_Regulations/ — AI vẫn tư vấn dựa trên kiến thức đào tạo.")
-    try:
-        import pypdf  # noqa: F401
-        st.caption("✅ pypdf đã cài — AI đọc được nội dung các văn bản pháp luật thực tế")
-    except ImportError:
-        st.caption("pypdf chưa cài — AI dùng kiến thức đào tạo, không đọc file PDF trực tiếp")
-
-    # ── Về ứng dụng ───────────────────────────────────────────────────────────
-    st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="sf-card" style="border-left:3px solid #94A3B8">'
-        '<div class="sf-card-title">ℹ️ Về SchoolFood AI v2.5</div>'
-        '<div class="sf-card-body">'
-        'Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường — giúp mỗi bên thực hiện '
-        'đúng vai trò, đúng thời điểm, có bằng chứng rõ ràng.<br>'
-        'Xây dựng theo: Luật ATTP 55/2010 · NĐ 15/2018 · TTLT 13/2016 · QĐ 3958/QĐ-BYT 2025 · '
-        'Hỗ trợ AI: Claude Sonnet 4.6 (Anthropic)<br>'
-        '<b>Cập nhật:</b> 06/2026 &nbsp;·&nbsp; '
-        '<b>Đường dây nóng Cục ATTP:</b> 1800 6838 (miễn phí) &nbsp;·&nbsp; '
-        '<b>Cấp cứu:</b> 115'
-        '</div></div>',
-        unsafe_allow_html=True,
-    )
 
     # ── Task#1: Cài đặt Zalo nhận thông báo ─────────────────────────────────
     _auth_guide = st.session_state.get("auth_user")
@@ -6457,6 +6482,109 @@ def tab_history(role: str = "", school_filter: str = ""):
         else:
             ws_ncc.cell(row=1, column=1, value="Không có dữ liệu nhà cung cấp trong bộ lọc hiện tại.")
 
+        # ── Sheet 3: Phản hồi Phụ Huynh ─────────────────────────────────────
+        ws_fb = wb.create_sheet("📬 Phản Hồi Phụ Huynh")
+        HDR_FILL_FB = PatternFill("solid", fgColor="065F46")
+        try:
+            _all_fb = db_get_all_feedbacks(school=school_filter or "", limit=500)
+            if _all_fb:
+                import pandas as _pd2
+                _STATUS_VN = {"pending": "⏳ Chờ xử lý", "reviewed": "💬 Đang xem xét", "resolved": "✅ Đã xử lý"}
+                _df_fb = _pd2.DataFrame([{
+                    "Ngày gửi": (f.get("created_at","") or "")[:10],
+                    "Trường":   f.get("school_name",""),
+                    "Loại":     f.get("category",""),
+                    "Nội dung": (f.get("content","") or "")[:120],
+                    "Trạng thái": _STATUS_VN.get(f.get("status",""), f.get("status","")),
+                    "Minh chứng": (f.get("evidence_text","") or "")[:80],
+                    "Phản hồi BGH": (f.get("response_text","") or "")[:80],
+                } for f in _all_fb])
+                _write_sheet(
+                    ws_fb, _df_fb,
+                    title_txt="TỔNG HỢP PHẢN HỒI PHỤ HUYNH — AN TOÀN THỰC PHẨM",
+                    subtitle_txt=(f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')} | "
+                                  f"Tổng: {len(_df_fb)} phản hồi | "
+                                  f"Đã xử lý: {(_df_fb['Trạng thái']=='✅ Đã xử lý').sum()}"),
+                    hdr_fill=HDR_FILL_FB,
+                )
+            else:
+                ws_fb.cell(row=1, column=1, value="Chưa có phản hồi Phụ Huynh.")
+        except Exception:
+            ws_fb.cell(row=1, column=1, value="Không tải được dữ liệu phản hồi.")
+
+        # ── Sheet 4: Dashboard tổng hợp (biểu đồ openpyxl) ──────────────────
+        ws_dash = wb.create_sheet("📊 Dashboard")
+        from openpyxl.chart import BarChart, PieChart, Reference
+        from openpyxl.chart.series import DataPoint
+
+        # Tiêu đề dashboard
+        ws_dash.merge_cells("A1:H1")
+        _dc = ws_dash["A1"]
+        _dc.value = "DASHBOARD TỔNG HỢP AN TOÀN THỰC PHẨM HỌC ĐƯỜNG"
+        _dc.font = XFont(name="Times New Roman", size=14, bold=True, color="1B3B6F")
+        _dc.alignment = Alignment(horizontal="center")
+        ws_dash.row_dimensions[1].height = 30
+
+        # Bảng tóm tắt số liệu (A3:B10)
+        _summary = [
+            ("Chỉ số", "Giá trị"),
+            ("Số lần kiểm tra bữa ăn", str(len(df_meal)) if show_meal and not df_meal.empty else "0"),
+            ("Tỷ lệ đạt TB bữa ăn (%)", f"{df_meal['Tỷ lệ đạt (%)'].mean():.0f}" if show_meal and not df_meal.empty and 'Tỷ lệ đạt (%)' in df_meal else "0"),
+            ("Số lần đánh giá NCC", str(len(df_ncc)) if show_ncc and not df_ncc.empty else "0"),
+            ("NCC Loại A", str(ncc_a if (show_ncc and not df_ncc.empty) else 0)),
+            ("NCC Loại B", str(ncc_b if (show_ncc and not df_ncc.empty) else 0)),
+            ("NCC Loại C", str(ncc_c if (show_ncc and not df_ncc.empty) else 0)),
+            ("Tổng phản hồi PH", str(len(_all_fb)) if '_all_fb' in dir() and _all_fb else "0"),
+        ]
+        for ri, (k, v) in enumerate(_summary, 3):
+            _ck = ws_dash.cell(row=ri, column=1, value=k)
+            _cv = ws_dash.cell(row=ri, column=2, value=v)
+            _ck.font = XFont(name="Times New Roman", size=12, bold=(ri==3))
+            _cv.font = XFont(name="Times New Roman", size=12, bold=(ri==3))
+            if ri == 3:
+                _ck.fill = PatternFill("solid", fgColor="1B3B6F")
+                _cv.fill = PatternFill("solid", fgColor="1B3B6F")
+                _ck.font = XFont(name="Times New Roman", size=12, bold=True, color="FFFFFF")
+                _cv.font = XFont(name="Times New Roman", size=12, bold=True, color="FFFFFF")
+            _ck.border = BORDER; _cv.border = BORDER
+        ws_dash.column_dimensions["A"].width = 28
+        ws_dash.column_dimensions["B"].width = 14
+
+        # Biểu đồ 1: Bar chart tỷ lệ đạt bữa ăn (D3)
+        if show_meal and not df_meal.empty and 'Tỷ lệ đạt (%)' in df_meal.columns:
+            _bar_data = [(row.get("Ngày",""), row.get("Tỷ lệ đạt (%)",0))
+                         for _, row in df_meal.head(15).iterrows()]
+            for bi, (d, v) in enumerate(_bar_data, 12):
+                ws_dash.cell(row=bi, column=1, value=d)
+                ws_dash.cell(row=bi, column=2, value=float(v) if str(v).replace('.','').isdigit() else 0)
+            bc = BarChart()
+            bc.type = "col"; bc.title = "Tỷ Lệ Đạt Bữa Ăn (%)"; bc.grouping = "clustered"
+            bc.y_axis.title = "%"; bc.x_axis.title = "Ngày kiểm tra"
+            bc.y_axis.scaling.min = 0; bc.y_axis.scaling.max = 100
+            bc.style = 10; bc.width = 18; bc.height = 10
+            _bdata = Reference(ws_dash, min_col=2, min_row=12, max_row=11+len(_bar_data))
+            _bcats = Reference(ws_dash, min_col=1, min_row=12, max_row=11+len(_bar_data))
+            bc.add_data(_bdata); bc.set_categories(_bcats)
+            ws_dash.add_chart(bc, "D3")
+
+        # Biểu đồ 2: Pie chart NCC xếp loại (D18)
+        if show_ncc and not df_ncc.empty and (ncc_a + ncc_b + ncc_c) > 0:
+            ws_dash.cell(row=30, column=1, value="Loại A"); ws_dash.cell(row=30, column=2, value=ncc_a)
+            ws_dash.cell(row=31, column=1, value="Loại B"); ws_dash.cell(row=31, column=2, value=ncc_b)
+            ws_dash.cell(row=32, column=1, value="Loại C"); ws_dash.cell(row=32, column=2, value=ncc_c)
+            pc = PieChart()
+            pc.title = "Phân Bố Xếp Loại Nhà Cung Cấp"
+            pc.style = 10; pc.width = 14; pc.height = 10
+            _pdata = Reference(ws_dash, min_col=2, min_row=30, max_row=32)
+            _plabels = Reference(ws_dash, min_col=1, min_row=30, max_row=32)
+            pc.add_data(_pdata); pc.set_categories(_plabels)
+            for i, color in enumerate(["70C94B", "FFC000", "FF0000"], 0):
+                if i < len(pc.series[0].dPt) if pc.series else False: pass
+                pt = DataPoint(idx=i)
+                from openpyxl.drawing.fill import PatternFillProperties
+                pc.series[0].dPt.append(pt)
+            ws_dash.add_chart(pc, "D18")
+
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
             "⬇️ Tải báo cáo (.xlsx)",
@@ -6565,18 +6693,87 @@ def tab_history(role: str = "", school_filter: str = ""):
                         _rr.font.name = "Times New Roman"; _rr.font.size = _Pt(12)
                         if ci == 0: _rr.bold = True
 
-                # Kết luận
-                doc.add_paragraph("")
-                _rp(doc.add_paragraph(), "II. KẾT LUẬN VÀ KIẾN NGHỊ", bold=True, sz=13)
-                _concl_txt = (
-                    f"Trong tháng {_sel_month:02d}/{_sel_year}, nhà trường đã thực hiện "
-                    f"{len(_bgs_ses)} lần kiểm tra (Ban Giám Sát) và {len(_yte_ses)} lần kiểm thực "
-                    f"3 bước (Y Tế Học Đường). Tỷ lệ đạt trung bình: {_meal_avg}%."
+                # ── Claude viết phần II-IV ──────────────────────────────────
+                _api_key_monthly = (
+                    st.session_state.get("api_key_stored","") or
+                    (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else "")
                 )
-                if _crit_ct > 0:
-                    _concl_txt += f" Ghi nhận {_crit_ct} lần cảnh báo mức CRITICAL — đã xử lý theo quy trình."
-                _concl_txt += f"\n\nPhản hồi Phụ Huynh: {_fb_total} phản hồi, {_fb_resolved} đã xử lý."
-                _rp(doc.add_paragraph(), _concl_txt, sz=13)
+                _data_ctx = (
+                    f"Tháng {_sel_month:02d}/{_sel_year} | Trường: {school_input or 'Tất cả'}\n"
+                    f"Kiểm tra bữa ăn (Ban Giám Sát): {len(_bgs_ses)} lần\n"
+                    f"Kiểm thực 3 bước (Y Tế Học Đường): {len(_yte_ses)} lần/ngày\n"
+                    f"Tỷ lệ đạt trung bình bữa ăn: {_meal_avg}%\n"
+                    f"Số lần cảnh báo CRITICAL: {_crit_ct}\n"
+                    f"Đánh giá nhà cung cấp: {len(_ncc_ses)} lần\n"
+                    f"Phản hồi Phụ Huynh: tổng {_fb_total}, đã xử lý {_fb_resolved}\n"
+                    f"Tỷ lệ xử lý phản hồi: {round(_fb_resolved/_fb_total*100) if _fb_total else 100}%"
+                )
+
+                if _api_key_monthly:
+                    try:
+                        _cl_monthly = anthropic.Anthropic(api_key=_api_key_monthly)
+                        _analysis_resp = _cl_monthly.messages.create(
+                            model=MODEL, max_tokens=1200,
+                            messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
+Dữ liệu kiểm tra tháng:
+{_data_ctx}
+
+{_LEGAL_BASIS}
+
+Viết 3 phần cho báo cáo tháng gửi Sở GD&ĐT — văn phong hành chính nhà nước, Times New Roman, đúng thể thức:
+
+PHẦN II. ĐÁNH GIÁ KẾT QUẢ VÀ PHÂN TÍCH
+(200 từ: nhận xét tổng thể tháng, so sánh tỷ lệ đạt với ngưỡng tối thiểu ≥90%, phân tích xu hướng,
+trích dẫn điều khoản pháp lý liên quan — NĐ 15/2018, TTLT 13/2016)
+
+PHẦN III. ĐÁNH GIÁ NGUY CƠ VÀ ĐIỂM CẦN LƯU Ý
+(150 từ: các điểm rủi ro phát hiện trong tháng, nguy cơ tiềm ẩn theo mùa/thực đơn,
+mức độ tuân thủ của nhà cung cấp, phản hồi phụ huynh cần chú ý)
+
+PHẦN IV. KẾT LUẬN VÀ KIẾN NGHỊ
+(150 từ: kết luận đánh giá chung, kiến nghị cụ thể 3-5 điểm, thời hạn thực hiện,
+trách nhiệm từng bên theo TTLT 13/2016)
+
+Viết thành đoạn văn liên tục, KHÔNG dùng bullet points, KHÔNG dùng markdown."""}]
+                        )
+                        _ai_analysis = _analysis_resp.content[0].text.strip()
+                    except Exception:
+                        _ai_analysis = None
+                else:
+                    _ai_analysis = None
+
+                if _ai_analysis:
+                    # Parse 3 phần từ response AI
+                    for _part_marker, _part_title in [
+                        ("PHẦN II", "II. ĐÁNH GIÁ KẾT QUẢ VÀ PHÂN TÍCH"),
+                        ("PHẦN III", "III. ĐÁNH GIÁ NGUY CƠ VÀ ĐIỂM CẦN LƯU Ý"),
+                        ("PHẦN IV", "IV. KẾT LUẬN VÀ KIẾN NGHỊ"),
+                    ]:
+                        doc.add_paragraph("")
+                        _rp(doc.add_paragraph(), _part_title, bold=True, sz=13)
+                        # Tìm nội dung phần này trong AI response
+                        _start = _ai_analysis.find(_part_marker)
+                        _next_markers = [_ai_analysis.find(f"PHẦN {r}") for r in ["III","IV"] if _ai_analysis.find(f"PHẦN {r}") > _start]
+                        _end = min(_next_markers) if _next_markers else len(_ai_analysis)
+                        _part_text = _ai_analysis[_start:_end].strip()
+                        # Xóa dòng tiêu đề PHẦN X
+                        _lines = _part_text.split("\n")
+                        _body = "\n".join(l for l in _lines[1:] if l.strip()).strip()
+                        if _body:
+                            _rp(doc.add_paragraph(), _body, sz=12)
+                else:
+                    # Fallback không có Claude
+                    doc.add_paragraph("")
+                    _rp(doc.add_paragraph(), "II. KẾT LUẬN VÀ KIẾN NGHỊ", bold=True, sz=13)
+                    _concl_txt = (
+                        f"Trong tháng {_sel_month:02d}/{_sel_year}, nhà trường đã thực hiện "
+                        f"{len(_bgs_ses)} lần kiểm tra (Ban Giám Sát) và {len(_yte_ses)} lần kiểm thực "
+                        f"3 bước (Y Tế Học Đường). Tỷ lệ đạt trung bình: {_meal_avg}%. "
+                    )
+                    if _crit_ct > 0:
+                        _concl_txt += f"Ghi nhận {_crit_ct} lần cảnh báo CRITICAL — đã xử lý theo quy trình. "
+                    _concl_txt += f"Phản hồi Phụ Huynh: {_fb_total} phản hồi, {_fb_resolved} đã xử lý."
+                    _rp(doc.add_paragraph(), _concl_txt, sz=12)
 
                 doc.add_paragraph("")
                 _sign_dt = f"......., ngày {now_vn().strftime('%d')} tháng {now_vn().strftime('%m')} năm {now_vn().strftime('%Y')}"
@@ -8331,13 +8528,15 @@ def main():
         _tabs = st.tabs([
             "💬 Hỏi đáp AI",
             "🍱 Góc Phụ Huynh",
+            "📐 Quy Chuẩn & Lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
         with _tabs[0]: tab_chat(api_key, role, level, loc)
         with _tabs[1]: tab_parent_view(api_key)
-        with _tabs[2]: tab_emergency(api_key)
-        with _tabs[3]: tab_guide()
+        with _tabs[2]: tab_schedule()
+        with _tabs[3]: tab_emergency(api_key)
+        with _tabs[4]: tab_guide()
 
     elif role == "Y Tế Học Đường":
         # Y Tế: kiểm thực 3 bước + kiểm tra NCC (Bước 1 yêu cầu check nguyên liệu đầu vào)
@@ -8347,6 +8546,7 @@ def main():
             "🏥 Kiểm thực 3 bước",
             "🏭 Nhà Cung Cấp",
             _hist_label,
+            "📐 Quy Chuẩn & Lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
@@ -8354,8 +8554,9 @@ def main():
         with _tabs[1]: tab_kiem_thuc(api_key, level)
         with _tabs[2]: tab_supplier(api_key, role=role)
         with _tabs[3]: tab_history(role=role, school_filter="" if _is_super else _school_pf)
-        with _tabs[4]: tab_emergency(api_key)
-        with _tabs[5]: tab_guide()
+        with _tabs[4]: tab_schedule()
+        with _tabs[5]: tab_emergency(api_key)
+        with _tabs[6]: tab_guide()
 
     elif role == "Ban Giám Sát (Đại Diện PHHS)":
         # BGS: checklist + NCC + lịch sử + lịch chuẩn mực + hướng dẫn
@@ -8364,7 +8565,7 @@ def main():
             "✅ Checklist kiểm tra",
             "🏭 Nhà Cung Cấp",
             _hist_label,
-            "📅 Lịch & Chuẩn mực",
+            "📐 Quy Chuẩn & Lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
@@ -8379,7 +8580,7 @@ def main():
     else:  # Ban Giám Hiệu
         # BGH: dashboard + NCC tab riêng + lịch + khẩn cấp + hướng dẫn + quản lý TK
         _bgh_tabs = ["💬 Hỏi đáp AI", _hist_label, "🏭 Nhà Cung Cấp",
-                     "📅 Lịch & Chuẩn mực", "🚨 Khẩn cấp", "📖 Hướng dẫn"]
+                     "📐 Quy Chuẩn & Lịch", "🚨 Khẩn cấp", "📖 Hướng dẫn"]
         if _use_auth:
             _bgh_tabs.append("👤 Quản lý tài khoản")
         _tabs = st.tabs(_bgh_tabs)
