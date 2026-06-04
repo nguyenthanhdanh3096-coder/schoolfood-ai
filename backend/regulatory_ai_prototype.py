@@ -1838,6 +1838,68 @@ Trả lời JSON array (không thêm text khác):
 
 
 # ── Anti-Fraud: Câu hỏi ngẫu nhiên chỉ người có mặt mới trả lời được ─────────
+def verify_anti_fraud_answers(questions: list, answers: dict, api_key: str) -> dict:
+    """Dùng Claude đánh giá câu trả lời chống gian lận có hợp lý không.
+    Trả về {"passed": bool, "score": 0-100, "verdict": str, "issues": list}
+    """
+    if not api_key or not questions or not answers:
+        return {"passed": True, "score": 50, "verdict": "Không đủ dữ liệu để xác minh", "issues": []}
+    try:
+        _qa_pairs = "\n".join(
+            f"Câu hỏi {i+1}: {q['q']}\nCâu trả lời: {answers.get(i,'(trống)').strip() or '(trống)'}"
+            for i, q in enumerate(questions)
+        )
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=MODEL, max_tokens=300,
+            messages=[{"role": "user", "content": f"""Bạn là chuyên gia chống gian lận ATTP trường học.
+
+Các câu hỏi dưới đây được thiết kế để xác minh người kiểm tra ĐANG CÓ MẶT thực sự tại bếp.
+Câu trả lời hợp lý phải: cụ thể (số liệu, màu sắc, mô tả chi tiết), không mơ hồ.
+Câu trả lời đáng nghi: "tốt", "ổn", "ok", "có", "không", chỉ 1-2 từ chung chung.
+
+{_qa_pairs}
+
+Đánh giá JSON (không thêm text):
+{{
+  "passed": true hoặc false,
+  "score": 0-100,
+  "verdict": "Nhận xét ngắn gọn (1 câu)",
+  "issues": ["vấn đề cụ thể nếu có"]
+}}
+passed=true khi: câu trả lời đủ cụ thể và hợp lý với bối cảnh bếp trường.
+passed=false khi: câu trả lời quá chung chung, không có giá trị số/mô tả, hoặc không liên quan."""}]
+        )
+        text = resp.content[0].text.strip()
+        s, e = text.find("{"), text.rfind("}") + 1
+        return json.loads(text[s:e]) if s != -1 else {"passed": True, "score": 70, "verdict": "Không phân tích được", "issues": []}
+    except Exception:
+        return {"passed": True, "score": 60, "verdict": "Lỗi xác minh — chấp nhận mặc định", "issues": []}
+
+
+def _ai_rate_check(cooldown_sec: int = 3, daily_limit: int = 60) -> tuple[bool, str]:
+    """Kiểm tra rate limit trước khi gọi Claude. Trả về (allowed, reason)."""
+    import time as _time
+    _now_ts = _time.time()
+    _today  = now_vn().strftime("%Y-%m-%d")
+
+    # Cooldown giữa các lần gọi
+    _last = st.session_state.get("_ai_last_call", 0)
+    if _now_ts - _last < cooldown_sec:
+        return False, f"Vui lòng chờ {cooldown_sec - int(_now_ts - _last)} giây giữa các lần gọi AI."
+
+    # Daily limit
+    _count_key = f"_ai_count_{_today}"
+    _count = st.session_state.get(_count_key, 0)
+    if _count >= daily_limit:
+        return False, f"Đã đạt giới hạn {daily_limit} lần gọi AI hôm nay. Thử lại vào ngày mai."
+
+    # Update counters
+    st.session_state["_ai_last_call"] = _now_ts
+    st.session_state[_count_key] = _count + 1
+    return True, ""
+
+
 def generate_anti_fraud_questions(menu: str, school: str, date_str: str,
                                    school_level: str, api_key: str) -> list:
     """
@@ -2538,17 +2600,38 @@ def tab_checklist(api_key: str = ""):
                     if not _ans.strip():
                         _all_answered = False
 
-                if _all_answered:
-                    if st.button("✅ Xác nhận đã kiểm tra trực tiếp", key="af_confirm",
+                if _all_answered and not st.session_state.cl_af_verified:
+                    if st.button("🔍 Xác nhận & Kiểm tra câu trả lời", key="af_confirm",
                                  type="primary", use_container_width=True):
-                        st.session_state.cl_af_verified = True
-                        st.success("✅ Đã xác thực hiện diện — kết quả kiểm tra được ghi nhận.")
+                        _rate_ok, _rate_msg = _ai_rate_check(cooldown_sec=2)
+                        if not _rate_ok:
+                            st.warning(_rate_msg)
+                        else:
+                            with st.spinner("🤖 AI đang đánh giá câu trả lời (~2s)..."):
+                                _verdict = verify_anti_fraud_answers(
+                                    st.session_state.cl_af_questions,
+                                    st.session_state.cl_af_answers,
+                                    api_key,
+                                )
+                            if _verdict.get("passed", True):
+                                st.session_state.cl_af_verified = True
+                                st.session_state.cl_af_verdict = _verdict
+                                st.success(f"✅ Xác thực thành công (điểm tin cậy: {_verdict.get('score',70)}/100) — {_verdict.get('verdict','')}")
+                            else:
+                                st.error(
+                                    f"❌ Câu trả lời chưa đủ thuyết phục (điểm: {_verdict.get('score',0)}/100)\n\n"
+                                    f"**{_verdict.get('verdict','')}**\n\n"
+                                    + "\n".join(f"• {i}" for i in _verdict.get("issues",[]))
+                                    + "\n\nVui lòng quan sát lại và trả lời cụ thể hơn (số liệu, màu sắc, mô tả chi tiết)."
+                                )
 
                 if st.session_state.cl_af_verified:
+                    _vd = st.session_state.get("cl_af_verdict", {})
                     st.markdown(
-                        '<div style="background:#DCFCE7;border-radius:6px;padding:6px 12px;'
-                        'font-size:0.8rem;color:#166534;font-weight:600">'
-                        '🛡️ Đã xác thực — Câu trả lời được lưu vào báo cáo</div>',
+                        f'<div style="background:#DCFCE7;border-radius:6px;padding:8px 12px;'
+                        f'font-size:0.8rem;color:#166534;font-weight:600">'
+                        f'🛡️ Đã xác thực (điểm: {_vd.get("score",70)}/100) — '
+                        f'{_vd.get("verdict","Câu trả lời hợp lệ")}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -3189,14 +3272,40 @@ def tab_emergency(api_key: str = ""):
             st.session_state.incident_log = []
 
         col_start, col_end = st.columns(2)
+        # Thông tin ban đầu sự cố — bắt buộc điền để traceback
+        if not st.session_state.incident_active:
+            st.markdown(
+                '<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;'
+                'padding:12px 16px;margin-bottom:10px">'
+                '<b style="color:#991B1B">📋 Khai báo thông tin ban đầu (để truy xuất nguyên nhân sau này)</b>'
+                '</div>', unsafe_allow_html=True
+            )
+            _inc_c1, _inc_c2 = st.columns(2)
+            _inc_c1.number_input("Số học sinh bị ảnh hưởng", min_value=1, max_value=500,
+                                  value=1, key="inc_students")
+            _inc_c2.text_input("Triệu chứng chính",
+                                placeholder="VD: buồn nôn, đau bụng, tiêu chảy",
+                                key="inc_symptoms")
+            st.text_input("Món ăn nghi ngờ (nhớ giữ lại mẫu lưu)",
+                           placeholder="VD: thịt kho, canh cải, cơm trắng",
+                           key="inc_dishes")
+            st.text_input("Thời gian phát sinh triệu chứng",
+                           placeholder="VD: 11:45, sau bữa trưa khoảng 30 phút",
+                           key="inc_time")
+
         if col_start.button("🚨 Bắt đầu xử lý sự cố", type="primary",
                             use_container_width=True,
                             disabled=st.session_state.incident_active):
             st.session_state.incident_active = True
             st.session_state.incident_history = []
-            st.session_state.incident_log = [
-                f"[{now_vn().strftime('%H:%M')}] — Bắt đầu ghi nhận sự cố"
-            ]
+            _init_info = (
+                f"[{now_vn().strftime('%H:%M:%S')}] === BẮT ĐẦU GHI NHẬN SỰ CỐ ===\n"
+                f"[{now_vn().strftime('%H:%M:%S')}] Số học sinh bị ảnh hưởng: {st.session_state.get('inc_students', '?')}\n"
+                f"[{now_vn().strftime('%H:%M:%S')}] Triệu chứng: {st.session_state.get('inc_symptoms', '(chưa khai báo)')}\n"
+                f"[{now_vn().strftime('%H:%M:%S')}] Món ăn nghi ngờ: {st.session_state.get('inc_dishes', '(chưa khai báo)')}\n"
+                f"[{now_vn().strftime('%H:%M:%S')}] Thời gian phát sinh: {st.session_state.get('inc_time', '(chưa khai báo)')}"
+            )
+            st.session_state.incident_log = _init_info.split("\n")
             st.rerun()
 
         if col_end.button("⏹ Kết thúc & Tạo biên bản", use_container_width=True,
@@ -3784,10 +3893,9 @@ def tab_parent_view(api_key: str = ""):
                     unsafe_allow_html=True)
         q = st.text_input("Câu hỏi", placeholder="VD: Con đau bụng sau bữa trưa, tôi cần làm gì?")
         if q:
-            from anthropic import Anthropic
             with st.spinner("AI đang trả lời..."):
                 _sys = build_system_prompt("Phụ Huynh", "tiểu học", "Việt Nam")
-                st.info(ask_claude(Anthropic(api_key=api_key), _sys, [], q))
+                st.info(ask_claude(anthropic.Anthropic(api_key=api_key), _sys, [], q))
 
 
 # ── Kiểm thực 3 bước — Tab dành riêng Y Tế Học Đường ────────────────────────
@@ -4618,7 +4726,7 @@ MANUAL_CONTENT = {
         {
             "id": "complaint",
             "icon": "📬",
-            "title": "2b. Hệ thống Phản hồi & Complaint",
+            "title": "3. Hệ thống phản hồi & complaint",
             "content": "Luồng xử lý complaint 3 bước — từ Phụ Huynh đến Ban Giám Hiệu:",
             "subsections": [
                 ("⏳ Bước 1 — Phụ Huynh gửi phản hồi",
@@ -4645,7 +4753,7 @@ MANUAL_CONTENT = {
         {
             "id": "accounts",
             "icon": "🔐",
-            "title": "2c. Quản lý tài khoản & Trường đa cấp",
+            "title": "4. Quản lý tài khoản & trường đa cấp",
             "subsections": [
                 ("Quy trình tạo tài khoản",
                  "Bước 1 — Admin hệ thống tạo tài khoản BGH đầu tiên cho trường\n"
@@ -4677,7 +4785,7 @@ MANUAL_CONTENT = {
         {
             "id": "checklist",
             "icon": "✅",
-            "title": "3. Hướng dẫn Checklist 20 điểm",
+            "title": "5. Hướng dẫn checklist 20 điểm",
             "content": (
                 "Checklist 20 điểm được xây dựng theo NĐ 15/2018/NĐ-CP và TTLT 13/2016/TTLT-BYT-BGDĐT. "
                 "Chia làm 5 nhóm, mỗi nhóm kiểm tra một khía cạnh của chuỗi thực phẩm."
@@ -4736,10 +4844,10 @@ MANUAL_CONTENT = {
         {
             "id": "alert",
             "icon": "🔔",
-            "title": "4. Hệ thống cảnh báo 4 cấp",
+            "title": "6. Hệ thống cảnh báo 4 cấp",
             "content": (
                 "Bảng cảnh báo đầy đủ (kích hoạt, thời hạn, người nhận thông báo) xem trong "
-                "tab **📅 Lịch & Chuẩn mực**. Tóm tắt nhanh để tra cứu:"
+                "tab **📐 Quy chuẩn & lịch**. Tóm tắt nhanh để tra cứu:"
             ),
             "subsections": [
                 ("🔴 CRITICAL — trong 5 phút",
@@ -4755,7 +4863,7 @@ MANUAL_CONTENT = {
         {
             "id": "ai",
             "icon": "🤖",
-            "title": "5. Tính năng AI — hướng dẫn và giới hạn",
+            "title": "7. Tính năng AI — hướng dẫn và giới hạn",
             "subsections": [
                 ("Cần credit API không?",
                  "CẦN credit (~$5 = dùng 1–2 tháng pilot):\n"
@@ -4787,7 +4895,7 @@ MANUAL_CONTENT = {
         {
             "id": "emergency",
             "icon": "🚨",
-            "title": "6. Xử lý khẩn cấp ngộ độc thực phẩm",
+            "title": "8. Xử lý khẩn cấp ngộ độc thực phẩm",
             "content": "Quy trình 6 bước theo TTLT 13/2016/TTLT-BYT-BGDĐT:",
             "subsections": [
                 ("Bước 1 — DỪNG BỮA ĂN NGAY",
@@ -4812,7 +4920,7 @@ MANUAL_CONTENT = {
         {
             "id": "zalo",
             "icon": "📲",
-            "title": "7. Cài đặt nhận thông báo qua Zalo",
+            "title": "9. Cài đặt nhận thông báo qua Zalo",
             "content": (
                 "SchoolFood AI gửi thông báo tự động qua Zalo khi có phản hồi mới, BGH xử lý complaint, "
                 "hoặc chứng nhận nhà cung cấp sắp hết hạn. Thực hiện 3 bước sau:"
@@ -4859,7 +4967,7 @@ MANUAL_CONTENT = {
         {
             "id": "faq",
             "icon": "❓",
-            "title": "8. Câu hỏi thường gặp (FAQ)",
+            "title": "10. Câu hỏi thường gặp (FAQ)",
             "faq": [
                 ("Checklist 20 câu dựa trên luật nào?",
                  "NĐ 15/2018/NĐ-CP (điều kiện bếp ăn tập thể), TTLT 13/2016/TTLT-BYT-BGDĐT "
@@ -4908,7 +5016,7 @@ MANUAL_CONTENT = {
         {
             "id": "legal",
             "icon": "⚖️",
-            "title": "9. Căn cứ pháp lý tóm tắt",
+            "title": "11. Căn cứ pháp lý tóm tắt",
             "legal_refs": [
                 ("Luật ATTP số 55/2010/QH12",
                  "Khung pháp lý tổng thể về an toàn thực phẩm tại Việt Nam. "
@@ -4935,7 +5043,7 @@ MANUAL_CONTENT = {
         {
             "id": "glossary",
             "icon": "📚",
-            "title": "10. Bảng thuật ngữ",
+            "title": "12. Bảng thuật ngữ",
             "terms": [
                 ("ATTP", "An toàn thực phẩm"),
                 ("ATVSTP", "An toàn vệ sinh thực phẩm (cách gọi cũ, nay dùng ATTP)"),
@@ -4980,7 +5088,7 @@ def tab_guide():
             <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 12px;font-size:0.78rem">
                 ⚖️ <b>Tra luật?</b> → Mục 8 — Căn cứ pháp lý</div>
             <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 12px;font-size:0.78rem">
-                🚨 <b>Sự cố ngộ độc?</b> → Mục 6 — Xử lý khẩn cấp</div>
+                🚨 <b>Sự cố ngộ độc?</b> → Mục 8 — Xử lý khẩn cấp</div>
             <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 12px;font-size:0.78rem">
                 📲 <b>Nhận thông báo?</b> → Mục 7 — Cài đặt Zalo</div>
         </div>
@@ -6350,7 +6458,7 @@ def tab_history(role: str = "", school_filter: str = ""):
     if role == "Ban Giám Hiệu" or st.session_state.get("is_super"):
         _anomalies = []
 
-        # 1-3. Kiểm tra chất lượng dữ liệu (cần có df_meal)
+        # 1. Kiểm tra chất lượng dữ liệu — điểm quá đồng đều
         if show_meal and not df_meal.empty:
             _streak_high = (df_meal["Tỷ lệ đạt (%)"] >= 95).sum()
             if _streak_high >= 10 and len(df_meal) >= 10:
@@ -6358,6 +6466,37 @@ def tab_history(role: str = "", school_filter: str = ""):
                     f"📊 <b>Điểm quá đồng đều</b>: {_streak_high}/{len(df_meal)} lần đạt ≥ 95% "
                     "— kết quả thực tế hiếm khi hoàn hảo liên tục. Đề xuất kiểm tra đột xuất."
                 )
+
+            # 1b. Chuỗi 100% liên tiếp ≥5 lần — dấu hiệu gian lận rõ ràng
+            try:
+                _sorted_meal = df_meal.sort_values("Ngày")
+                _consec = 0; _max_c = 0
+                for _pct in _sorted_meal["Tỷ lệ đạt (%)"]:
+                    if float(str(_pct).replace("%","")) >= 100:
+                        _consec += 1; _max_c = max(_max_c, _consec)
+                    else:
+                        _consec = 0
+                if _max_c >= 5:
+                    _anomalies.append(
+                        f"🔴 <b>Chuỗi 100% liên tiếp ({_max_c} lần)</b>: Xác suất thống kê gần như = 0. "
+                        "Khả năng cao là gian lận hoặc checklist được điền trước. "
+                        "→ Yêu cầu ảnh minh chứng ngẫu nhiên + kiểm tra đột xuất ngay."
+                    )
+            except Exception: pass
+
+            # 1c. Một người kiểm tra liên tục 100% trên ≥5 lần
+            try:
+                if "Người kiểm tra" in df_meal.columns:
+                    for _insp, _grp in df_meal.groupby("Người kiểm tra"):
+                        _grp_pct = _grp["Tỷ lệ đạt (%)"].apply(lambda x: float(str(x).replace("%","")))
+                        if len(_grp) >= 5 and (_grp_pct >= 98).all():
+                            _anomalies.append(
+                                f"👤 <b>Kiểm tra viên bất thường</b>: <b>{_insp}</b> cho điểm ≥98% "
+                                f"trong tất cả {len(_grp)} lần — không phản ánh thực tế. "
+                                "→ Xem xét giao người khác kiểm tra chéo."
+                            )
+                            break
+            except Exception: pass
 
         # 2. BGS và Y Tế cùng ngày chênh lệch > 20%
         if show_meal and not df_meal.empty and "Loại" in df_meal.columns:
@@ -6505,6 +6644,35 @@ def tab_history(role: str = "", school_filter: str = ""):
                     except Exception as _ae:
                         st.error(f"Lỗi AI: {_ae}")
     
+    # ── Export toàn bộ dữ liệu CSV (BGH/Super Admin) ─────────────────────────
+    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
+        with st.expander("📥 Xuất toàn bộ dữ liệu (CSV) — Backup & Gửi Sở"):
+            st.caption("Xuất 3 file CSV riêng: lịch sử kiểm tra · phản hồi phụ huynh · nhà cung cấp")
+            _ex_c1, _ex_c2, _ex_c3 = st.columns(3)
+            # CSV 1: Lịch sử kiểm tra
+            if not df_meal.empty and _ex_c1.button("📋 Lịch sử kiểm tra", key="csv_meal", use_container_width=True):
+                _csv1 = df_meal.to_csv(index=False, encoding="utf-8-sig")
+                st.download_button("⬇️ Tải lịch_su_kiem_tra.csv", data=_csv1.encode("utf-8-sig"),
+                    file_name=f"lich_su_kiem_tra_{now_vn().strftime('%d%m%Y')}.csv",
+                    mime="text/csv", use_container_width=True)
+            # CSV 2: Phản hồi PH
+            try:
+                _all_fb_csv = db_get_all_feedbacks(school=school_filter or "", limit=1000)
+                if _all_fb_csv and _ex_c2.button("📬 Phản hồi phụ huynh", key="csv_fb", use_container_width=True):
+                    import pandas as _pd_csv
+                    _df_fb_csv = _pd_csv.DataFrame(_all_fb_csv)
+                    _csv2 = _df_fb_csv.to_csv(index=False, encoding="utf-8-sig")
+                    st.download_button("⬇️ Tải phan_hoi_phu_huynh.csv", data=_csv2.encode("utf-8-sig"),
+                        file_name=f"phan_hoi_{now_vn().strftime('%d%m%Y')}.csv",
+                        mime="text/csv", use_container_width=True)
+            except Exception: pass
+            # CSV 3: NCC
+            if not df_ncc.empty and _ex_c3.button("🏭 Nhà cung cấp", key="csv_ncc", use_container_width=True):
+                _csv3 = df_ncc.to_csv(index=False, encoding="utf-8-sig")
+                st.download_button("⬇️ Tải nha_cung_cap.csv", data=_csv3.encode("utf-8-sig"),
+                    file_name=f"nha_cung_cap_{now_vn().strftime('%d%m%Y')}.csv",
+                    mime="text/csv", use_container_width=True)
+
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
     try:
