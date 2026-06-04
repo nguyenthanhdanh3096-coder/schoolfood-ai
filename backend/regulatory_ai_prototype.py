@@ -461,86 +461,96 @@ def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> 
     except Exception:
         return False
 
-# ── Task#1: Telegram Push Notification Infrastructure ─────────────────────────
-# Thiết kế scalable: tách biệt transport layer (Telegram hiện tại)
-# khỏi notification logic — dễ thay bằng Zalo/Email/SMS sau này
+# ── Task#1: Zalo Push Notification Infrastructure ────────────────────────────
+# Thiết kế scalable: tách biệt transport layer (Zalo OA hiện tại)
+# Để thay bằng Email/SMS sau này chỉ cần thay hàm send_zalo_notification()
+# Zalo OA API: https://developers.zalo.me/docs/official-account
 
-def send_telegram_notification(chat_id: str, message: str, bot_token: str = "") -> bool:
-    """Gửi thông báo qua Telegram Bot API.
-    Scalable: có thể thay bằng Zalo/Email bằng cách thay hàm này.
+def send_zalo_notification(zalo_user_id: str, message: str,
+                            oa_token: str = "") -> bool:
+    """Gửi thông báo qua Zalo Official Account API (text message).
+    Người dùng cần follow OA trước để nhận tin.
+    Docs: https://developers.zalo.me/docs/official-account/message-api/send-text
     """
-    if not chat_id or not chat_id.strip():
+    if not zalo_user_id or not zalo_user_id.strip():
         return False
     try:
-        if not bot_token:
-            bot_token = (st.secrets.get("TELEGRAM_BOT_TOKEN","") if hasattr(st,"secrets") else "")
-        if not bot_token:
+        if not oa_token:
+            oa_token = (st.secrets.get("ZALO_OA_ACCESS_TOKEN","")
+                        if hasattr(st,"secrets") else "")
+        if not oa_token:
             return False
         import requests as _req
         resp = _req.post(
-            f"https://api.telegram.org/bot{bot_token}/sendMessage",
-            json={"chat_id": chat_id.strip(), "text": message,
-                  "parse_mode": "HTML", "disable_notification": False},
+            "https://openapi.zalo.me/v2.0/oa/message/cs",
+            headers={
+                "access_token": oa_token,
+                "Content-Type": "application/json",
+            },
+            json={
+                "recipient": {"user_id": zalo_user_id.strip()},
+                "message": {"text": message[:2000]}
+            },
             timeout=5
         )
-        return resp.status_code == 200
+        _data = resp.json()
+        return resp.status_code == 200 and _data.get("error") == 0
     except Exception:
         return False
 
 
 def notify_bgh_new_complaint(school: str, category: str, content_preview: str):
-    """Gửi Telegram cho tất cả BGH của trường khi có complaint mới."""
+    """Gửi Zalo OA cho tất cả BGH của trường khi có complaint mới."""
     try:
         _sb = _get_sb()
         if not _sb: return
-        _bghs = _sb.table("user_profiles").select("telegram_chat_id")\
+        _bghs = _sb.table("user_profiles").select("zalo_user_id")\
             .eq("school_name", school).eq("role", "ban_giam_hieu")\
             .eq("is_active", True).execute().data or []
-        _msg = (f"📬 <b>Phản hồi mới từ Phụ Huynh</b>\n"
+        _msg = (f"📬 Phản hồi mới từ Phụ Huynh\n"
                 f"🏫 Trường: {school}\n"
                 f"🏷️ Loại: {category}\n"
-                f"💬 Nội dung: {content_preview[:100]}...\n"
-                f"→ Vào SchoolFood AI → Tab Lịch sử để xem và xử lý")
+                f"💬 {content_preview[:100]}\n"
+                f"→ Mở SchoolFood AI → Tab Lịch sử để xử lý")
         for _b in _bghs:
-            send_telegram_notification(_b.get("telegram_chat_id",""), _msg)
+            send_zalo_notification(_b.get("zalo_user_id",""), _msg)
     except Exception: pass
 
 
-def notify_ph_complaint_resolved(telegram_chat_id: str, school: str, response_text: str):
-    """Gửi Telegram cho Phụ Huynh khi BGH đã xử lý complaint."""
-    if not telegram_chat_id: return
-    _msg = (f"✅ <b>Phản hồi của bạn đã được xử lý</b>\n"
+def notify_ph_complaint_resolved(zalo_user_id: str, school: str, response_text: str):
+    """Gửi Zalo OA cho Phụ Huynh khi BGH đã xử lý complaint."""
+    if not zalo_user_id: return
+    _msg = (f"✅ Phản hồi của bạn đã được xử lý\n"
             f"🏫 Trường: {school}\n"
-            f"💬 Phản hồi từ Ban Giám Hiệu: {response_text[:200]}\n"
-            f"→ Vào SchoolFood AI → Góc Phụ Huynh để xem chi tiết")
-    send_telegram_notification(telegram_chat_id, _msg)
+            f"💬 Ban Giám Hiệu: {response_text[:200]}\n"
+            f"→ Mở SchoolFood AI → Góc Phụ Huynh để xem chi tiết")
+    send_zalo_notification(zalo_user_id, _msg)
 
 
 def notify_frequency_alert(school: str, role_type: str, days_gap: int):
-    """Gửi Telegram alert tần suất cho BGH."""
+    """Gửi Zalo OA alert tần suất cho BGH."""
     try:
         _sb = _get_sb()
         if not _sb: return
-        _bghs = _sb.table("user_profiles").select("telegram_chat_id")\
+        _bghs = _sb.table("user_profiles").select("zalo_user_id")\
             .eq("school_name", school).eq("role", "ban_giam_hieu")\
             .eq("is_active", True).execute().data or []
         _role_vn = "Y Tế Học Đường" if role_type == "kiem_thuc" else "Ban Giám Sát"
-        _msg = (f"🚨 <b>Cảnh báo tần suất kiểm tra</b>\n"
+        _msg = (f"🚨 Cảnh báo: {_role_vn} chưa kiểm tra {days_gap} ngày\n"
                 f"🏫 Trường: {school}\n"
-                f"👥 {_role_vn} chưa kiểm tra {days_gap} ngày\n"
-                f"⚖️ Vi phạm quy định NĐ 15/2018 / TTLT 13/2016\n"
+                f"⚖️ Vi phạm NĐ 15/2018 / TTLT 13/2016\n"
                 f"→ Liên hệ ngay để lên lịch kiểm tra")
         for _b in _bghs:
-            send_telegram_notification(_b.get("telegram_chat_id",""), _msg)
+            send_zalo_notification(_b.get("zalo_user_id",""), _msg)
     except Exception: pass
 
 
-def db_update_telegram_id(user_id: str, chat_id: str) -> bool:
-    """Cập nhật Telegram Chat ID cho user."""
+def db_update_zalo_id(user_id: str, zalo_user_id: str) -> bool:
+    """Cập nhật Zalo User ID cho user (lấy từ Zalo OA webhook)."""
     sb = _get_sb()
     if not sb: return False
     try:
-        sb.table("user_profiles").update({"telegram_chat_id": chat_id.strip()})\
+        sb.table("user_profiles").update({"zalo_user_id": zalo_user_id.strip()})\
             .eq("id", user_id).execute()
         return True
     except Exception: return False
@@ -4809,47 +4819,53 @@ def tab_guide():
         unsafe_allow_html=True,
     )
 
-    # ── Task#1: Cài đặt Telegram nhận thông báo ──────────────────────────────
+    # ── Task#1: Cài đặt Zalo nhận thông báo ─────────────────────────────────
     _auth_guide = st.session_state.get("auth_user")
     _pf_guide   = st.session_state.get("user_profile", {})
     if _auth_guide and not _auth_guide.get("demo"):
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
-        with st.expander("📲 Cài đặt thông báo Telegram"):
-            _cur_tg = _pf_guide.get("telegram_chat_id","") or ""
+        with st.expander("📲 Cài đặt thông báo Zalo"):
+            _cur_zl = _pf_guide.get("zalo_user_id","") or ""
+            _oa_active = bool(
+                st.secrets.get("ZALO_OA_ACCESS_TOKEN","") if hasattr(st,"secrets") else ""
+            )
             st.markdown(
-                '<div style="background:#EFF6FF;border-radius:8px;padding:12px 14px;margin-bottom:10px">'
-                '<b>Cách nhận thông báo tự động qua Telegram:</b><br>'
-                '1️⃣ Mở Telegram → Tìm kiếm <b>@SchoolFoodAI_VN_bot</b><br>'
-                '2️⃣ Bấm <b>Start</b> hoặc gõ <b>/start</b><br>'
-                '3️⃣ Bot sẽ trả về Chat ID của bạn (dạng số)<br>'
-                '4️⃣ Dán Chat ID vào ô bên dưới và bấm Lưu<br>'
-                '<span style="font-size:0.78rem;color:#64748B">'
-                'Bạn sẽ nhận thông báo khi: có complaint mới, BGH phản hồi, '
-                'cảnh báo NCC hết hạn, nhắc kiểm tra...</span>'
-                '</div>',
+                f'<div style="background:#EFF6FF;border-radius:8px;padding:12px 14px;margin-bottom:10px">'
+                f'<b>Cách nhận thông báo tự động qua Zalo:</b><br>'
+                f'1️⃣ Mở Zalo → Tìm kiếm Official Account <b>SchoolFood AI</b><br>'
+                f'2️⃣ Bấm <b>Quan tâm</b> (Follow) để nhận tin từ hệ thống<br>'
+                f'3️⃣ Nhắn bất kỳ tin nhắn cho OA → hệ thống tự nhận diện Zalo ID của bạn<br>'
+                f'4️⃣ Quản trị viên cập nhật Zalo ID vào tài khoản (hoặc tự điền bên dưới)<br>'
+                f'<span style="font-size:0.78rem;color:#64748B">'
+                f'Nhận thông báo khi: có complaint mới, BGH phản hồi, NCC hết hạn, nhắc kiểm tra<br>'
+                f'Trạng thái OA: {"✅ Đã kết nối OA" if _oa_active else "⚠️ Chưa cấu hình ZALO_OA_ACCESS_TOKEN"}</span>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
-            _tg_status = (
-                f'<span style="color:#16A34A;font-size:0.82rem">✅ Đã cài đặt: {_cur_tg}</span>'
-                if _cur_tg else
-                '<span style="color:#94A3B8;font-size:0.82rem">⬜ Chưa cài đặt</span>'
+            _zl_status = (
+                f'<span style="color:#16A34A;font-size:0.82rem">✅ Đã cài đặt (Zalo ID: {_cur_zl[:8]}...)</span>'
+                if _cur_zl else
+                '<span style="color:#94A3B8;font-size:0.82rem">⬜ Chưa liên kết Zalo</span>'
             )
-            st.markdown(_tg_status, unsafe_allow_html=True)
-            _tg_new = st.text_input("Telegram Chat ID", value=_cur_tg,
-                                     placeholder="VD: 123456789",
-                                     key="tg_chat_id_input")
-            if st.button("💾 Lưu Telegram Chat ID", key="tg_save_btn"):
-                if _tg_new.strip().lstrip("-").isdigit():
+            st.markdown(_zl_status, unsafe_allow_html=True)
+            _zl_new = st.text_input("Zalo User ID", value=_cur_zl,
+                                     placeholder="VD: 1234567890123456789",
+                                     key="zalo_id_input",
+                                     help="Zalo User ID lấy từ OA webhook khi người dùng nhắn tin cho OA")
+            if st.button("💾 Lưu Zalo ID", key="zalo_save_btn"):
+                if _zl_new.strip():
                     _uid = (_auth_guide or {}).get("id","")
-                    if _uid and db_update_telegram_id(_uid, _tg_new.strip()):
-                        # Test notification
-                        send_telegram_notification(_tg_new.strip(),
-                            f"✅ <b>SchoolFood AI</b>\nĐã kết nối thành công!\n"
-                            f"Bạn sẽ nhận thông báo tại đây.")
-                        st.success("✅ Đã lưu! Kiểm tra Telegram để xác nhận.")
+                    if _uid and db_update_zalo_id(_uid, _zl_new.strip()):
+                        if _oa_active:
+                            send_zalo_notification(_zl_new.strip(),
+                                "✅ SchoolFood AI đã kết nối thành công!\n"
+                                "Bạn sẽ nhận thông báo ATTP tại đây.")
+                            st.success("✅ Đã lưu! Kiểm tra Zalo để xác nhận.")
+                        else:
+                            st.success("✅ Đã lưu Zalo ID! (Cần cấu hình OA để gửi tin)")
                         st.rerun()
                 else:
-                    st.error("Chat ID không hợp lệ — chỉ gồm chữ số (có thể có dấu - ở đầu).")
+                    st.warning("Nhập Zalo User ID trước.")
 
     # ── Đổi mật khẩu — đặt trong Hướng dẫn, không làm rối header ─────────────
     _auth_user_guide = st.session_state.get("auth_user")
