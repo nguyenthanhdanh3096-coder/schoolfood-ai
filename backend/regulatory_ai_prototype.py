@@ -6743,6 +6743,9 @@ def tab_history(role: str = "", school_filter: str = ""):
         else:
             ws_meal.cell(row=1, column=1, value="Không có dữ liệu bữa ăn trong bộ lọc hiện tại.")
 
+        # Default values cho ncc_a/b/c — tránh NameError khi df_ncc empty
+        ncc_a = ncc_b = ncc_c = ncc_avg = 0
+
         # ── Sheet 2: Nhà Cung Cấp ────────────────────────────────────────────
         ws_ncc = wb.create_sheet("🏭 Nhà cung cấp")
         if show_ncc and not df_ncc.empty:
@@ -6847,8 +6850,8 @@ def tab_history(role: str = "", school_filter: str = ""):
         # ── Bảng KPI A4:C13 ────────────────────────────────────────────────────
         _meal_n  = len(df_meal) if show_meal and not df_meal.empty else 0
         _meal_av = (round(df_meal["Tỷ lệ đạt (%)"].mean(), 1)
-                    if _meal_n > 0 and "Tỷ lệ đạt (%)" in df_meal else 0)
-        _meal_cr = (int((df_meal.get("Cấp cảnh báo","") == "Nguy hiểm").sum())
+                    if _meal_n > 0 and "Tỷ lệ đạt (%)" in df_meal.columns else 0)
+        _meal_cr = (int((df_meal["Cấp cảnh báo"] == "CRITICAL").sum())
                     if _meal_n > 0 and "Cấp cảnh báo" in df_meal.columns else 0)
         _ncc_n   = len(df_ncc) if show_ncc and not df_ncc.empty else 0
         try:
