@@ -6801,139 +6801,278 @@ def tab_history(role: str = "", school_filter: str = ""):
         except Exception:
             ws_fb.cell(row=1, column=1, value="Không tải được dữ liệu phản hồi.")
 
-        # ── Sheet 4: Dashboard tổng hợp (biểu đồ openpyxl) ──────────────────
+        # ── Sheet 4: Dashboard chuyên nghiệp cấp Sở GD&ĐT ──────────────────
         ws_dash = wb.create_sheet("📊 Dashboard")
-        from openpyxl.chart import BarChart, PieChart, Reference
-        from openpyxl.chart.series import DataPoint
+        from openpyxl.chart import BarChart, PieChart, LineChart, Reference
+        from openpyxl.chart.series import SeriesLabel
+        from openpyxl.chart.label import DataLabelList
+        import pandas as _pd4
 
-        # Tiêu đề dashboard
-        ws_dash.merge_cells("A1:H1")
-        _dc = ws_dash["A1"]
-        _dc.value = "DASHBOARD TỔNG HỢP AN TOÀN THỰC PHẨM HỌC ĐƯỜNG"
-        _dc.font = XFont(name="Times New Roman", size=14, bold=True, color="1B3B6F")
-        _dc.alignment = Alignment(horizontal="center")
-        ws_dash.row_dimensions[1].height = 30
+        # ── Font & style constants ────────────────────────────────────────────
+        _TNR = "Times New Roman"
+        _NAVY   = "1B3B6F"
+        _AMBER  = "B45309"
+        _GREEN  = "166534"
+        _RED    = "991B1B"
+        _GREY   = "475569"
+        _FILL_HDR  = PatternFill("solid", fgColor=_NAVY)
+        _FILL_GRN  = PatternFill("solid", fgColor="DCFCE7")
+        _FILL_AMB  = PatternFill("solid", fgColor="FFFBEB")
+        _FILL_RED  = PatternFill("solid", fgColor="FEF2F2")
 
-        # Bảng tóm tắt số liệu (A3:B10)
-        _summary = [
-            ("Chỉ số", "Giá trị"),
-            ("Số lần kiểm tra bữa ăn", str(len(df_meal)) if show_meal and not df_meal.empty else "0"),
-            ("Tỷ lệ đạt TB bữa ăn (%)", f"{df_meal['Tỷ lệ đạt (%)'].mean():.0f}" if show_meal and not df_meal.empty and 'Tỷ lệ đạt (%)' in df_meal else "0"),
-            ("Số lần đánh giá NCC", str(len(df_ncc)) if show_ncc and not df_ncc.empty else "0"),
-            ("NCC Loại A", str(ncc_a if (show_ncc and not df_ncc.empty) else 0)),
-            ("NCC Loại B", str(ncc_b if (show_ncc and not df_ncc.empty) else 0)),
-            ("NCC Loại C", str(ncc_c if (show_ncc and not df_ncc.empty) else 0)),
-            ("Tổng phản hồi PH", str(len(_all_fb)) if '_all_fb' in dir() and _all_fb else "0"),
+        def _cell(ws, row, col, val, bold=False, size=11, color=None,
+                  fill=None, align="left", num_fmt=None, border=True):
+            c = ws.cell(row=row, column=col, value=val)
+            c.font = XFont(name=_TNR, size=size, bold=bold,
+                           color=color or "1E293B")
+            c.alignment = Alignment(horizontal=align, vertical="center",
+                                    wrap_text=False)
+            if fill: c.fill = fill
+            if border: c.border = BORDER
+            if num_fmt: c.number_format = num_fmt
+            return c
+
+        def _pro_chart(chart, title, y_label="", x_label=""):
+            """Áp dụng định dạng chuyên nghiệp cho chart."""
+            chart.title = title
+            # Bỏ gridlines
+            chart.y_axis.majorGridlines = None
+            chart.x_axis.majorGridlines = None
+            # Trục Y
+            if y_label:
+                chart.y_axis.title = y_label
+            chart.y_axis.txPr = None  # reset font
+            # Trục X
+            if x_label:
+                chart.x_axis.title = x_label
+            # Không viền chart
+            chart.plot_area.graphicalProperties = None
+            return chart
+
+        # ── Cột D-K dành biểu đồ trái, cột M-T biểu đồ phải ─────────────────
+        # Data ẩn đặt ở cột P-S (col 16-19), ẩn bằng width=0
+        for _hc in range(16, 22):
+            ws_dash.column_dimensions[get_column_letter(_hc)].width = 0.1
+
+        # ── TIÊU ĐỀ DASHBOARD ─────────────────────────────────────────────────
+        ws_dash.merge_cells("A1:L1")
+        _ttl = ws_dash["A1"]
+        _ttl.value = "DASHBOARD TỔNG HỢP AN TOÀN THỰC PHẨM HỌC ĐƯỜNG"
+        _ttl.font = XFont(name=_TNR, size=16, bold=True, color=_NAVY)
+        _ttl.alignment = Alignment(horizontal="center", vertical="center")
+        _ttl.fill = PatternFill("solid", fgColor="EFF6FF")
+        ws_dash.row_dimensions[1].height = 36
+
+        ws_dash.merge_cells("A2:L2")
+        _s = ws_dash["A2"]
+        _s.value = f"Xuất ngày: {now_vn().strftime('%d/%m/%Y %H:%M')}  |  Trường: {school_filter or school_input or 'Tất cả trường'}  |  SchoolFood AI v2.5"
+        _s.font = XFont(name=_TNR, size=10, italic=True, color=_GREY)
+        _s.alignment = Alignment(horizontal="center", vertical="center")
+        ws_dash.row_dimensions[2].height = 18
+
+        # ── BẢNG KPI (A4:C13) — chuyên nghiệp ────────────────────────────────
+        ws_dash.row_dimensions[3].height = 6  # spacer
+
+        # Tính số liệu
+        _meal_count = len(df_meal) if show_meal and not df_meal.empty else 0
+        _meal_avg   = round(df_meal["Tỷ lệ đạt (%)"].mean(), 1) if _meal_count > 0 and "Tỷ lệ đạt (%)" in df_meal else 0
+        _meal_crit  = (df_meal["Cấp cảnh báo"] == "Nguy hiểm").sum() if _meal_count > 0 and "Cấp cảnh báo" in df_meal else 0
+        _ncc_count  = len(df_ncc) if show_ncc and not df_ncc.empty else 0
+        try:
+            _fb_all   = db_get_all_feedbacks(school=school_filter or "", limit=500)
+            _fb_total = len(_fb_all)
+            _fb_done  = sum(1 for f in _fb_all if f.get("status") == "resolved")
+            _fb_rate  = round(_fb_done / _fb_total * 100) if _fb_total else 0
+        except Exception:
+            _fb_all = []; _fb_total = 0; _fb_done = 0; _fb_rate = 0
+
+        # Header bảng KPI
+        _cell(ws_dash, 4, 1, "CHỈ SỐ HIỆU QUẢ", bold=True, size=11,
+              color="FFFFFF", fill=_FILL_HDR, align="center")
+        ws_dash.merge_cells("A4:B4")
+        _cell(ws_dash, 4, 3, "GIÁ TRỊ", bold=True, size=11,
+              color="FFFFFF", fill=_FILL_HDR, align="center")
+
+        _kpi_rows = [
+            ("🍱 Số lần kiểm tra bữa ăn",     _meal_count,  _NAVY,   None),
+            ("📊 Tỷ lệ đạt trung bình (%)",    _meal_avg,    _GREEN if _meal_avg >= 90 else _AMBER,
+             _FILL_GRN if _meal_avg >= 90 else _FILL_AMB),
+            ("🚨 Số lần cảnh báo CRITICAL",    _meal_crit,   _RED if _meal_crit > 0 else _GREEN,
+             _FILL_RED if _meal_crit > 0 else _FILL_GRN),
+            ("🏭 Số lần đánh giá nhà cung cấp", _ncc_count,  _NAVY,   None),
+            ("   ↳ Loại A — Đạt chuẩn",        int(ncc_a) if show_ncc else 0, _GREEN, _FILL_GRN),
+            ("   ↳ Loại B — Cần cải thiện",    int(ncc_b) if show_ncc else 0, _AMBER, _FILL_AMB),
+            ("   ↳ Loại C — Không đạt",        int(ncc_c) if show_ncc else 0, _RED,   _FILL_RED),
+            ("📬 Tổng phản hồi phụ huynh",      _fb_total,   _NAVY,   None),
+            ("   ↳ Đã xử lý (%)",              f"{_fb_rate}%", _GREEN if _fb_rate >= 80 else _AMBER,
+             _FILL_GRN if _fb_rate >= 80 else _FILL_AMB),
         ]
-        for ri, (k, v) in enumerate(_summary, 3):
-            _ck = ws_dash.cell(row=ri, column=1, value=k)
-            _cv = ws_dash.cell(row=ri, column=2, value=v)
-            _ck.font = XFont(name="Times New Roman", size=12, bold=(ri==3))
-            _cv.font = XFont(name="Times New Roman", size=12, bold=(ri==3))
-            if ri == 3:
-                _ck.fill = PatternFill("solid", fgColor="1B3B6F")
-                _cv.fill = PatternFill("solid", fgColor="1B3B6F")
-                _ck.font = XFont(name="Times New Roman", size=12, bold=True, color="FFFFFF")
-                _cv.font = XFont(name="Times New Roman", size=12, bold=True, color="FFFFFF")
-            _ck.border = BORDER; _cv.border = BORDER
-        ws_dash.column_dimensions["A"].width = 28
-        ws_dash.column_dimensions["B"].width = 14
+        for _ki, (_lbl, _val, _clr, _bg) in enumerate(_kpi_rows, 5):
+            _cell(ws_dash, _ki, 1, _lbl, size=11, color=_GREY,
+                        fill=_bg or (PatternFill("solid", fgColor="F8FAFC") if _ki % 2 == 0 else None))
+            ws_dash.merge_cells(f"A{_ki}:B{_ki}")
+            _cell(ws_dash, _ki, 3, _val, bold=True, size=11, color=_clr,
+                        fill=_bg or (PatternFill("solid", fgColor="F8FAFC") if _ki % 2 == 0 else None),
+                        align="center")
+            ws_dash.row_dimensions[_ki].height = 20
 
-        from openpyxl.chart import LineChart
+        ws_dash.column_dimensions["A"].width = 30
+        ws_dash.column_dimensions["B"].width = 4
+        ws_dash.column_dimensions["C"].width = 12
 
-        # Dữ liệu phụ trợ (vùng ẩn dưới bảng KPI) — col A:C từ row 12
-        # Layout 2×2 grid: Chart1 "D2", Chart2 "D22", Chart3 "M2", Chart4 "M22"
-        # Width 13cm ≈ 6 cols, Height 9cm ≈ 18 rows → mỗi ô chiếm ~20 rows
-        _DW, _DH = 13, 9   # cm
-        _R0 = 12            # row bắt đầu vùng data ẩn
+        # Spacer col D
+        ws_dash.column_dimensions["D"].width = 2
 
-        # ── Chart 1 (D2): Line chart xu hướng tỷ lệ đạt ─────────────────────
+        # ── DATA ẨN: Cột P-S (không hiển thị) ───────────────────────────────
+        _DC = 16   # col P — bắt đầu vùng data ẩn
+        _R_MEAL = 2
+        _R_MONTH = 25
+        _R_NCC   = 45
+        _R_FB    = 55
+
+        # Data 1: Meal trend
+        if show_meal and not df_meal.empty and "Tỷ lệ đạt (%)" in df_meal.columns:
+            _md = [(str(r.get("Ngày",""))[:10],
+                    round(float(str(r.get("Tỷ lệ đạt (%)", 0)).replace("%","")), 1))
+                   for _, r in df_meal.sort_values("Ngày").tail(15).iterrows()]
+            for _i, (_d, _v) in enumerate(_md, _R_MEAL):
+                ws_dash.cell(row=_i, column=_DC,   value=_d)
+                ws_dash.cell(row=_i, column=_DC+1, value=_v)
+                ws_dash.cell(row=_i, column=_DC+2, value=90)
+        else:
+            _md = []
+
+        # Data 2: Monthly count
+        _mct_data = []
+        if show_meal and not df_meal.empty and "Ngày" in df_meal.columns:
+            _mcp = df_meal.copy()
+            _mcp["Tháng"] = _pd4.to_datetime(_mcp["Ngày"], errors="coerce").dt.strftime("%m/%Y")
+            _mct2 = _mcp.groupby("Tháng", sort=True).size().reset_index()
+            for _i, (_, _rm) in enumerate(_mct2.iterrows(), _R_MONTH):
+                ws_dash.cell(row=_i, column=_DC,   value=_rm["Tháng"])
+                ws_dash.cell(row=_i, column=_DC+1, value=int(_rm.iloc[1]))
+                _mct_data.append((_rm["Tháng"], int(_rm.iloc[1])))
+
+        # Data 3: NCC
+        if show_ncc and not df_ncc.empty and (ncc_a + ncc_b + ncc_c) > 0:
+            for _i, (_l, _v) in enumerate([
+                ("Loại A", int(ncc_a)), ("Loại B", int(ncc_b)), ("Loại C", int(ncc_c))
+            ], _R_NCC):
+                ws_dash.cell(row=_i, column=_DC,   value=_l)
+                ws_dash.cell(row=_i, column=_DC+1, value=_v)
+
+        # Data 4: Feedback status
+        _fb_pending_d  = sum(1 for f in _fb_all if f.get("status")=="pending")
+        _fb_reviewed_d = sum(1 for f in _fb_all if f.get("status")=="reviewed")
+        _fb_resolved_d = sum(1 for f in _fb_all if f.get("status")=="resolved")
+        for _i, (_l, _v) in enumerate([
+            ("Chờ xử lý", _fb_pending_d),
+            ("Đang xử lý", _fb_reviewed_d),
+            ("Đã xử lý", _fb_resolved_d),
+        ], _R_FB):
+            ws_dash.cell(row=_i, column=_DC,   value=_l)
+            ws_dash.cell(row=_i, column=_DC+1, value=_v)
+
+        # ── CHART 1 (E4): Line chart xu hướng ────────────────────────────────
         try:
-            if show_meal and not df_meal.empty and "Tỷ lệ đạt (%)" in df_meal.columns:
-                _md = [(str(r.get("Ngày",""))[:10],
-                        round(float(r.get("Tỷ lệ đạt (%)", 0)), 1))
-                       for _, r in df_meal.sort_values("Ngày").tail(15).iterrows()]
-                for _bi, (_d, _v) in enumerate(_md, _R0):
-                    ws_dash.cell(row=_bi, column=1, value=_d)
-                    ws_dash.cell(row=_bi, column=2, value=_v)
-                    ws_dash.cell(row=_bi, column=3, value=90)   # ngưỡng chuẩn
+            if _md:
                 lc1 = LineChart()
-                lc1.title = "Xu hướng tỷ lệ đạt bữa ăn (%)"; lc1.style = 10
-                lc1.y_axis.title = "%"; lc1.y_axis.scaling.min = 0; lc1.y_axis.scaling.max = 100
-                lc1.width = _DW; lc1.height = _DH
-                _r1 = _R0 + len(_md) - 1
-                lc1.add_data(Reference(ws_dash, min_col=2, min_row=_R0, max_row=_r1))
-                lc1.add_data(Reference(ws_dash, min_col=3, min_row=_R0, max_row=_r1))
-                lc1.set_categories(Reference(ws_dash, min_col=1, min_row=_R0, max_row=_r1))
+                lc1 = _pro_chart(lc1, "Xu hướng tỷ lệ đạt bữa ăn (%)", y_label="Tỷ lệ (%)", x_label="Ngày kiểm tra")
+                lc1.y_axis.scaling.min = 0; lc1.y_axis.scaling.max = 100
+                lc1.y_axis.numFmt = '0"%"'
+                lc1.width = 18; lc1.height = 11; lc1.style = 10
+                _r1e = _R_MEAL + len(_md) - 1
+                lc1.add_data(Reference(ws_dash, min_col=_DC+1, min_row=_R_MEAL, max_row=_r1e))
+                lc1.add_data(Reference(ws_dash, min_col=_DC+2, min_row=_R_MEAL, max_row=_r1e))
+                lc1.set_categories(Reference(ws_dash, min_col=_DC, min_row=_R_MEAL, max_row=_r1e))
                 try:
-                    from openpyxl.chart.series import SeriesLabel
-                    lc1.series[0].title = SeriesLabel(v="Tỷ lệ đạt")
-                    lc1.series[1].title = SeriesLabel(v="Ngưỡng 90%")
+                    lc1.series[0].title = SeriesLabel(v="Tỷ lệ đạt thực tế")
+                    lc1.series[0].smooth = True
+                    lc1.series[1].title = SeriesLabel(v="Ngưỡng tối thiểu 90%")
+                    lc1.series[1].graphicalProperties.line.dashDot = "dash"
+                    # Data labels trên line
+                    lc1.series[0].dLbls = DataLabelList()
+                    lc1.series[0].dLbls.showVal = True
+                    lc1.series[0].dLbls.showLegendKey = False
+                    lc1.series[0].dLbls.showCatName = False
+                    lc1.series[0].dLbls.showSerName = False
                 except Exception: pass
-                ws_dash.add_chart(lc1, "D2")
+                ws_dash.add_chart(lc1, "E4")
         except Exception: pass
 
-        # ── Chart 2 (D22): Bar chart số lần kiểm tra theo tháng ─────────────
+        # ── CHART 2 (E22): Bar chart số lần theo tháng ───────────────────────
         try:
-            if show_meal and not df_meal.empty and "Ngày" in df_meal.columns:
-                import pandas as _pd4
-                _mc = df_meal.copy()
-                _mc["Tháng"] = _pd4.to_datetime(_mc["Ngày"], errors="coerce").dt.strftime("%m/%Y")
-                _mct = _mc.groupby("Tháng", sort=True).size().reset_index()
-                _R2 = _R0 + 20
-                for _mi, (_, _row_m) in enumerate(_mct.iterrows(), _R2):
-                    ws_dash.cell(row=_mi, column=1, value=_row_m["Tháng"])
-                    ws_dash.cell(row=_mi, column=2, value=int(_row_m.iloc[1]))
+            if _mct_data:
                 bc2 = BarChart()
-                bc2.type = "col"; bc2.title = "Số lần kiểm tra theo tháng"
-                bc2.style = 2; bc2.width = _DW; bc2.height = _DH
-                _r2 = _R2 + len(_mct) - 1
-                bc2.add_data(Reference(ws_dash, min_col=2, min_row=_R2, max_row=_r2))
-                bc2.set_categories(Reference(ws_dash, min_col=1, min_row=_R2, max_row=_r2))
-                ws_dash.add_chart(bc2, "D22")
+                bc2 = _pro_chart(bc2, "Số lần kiểm tra bữa ăn theo tháng",
+                                  y_label="Số lần", x_label="Tháng")
+                bc2.type = "col"; bc2.style = 10
+                bc2.width = 18; bc2.height = 10
+                bc2.y_axis.numFmt = "0"
+                _r2e = _R_MONTH + len(_mct_data) - 1
+                bc2.add_data(Reference(ws_dash, min_col=_DC+1, min_row=_R_MONTH, max_row=_r2e))
+                bc2.set_categories(Reference(ws_dash, min_col=_DC, min_row=_R_MONTH, max_row=_r2e))
+                try:
+                    bc2.series[0].title = SeriesLabel(v="Số lần kiểm tra")
+                    bc2.series[0].dLbls = DataLabelList()
+                    bc2.series[0].dLbls.showVal = True
+                    bc2.series[0].dLbls.showLegendKey = False
+                    bc2.series[0].dLbls.showCatName = False
+                    bc2.series[0].dLbls.showSerName = False
+                    bc2.series[0].dLbls.numFmt = "0"
+                except Exception: pass
+                ws_dash.add_chart(bc2, "E22")
         except Exception: pass
 
-        # ── Chart 3 (M2): Pie chart NCC xếp loại A/B/C ───────────────────────
+        # ── CHART 3 (M4): Pie chart NCC ──────────────────────────────────────
         try:
             if show_ncc and not df_ncc.empty and (ncc_a + ncc_b + ncc_c) > 0:
-                _R3 = _R0 + 40
-                for _pi, (_lbl, _val) in enumerate([
-                    ("Loại A — Đạt chuẩn", int(ncc_a)),
-                    ("Loại B — Cần cải thiện", int(ncc_b)),
-                    ("Loại C — Không đạt", int(ncc_c)),
-                ], _R3):
-                    ws_dash.cell(row=_pi, column=1, value=_lbl)
-                    ws_dash.cell(row=_pi, column=2, value=_val)
                 pc3 = PieChart()
-                pc3.title = "Xếp loại nhà cung cấp"; pc3.style = 26
-                pc3.width = _DW; pc3.height = _DH
-                pc3.add_data(Reference(ws_dash, min_col=2, min_row=_R3, max_row=_R3+2))
-                pc3.set_categories(Reference(ws_dash, min_col=1, min_row=_R3, max_row=_R3+2))
-                ws_dash.add_chart(pc3, "M2")
+                pc3 = _pro_chart(pc3, "Phân loại nhà cung cấp suất ăn")
+                pc3.style = 10; pc3.width = 14; pc3.height = 11
+                pc3.add_data(Reference(ws_dash, min_col=_DC+1, min_row=_R_NCC, max_row=_R_NCC+2))
+                pc3.set_categories(Reference(ws_dash, min_col=_DC, min_row=_R_NCC, max_row=_R_NCC+2))
+                try:
+                    pc3.series[0].dLbls = DataLabelList()
+                    pc3.series[0].dLbls.showVal = True
+                    pc3.series[0].dLbls.showPercent = True
+                    pc3.series[0].dLbls.showLegendKey = False
+                    pc3.series[0].dLbls.showCatName = True
+                    pc3.series[0].dLbls.showSerName = False
+                    pc3.series[0].dLbls.separator = "\n"
+                except Exception: pass
+                ws_dash.add_chart(pc3, "M4")
         except Exception: pass
 
-        # ── Chart 4 (M22): Bar ngang trạng thái phản hồi PH ──────────────────
+        # ── CHART 4 (M22): Bar trạng thái phản hồi ───────────────────────────
         try:
-            _all_fb_dash = db_get_all_feedbacks(school=school_filter or "", limit=300)
-            if _all_fb_dash:
-                _R4 = _R0 + 50
-                _fb_pending  = sum(1 for f in _all_fb_dash if f.get("status")=="pending")
-                _fb_reviewed = sum(1 for f in _all_fb_dash if f.get("status")=="reviewed")
-                _fb_resolved = sum(1 for f in _all_fb_dash if f.get("status")=="resolved")
-                for _si, (_lbl, _val) in enumerate([
-                    ("Chờ xử lý", _fb_pending),
-                    ("Đang xử lý", _fb_reviewed),
-                    ("Đã xử lý", _fb_resolved),
-                ], _R4):
-                    ws_dash.cell(row=_si, column=1, value=_lbl)
-                    ws_dash.cell(row=_si, column=2, value=_val)
+            if _fb_total > 0:
                 bc4 = BarChart()
-                bc4.type = "bar"; bc4.title = "Trạng thái phản hồi phụ huynh"
-                bc4.style = 2; bc4.width = _DW; bc4.height = _DH
-                bc4.add_data(Reference(ws_dash, min_col=2, min_row=_R4, max_row=_R4+2))
-                bc4.set_categories(Reference(ws_dash, min_col=1, min_row=_R4, max_row=_R4+2))
+                bc4 = _pro_chart(bc4, "Trạng thái phản hồi phụ huynh",
+                                  y_label="Số phản hồi")
+                bc4.type = "col"; bc4.style = 10
+                bc4.width = 14; bc4.height = 10
+                bc4.y_axis.numFmt = "0"
+                bc4.add_data(Reference(ws_dash, min_col=_DC+1, min_row=_R_FB, max_row=_R_FB+2))
+                bc4.set_categories(Reference(ws_dash, min_col=_DC, min_row=_R_FB, max_row=_R_FB+2))
+                try:
+                    bc4.series[0].title = SeriesLabel(v="Số phản hồi")
+                    bc4.series[0].dLbls = DataLabelList()
+                    bc4.series[0].dLbls.showVal = True
+                    bc4.series[0].dLbls.showLegendKey = False
+                    bc4.series[0].dLbls.showCatName = False
+                    bc4.series[0].dLbls.showSerName = False
+                    bc4.series[0].dLbls.numFmt = "0"
+                except Exception: pass
                 ws_dash.add_chart(bc4, "M22")
         except Exception: pass
+
+        # Ẩn các cột data (col 16-21)
+        for _hc in range(16, 22):
+            ws_dash.column_dimensions[get_column_letter(_hc)].hidden = True
+
+        # In tab order
+        ws_dash.sheet_view.tabSelected = False
 
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
