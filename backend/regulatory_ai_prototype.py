@@ -7023,6 +7023,7 @@ def tab_history(role: str = "", school_filter: str = ""):
 
         ws_dash.sheet_view.tabSelected = False
 
+        buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
             "⬇️ Tải báo cáo (.xlsx)",
             data=buf.getvalue(),
