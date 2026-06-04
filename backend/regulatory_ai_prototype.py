@@ -8553,9 +8553,14 @@ def main():
         '<div style="position:absolute;bottom:-60px;right:80px;width:160px;height:160px;'
         'border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>'
     )
-    _ai_badge_clr = "rgba(34,197,94,0.25)" if api_key and api_key.startswith("sk-ant-") else "rgba(239,68,68,0.2)"
-    _ai_badge_txt = "#86EFAC" if api_key and api_key.startswith("sk-ant-") else "#FCA5A5"
-    _ai_badge_lbl = "✅ AI" if api_key and api_key.startswith("sk-ant-") else "⚠️ AI chưa kết nối"
+    import os as _os_hdr
+    _hdr_api = (
+        (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else "")
+        or _os_hdr.environ.get("ANTHROPIC_API_KEY","")
+    )
+    _ai_badge_clr = "rgba(34,197,94,0.25)" if _hdr_api and _hdr_api.startswith("sk-ant-") else "rgba(239,68,68,0.2)"
+    _ai_badge_txt = "#86EFAC" if _hdr_api and _hdr_api.startswith("sk-ant-") else "#FCA5A5"
+    _ai_badge_lbl = "✅ AI" if _hdr_api and _hdr_api.startswith("sk-ant-") else "⚠️ AI chưa kết nối"
     _badges = (
         '<span style="background:rgba(255,255,255,0.15);color:white;padding:4px 12px;'
         'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(255,255,255,0.2)">'
