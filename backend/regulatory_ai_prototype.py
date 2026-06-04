@@ -344,8 +344,9 @@ def db_save_profile(user_id: str, email: str, full_name: str,
         return False
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def db_get_all_profiles(school: str = "") -> list:
-    """Lấy tất cả user profiles (BGH admin)."""
+    """Lấy tất cả user profiles — cache 2 phút."""
     sb = _get_sb()
     if not sb:
         return []
@@ -370,8 +371,9 @@ def db_toggle_profile(user_id: str, is_active: bool) -> bool:
         return False
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def db_get_feedback(school: str = "", status: str = "pending") -> list:
-    """Lấy feedback Phụ Huynh."""
+    """Lấy feedback Phụ Huynh — cache 30s."""
     sb = _get_sb()
     if not sb:
         return []
@@ -399,8 +401,9 @@ def db_update_feedback_status(feedback_id: str, new_status: str):
         pass
 
 
+@st.cache_data(ttl=30, show_spinner=False)
 def db_get_all_feedbacks(school: str = "", limit: int = 100) -> list:
-    """Lấy TẤT CẢ feedback không filter status — dùng cho tab_history và traceback."""
+    """Lấy TẤT CẢ feedback không filter status — cache 30s để giảm lag."""
     sb = _get_sb()
     if not sb: return []
     try:
@@ -446,8 +449,9 @@ def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> 
 
 # ── Task#5: NCC Registry — track giấy phép & chứng nhận ATTP ─────────────────
 
+@st.cache_data(ttl=60, show_spinner=False)
 def db_get_ncc_registry(school: str = "") -> list:
-    """Lấy danh sách NCC đã đăng ký, kèm ngày hết hạn chứng nhận."""
+    """Lấy danh sách NCC đã đăng ký — cache 60s."""
     sb = _get_sb()
     if not sb: return []
     try:
