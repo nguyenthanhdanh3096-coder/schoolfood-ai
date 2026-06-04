@@ -6644,35 +6644,6 @@ def tab_history(role: str = "", school_filter: str = ""):
                     except Exception as _ae:
                         st.error(f"Lỗi AI: {_ae}")
     
-    # ── Export toàn bộ dữ liệu CSV (BGH/Super Admin) ─────────────────────────
-    if role in ("Ban Giám Hiệu",) or st.session_state.get("is_super"):
-        with st.expander("📥 Xuất toàn bộ dữ liệu (CSV) — Backup & Gửi Sở"):
-            st.caption("Xuất 3 file CSV riêng: lịch sử kiểm tra · phản hồi phụ huynh · nhà cung cấp")
-            _ex_c1, _ex_c2, _ex_c3 = st.columns(3)
-            # CSV 1: Lịch sử kiểm tra
-            if not df_meal.empty and _ex_c1.button("📋 Lịch sử kiểm tra", key="csv_meal", use_container_width=True):
-                _csv1 = df_meal.to_csv(index=False, encoding="utf-8-sig")
-                st.download_button("⬇️ Tải lịch_su_kiem_tra.csv", data=_csv1.encode("utf-8-sig"),
-                    file_name=f"lich_su_kiem_tra_{now_vn().strftime('%d%m%Y')}.csv",
-                    mime="text/csv", use_container_width=True)
-            # CSV 2: Phản hồi PH
-            try:
-                _all_fb_csv = db_get_all_feedbacks(school=school_filter or "", limit=1000)
-                if _all_fb_csv and _ex_c2.button("📬 Phản hồi phụ huynh", key="csv_fb", use_container_width=True):
-                    import pandas as _pd_csv
-                    _df_fb_csv = _pd_csv.DataFrame(_all_fb_csv)
-                    _csv2 = _df_fb_csv.to_csv(index=False, encoding="utf-8-sig")
-                    st.download_button("⬇️ Tải phan_hoi_phu_huynh.csv", data=_csv2.encode("utf-8-sig"),
-                        file_name=f"phan_hoi_{now_vn().strftime('%d%m%Y')}.csv",
-                        mime="text/csv", use_container_width=True)
-            except Exception: pass
-            # CSV 3: NCC
-            if not df_ncc.empty and _ex_c3.button("🏭 Nhà cung cấp", key="csv_ncc", use_container_width=True):
-                _csv3 = df_ncc.to_csv(index=False, encoding="utf-8-sig")
-                st.download_button("⬇️ Tải nha_cung_cap.csv", data=_csv3.encode("utf-8-sig"),
-                    file_name=f"nha_cung_cap_{now_vn().strftime('%d%m%Y')}.csv",
-                    mime="text/csv", use_container_width=True)
-
     st.markdown('<div class="sec-hdr">⬇️ Xuất báo cáo Excel</div>', unsafe_allow_html=True)
 
     try:
