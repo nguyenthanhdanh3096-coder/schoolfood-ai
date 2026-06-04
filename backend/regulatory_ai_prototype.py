@@ -652,7 +652,7 @@ if not PROMPT_FILE.exists():
 # Vision (ảnh): dùng Sonnet 4.6 (cũng hỗ trợ vision, rẻ hơn Opus ~5x)
 MODEL         = "claude-sonnet-4-6"
 MODEL_VISION  = "claude-sonnet-4-6"   # Thay vì opus — cùng chất lượng vision, tiết kiệm hơn
-MAX_TOK       = 1200                   # Giảm từ 1500 — đủ cho hầu hết câu trả lời
+MAX_TOK       = 1800                   # Đủ cho câu trả lời chi tiết có bảng/sơ đồ
 
 # ── Định nghĩa mục bắt buộc & ngưỡng điểm ────────────────────────────────────
 CRITICAL_ITEMS = {"C03", "C07", "C09", "C10", "C11", "C18", "C20"}
@@ -1726,13 +1726,15 @@ TIÊU CHÍ ĐÁNH GIÁ TRỰC QUAN (Căn cứ WHO Food Safety Visual Inspection 
 
 # ── AI #2: Phân tích ảnh rủi ro ATTP (Claude Vision) ─────────────────────────
 def analyze_photo_ai(photo_bytes: bytes, group_name: str, api_key: str) -> dict:
-    """Gọi Claude Vision phân tích ảnh ATTP dựa trên chuẩn WHO + QCVN + NĐ 15/2018."""
+    """Gọi Claude Vision phân tích ảnh ATTP dựa trên chuẩn WHO + QCVN + NĐ 15/2018.
+    Trả về {'needs_retake': True} nếu ảnh không đủ chất lượng để phân tích chính xác.
+    """
     try:
         client = anthropic.Anthropic(api_key=api_key)
         b64 = base64.standard_b64encode(photo_bytes).decode()
         resp = client.messages.create(
             model=MODEL_VISION,
-            max_tokens=500,   # JSON output ngắn gọn, không cần nhiều
+            max_tokens=900,
             messages=[{
                 "role": "user",
                 "content": [
@@ -1743,26 +1745,53 @@ Nhóm kiểm tra: {group_name}
 
 {_VISUAL_CRITERIA}
 
-Phân tích ảnh theo các tiêu chí trên. Trả lời JSON (không thêm text ngoài JSON):
+BƯỚC 1 — ĐÁNH GIÁ CHẤT LƯỢNG ẢNH:
+Trước khi phân tích, đánh giá xem ảnh có đủ điều kiện để cho kết quả chính xác không:
+- Đủ sáng (không quá tối/quá sáng)
+- Đủ nét (không bị mờ, rung)
+- Đủ gần (thấy rõ vùng cần kiểm tra, không quá xa)
+- Không bị che khuất quá nhiều
+
+Nếu ảnh KHÔNG đủ chất lượng → trả về JSON với "needs_retake": true và lý do cụ thể.
+Nếu ảnh ĐỦ chất lượng → phân tích đầy đủ theo BƯỚC 2.
+
+BƯỚC 2 — PHÂN TÍCH CHI TIẾT (chỉ khi ảnh đủ chất lượng):
+Phân tích theo các tiêu chí cảm quan đã liệt kê.
+
+Trả lời JSON (không thêm text ngoài JSON):
 {{
+  "needs_retake": false,
+  "retake_reason": "",
   "risk_level": "OK" hoặc "WARNING" hoặc "CRITICAL",
-  "issues": ["vấn đề cụ thể + căn cứ pháp lý/kỹ thuật nếu có"],
-  "positives": ["điểm đạt chuẩn quan sát được"],
+  "issues": ["vấn đề cụ thể + căn cứ pháp lý nếu có — mô tả rõ ràng, không mơ hồ"],
+  "positives": ["điểm đạt chuẩn quan sát được — cụ thể"],
   "recommendation": "hành động khắc phục cụ thể + thời hạn (để trống nếu OK)",
-  "legal_ref": "văn bản pháp lý áp dụng chính (ví dụ: QCVN 8-1:2011/BYT)",
+  "legal_ref": "văn bản pháp lý áp dụng chính (ví dụ: QCVN 8-1:2011/BYT Điều...)",
   "confidence": 0.85
-}}"""}
+}}
+
+Lưu ý quan trọng: Nếu không chắc chắn về một vấn đề → đặt confidence thấp hơn và
+đề nghị kiểm tra thêm bằng cảm quan trực tiếp. KHÔNG đưa kết quả "OK chung chung"
+khi không thể phân tích được vì ảnh mờ."""}
                 ]
             }]
         )
         text = resp.content[0].text.strip()
         s, e = text.find("{"), text.rfind("}") + 1
-        return json.loads(text[s:e]) if s != -1 and e > s else \
-               {"risk_level": "OK", "issues": [], "positives": [],
-                "recommendation": "", "legal_ref": "", "confidence": 0.5}
+        result = json.loads(text[s:e]) if s != -1 and e > s else \
+                 {"risk_level": "OK", "issues": [], "positives": [],
+                  "recommendation": "", "legal_ref": "", "confidence": 0.5,
+                  "needs_retake": False, "retake_reason": ""}
+        # Tự động đánh dấu needs_retake nếu confidence < 0.65 và issues trống
+        if result.get("confidence", 1.0) < 0.65 and not result.get("issues"):
+            result["needs_retake"] = True
+            result["retake_reason"] = (result.get("retake_reason") or
+                "Độ tin cậy phân tích thấp — ảnh có thể chưa đủ rõ hoặc chưa đủ sáng")
+        return result
     except Exception as ex:
         return {"risk_level": "ERROR", "issues": [str(ex)], "positives": [],
-                "recommendation": "", "legal_ref": "", "confidence": 0}
+                "recommendation": "", "legal_ref": "", "confidence": 0,
+                "needs_retake": False, "retake_reason": ""}
 
 
 # ── AI #1: Checklist động theo thực đơn ──────────────────────────────────────
@@ -1852,30 +1881,36 @@ def generate_ai_narrative(results: dict, notes: dict, alert_level: str,
                            school: str, date_str: str, menu: str,
                            pass_count: int, total: int,
                            level_key: str, api_key: str) -> str:
-    """Claude viết tóm tắt báo cáo kiểm tra bằng tiếng Việt tự nhiên."""
+    """Claude viết tóm tắt báo cáo kiểm tra bằng tiếng Việt — chuẩn hành chính nhà nước."""
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        fail_list = [f"{c} ({notes.get(c,'').strip() or 'không có ghi chú'})"
+        fail_list = [f"Mục {c}: {notes.get(c,'').strip() or 'chưa có ghi chú cụ thể'}"
                      for c, v in results.items() if v == "❌ Không Đạt"]
+        critical_fails = [c for c, v in results.items()
+                          if v == "❌ Không Đạt" and c in CRITICAL_ITEMS]
         context = (
-            f"Trường: {school or '(chưa nhập)'} | Cấp: {level_key} | Ngày: {date_str}\n"
+            f"Đơn vị: {school or '(chưa nhập)'} | Cấp học: {level_key} | Ngày kiểm tra: {date_str}\n"
             f"Thực đơn: {menu or '(chưa nhập)'}\n"
-            f"Kết quả: {pass_count}/{total} đạt chuẩn | Cảnh báo: {alert_level}\n"
-            f"Mục không đạt: {', '.join(fail_list) if fail_list else 'Không có'}"
+            f"Tổng kết quả: {pass_count}/{total} tiêu chí đạt chuẩn | Mức cảnh báo: {alert_level}\n"
+            f"Các tiêu chí BẮT BUỘC không đạt: {', '.join(critical_fails) if critical_fails else 'Không có'}\n"
+            f"Các tiêu chí không đạt khác:\n" + ('\n'.join(f'  - {f}' for f in fail_list) if fail_list else '  Không có')
         )
         resp = client.messages.create(
             model=MODEL,
-            max_tokens=400,   # Đoạn văn 120-160 từ, giảm từ 500
-            messages=[{"role": "user", "content": f"""Viết đoạn tóm tắt báo cáo ATTP (120–160 từ) bằng tiếng Việt:
+            max_tokens=700,
+            messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học. Viết nhận xét kiểm tra ATTP bằng tiếng Việt chuẩn văn bản hành chính nhà nước (200–250 từ):
+
 {context}
 
-Yêu cầu:
-- Văn phong chuyên nghiệp, dễ hiểu với phụ huynh và ban giám hiệu
-- Nêu điểm tốt trước, điểm cần cải thiện sau
-- Có khuyến nghị cụ thể nếu có mục không đạt
-- Kết thúc bằng đánh giá tổng thể 1 câu
-- Không dùng markdown header hay bullet points, viết thành đoạn văn"""
-            }]
+YÊU CẦU BẮT BUỘC:
+1. Văn phong trang trọng, đúng thể thức hành chính (như báo cáo gửi Sở GD&ĐT)
+2. Cấu trúc 3 phần rõ ràng:
+   - Nhận xét kết quả tổng thể (1–2 câu)
+   - Các điểm đạt chuẩn và điểm cần khắc phục (cụ thể từng mục, trích dẫn điều khoản pháp lý nếu có vi phạm)
+   - Kết luận và kiến nghị (thời hạn khắc phục cụ thể nếu có vi phạm)
+3. Nếu có tiêu chí BẮT BUỘC không đạt → nêu rõ hành động khẩn cấp (theo NĐ 15/2018, TTLT 13/2016)
+4. Kết thúc bằng đánh giá: "Đạt/Chưa đạt chuẩn ATTP theo quy định"
+5. Không dùng markdown header, bullet point — viết thành đoạn văn hoàn chỉnh"""}]
         )
         return resp.content[0].text.strip()
     except Exception as ex:
@@ -2676,35 +2711,48 @@ def tab_checklist(api_key: str = ""):
                 # Hiển thị kết quả phân tích
                 if g_idx in st.session_state.photo_analysis:
                     r = st.session_state.photo_analysis[g_idx]
-                    lvl  = r.get("risk_level", "OK")
-                    clr  = {"OK": "#16A34A", "WARNING": "#D97706",
-                            "CRITICAL": "#DC2626", "ERROR": "#64748B"}.get(lvl, "#64748B")
-                    bg   = {"OK": "#F0FDF4", "WARNING": "#FFFBEB",
-                            "CRITICAL": "#FEF2F2", "ERROR": "#F8FAFC"}.get(lvl, "#F8FAFC")
-                    icon = {"OK": "✅", "WARNING": "⚠️",
-                            "CRITICAL": "🚨", "ERROR": "❓"}.get(lvl, "❓")
-                    conf = int(r.get("confidence", 0.8) * 100)
+                    # Ảnh không đủ chất lượng → yêu cầu chụp lại
+                    if r.get("needs_retake"):
+                        st.warning(
+                            f"📷 **Cần chụp lại ảnh**\n\n"
+                            f"{r.get('retake_reason','Ảnh chưa đủ rõ để phân tích chính xác.')}\n\n"
+                            "**Hướng dẫn chụp lại:**\n"
+                            "• Đảm bảo đủ sáng (mở đèn nếu cần)\n"
+                            "• Đến gần hơn (cách 20–40cm)\n"
+                            "• Giữ máy thẳng, không rung\n"
+                            "• Chụp thẳng góc vào vùng cần kiểm tra"
+                        )
+                    else:
+                        lvl  = r.get("risk_level", "OK")
+                        clr  = {"OK": "#16A34A", "WARNING": "#D97706",
+                                "CRITICAL": "#DC2626", "ERROR": "#64748B"}.get(lvl, "#64748B")
+                        bg   = {"OK": "#F0FDF4", "WARNING": "#FFFBEB",
+                                "CRITICAL": "#FEF2F2", "ERROR": "#F8FAFC"}.get(lvl, "#F8FAFC")
+                        icon = {"OK": "✅", "WARNING": "⚠️",
+                                "CRITICAL": "🚨", "ERROR": "❓"}.get(lvl, "❓")
+                        conf = int(r.get("confidence", 0.8) * 100)
 
-                    issues_html = "".join(
-                        f"<li style='color:#DC2626'>{i}</li>" for i in r.get("issues", [])
-                    ) or ""
-                    pos_html = "".join(
-                        f"<li style='color:#16A34A'>{p}</li>" for p in r.get("positives", [])
-                    ) or ""
+                        issues_html = "".join(
+                            f"<li style='color:#DC2626'>{i}</li>" for i in r.get("issues", [])
+                        ) or ""
+                        pos_html = "".join(
+                            f"<li style='color:#16A34A'>{p}</li>" for p in r.get("positives", [])
+                        ) or ""
 
-                    st.markdown(f"""
-                    <div style="background:{bg};border-left:4px solid {clr};
-                                border-radius:8px;padding:12px 16px;margin-top:8px">
-                        <div style="font-weight:700;color:{clr};margin-bottom:6px">
-                            {icon} Kết quả AI: <b>{lvl}</b>
-                            <span style="font-weight:400;font-size:0.75rem;
-                                         color:#64748B;margin-left:8px">
-                                Độ tin cậy: {conf}%</span>
-                        </div>
-                        {"<ul style='margin:4px 0;padding-left:16px'>" + issues_html + "</ul>" if issues_html else ""}
-                        {"<ul style='margin:4px 0;padding-left:16px'>" + pos_html + "</ul>" if pos_html else ""}
-                        {"<div style='font-size:0.82rem;color:#475569;margin-top:6px'><b>Khuyến nghị:</b> " + r.get("recommendation","") + "</div>" if r.get("recommendation") else ""}
-                    </div>""", unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div style="background:{bg};border-left:4px solid {clr};
+                                    border-radius:8px;padding:12px 16px;margin-top:8px">
+                            <div style="font-weight:700;color:{clr};margin-bottom:6px">
+                                {icon} Kết quả AI: <b>{lvl}</b>
+                                <span style="font-weight:400;font-size:0.75rem;
+                                             color:#64748B;margin-left:8px">
+                                    Độ tin cậy: {conf}%</span>
+                            </div>
+                            {"<ul style='margin:4px 0;padding-left:16px'>" + issues_html + "</ul>" if issues_html else ""}
+                            {"<ul style='margin:4px 0;padding-left:16px'>" + pos_html + "</ul>" if pos_html else ""}
+                            {"<div style='font-size:0.82rem;color:#475569;margin-top:6px'><b>Khuyến nghị:</b> " + r.get('recommendation','') + "</div>" if r.get("recommendation") else ""}
+                            {"<div style='font-size:0.78rem;color:#64748B;margin-top:4px'><b>Căn cứ:</b> " + r.get('legal_ref','') + "</div>" if r.get("legal_ref") else ""}
+                        </div>""", unsafe_allow_html=True)
             elif not ai_on and active_photo:
                 st.caption("💡 Kết nối AI để phân tích ảnh tự động.")
 
@@ -4338,7 +4386,7 @@ def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
 MANUAL_CONTENT = {
     "title": "SỔ TAY HƯỚNG DẪN SỬ DỤNG SCHOOLFOOD AI",
     "subtitle": "Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường",
-    "version": "v2.0 — Tháng 6/2026",
+    "version": "v2.5 — Tháng 6/2026",
     "sections": [
         {
             "id": "intro",
@@ -4422,9 +4470,13 @@ MANUAL_CONTENT = {
                  "  • Phát hiện bất thường tự động (điểm quá đều, BGS/Y Tế chênh lệch)\n"
                  "  • Quản lý complaint: xem minh chứng từ Y Tế → đóng task + phản hồi chính thức\n"
                  "  • Luồng: ⏳ Chờ xử lý → 💬 Y Tế thêm minh chứng → ✅ BGH đóng + phản hồi\n"
+                 "Tab 🏭 Nhà Cung Cấp (REGISTRY):\n"
+                 "  • Quản lý danh sách NCC: tên, giấy phép CSSX, chứng nhận ATTP\n"
+                 "  • Cảnh báo tự động khi chứng nhận sắp hết hạn (≤ 30 ngày)\n"
+                 "  • Upload file chứng nhận S01/S02 để lưu hồ sơ\n"
                  "Tab 📅 Lịch & Chuẩn mực: Lịch + hệ thống cảnh báo 4 cấp\n"
                  "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
-                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ + cài đặt Zalo thông báo\n"
                  "Tab 👤 Quản lý tài khoản:\n"
                  "  • Tạo tài khoản cho Y Tế (có chọn cấp học mặc định), BGS, Phụ Huynh\n"
                  "  • Tối đa 2 tài khoản BGH · Chỉ tạo cho trường mình quản lý"),
@@ -4581,13 +4633,15 @@ MANUAL_CONTENT = {
                  "KHÔNG cần credit (luôn dùng được):\n"
                  "• Checklist 20 câu · Xuất báo cáo Word · Lịch nhắc nhở · Hướng dẫn khẩn cấp"),
                 ("AI phân tích ảnh hoạt động thế nào?",
-                 "Ảnh được gửi đến Claude Opus (model AI đa phương thức của Anthropic). "
+                 "Ảnh được gửi đến Claude Sonnet 4.6 (model AI đa phương thức của Anthropic). "
                  "AI đánh giá dựa trên tiêu chí cảm quan từ:\n"
                  "• WHO Food Safety Visual Inspection Guide\n"
                  "• QCVN 8-1:2011/BYT (dấu hiệu nhiễm vi sinh)\n"
                  "• NĐ 15/2018/NĐ-CP (điều kiện vệ sinh bếp ăn)\n\n"
                  "Kết quả trả về: mức rủi ro (OK/WARNING/CRITICAL), vấn đề phát hiện, "
-                 "khuyến nghị khắc phục, căn cứ pháp lý áp dụng, độ tin cậy (%)."),
+                 "khuyến nghị khắc phục, căn cứ pháp lý áp dụng, độ tin cậy (%).\n\n"
+                 "⚠️ Nếu ảnh không đủ rõ (độ tin cậy < 65%), app sẽ yêu cầu chụp lại thay vì "
+                 "đưa ra kết quả mơ hồ. Chụp đúng kỹ thuật để có kết quả chính xác nhất."),
                 ("Giới hạn quan trọng của AI",
                  "AI KHÔNG THỂ thay thế:\n"
                  "❌ Xét nghiệm vi sinh học (Salmonella, E.coli) — cần phòng thí nghiệm\n"
@@ -4820,7 +4874,7 @@ def tab_guide():
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="sf-card" style="border-left:3px solid #94A3B8">'
-        '<div class="sf-card-title">ℹ️ Về SchoolFood AI v2.0</div>'
+        '<div class="sf-card-title">ℹ️ Về SchoolFood AI v2.5</div>'
         '<div class="sf-card-body">'
         'Nền tảng giám sát An toàn Thực phẩm bữa ăn học đường — giúp mỗi bên thực hiện '
         'đúng vai trò, đúng thời điểm, có bằng chứng rõ ràng.<br>'
