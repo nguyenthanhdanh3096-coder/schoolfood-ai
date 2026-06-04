@@ -4224,14 +4224,34 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
             )
             if sid_kt:
                 st.session_state[_kt_guard_key] = True
-                # DB saved silently
         else:
             st.info("💾 Sổ kiểm thực này đã được lưu trước đó.")
 
-        with st.spinner("Đang tạo sổ kiểm thực..."):
+        # Auto-call Claude viết nhận xét (nếu có API key)
+        _kt_narrative = ""
+        if ai_on:
+            with st.spinner("🤖 AI đang viết nhận xét kiểm thực (~3s)..."):
+                _kt_narrative = generate_kiem_thuc_narrative(
+                    all_results, all_notes, timestamps,
+                    kt_school, date_vn_kt, kt_menu,
+                    total_pass, total_items, api_key,
+                )
+            if _kt_narrative:
+                st.markdown(
+                    '<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;'
+                    'padding:14px 18px;margin-bottom:10px">'
+                    '<div style="font-size:0.75rem;font-weight:700;color:#166534;margin-bottom:6px">'
+                    '🤖 NHẬN XÉT AI — Tự động tạo theo TTLT 13/2016</div>'
+                    f'<div style="font-size:0.88rem;color:#1E293B;line-height:1.7">{_kt_narrative}</div>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+
+        with st.spinner("⚙️ Đang tạo sổ kiểm thực..."):
             docx_bytes = generate_so_kiem_thuc_docx(
                 kt_school, date_vn_kt,
                 kt_name, kt_menu, all_results, all_notes, timestamps,
+                ai_narrative=_kt_narrative,
             )
         fname = f"SoKiemThuc_{(kt_school or 'Truong').replace(' ','_')}_{kt_date.strftime('%d-%m-%Y')}.docx"
         st.download_button(
@@ -4248,11 +4268,81 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
         )
 
 
+def generate_kiem_thuc_narrative(results: dict, notes: dict, timestamps: dict,
+                                  school: str, date_str: str, menu: str,
+                                  total_pass: int, total_items: int,
+                                  api_key: str) -> str:
+    """Claude viết nhận xét kiểm thực 3 bước chuẩn hành chính."""
+    if not api_key:
+        return ""
+    try:
+        _fail_list = [f"Mục {c}: {notes.get(c,'').strip() or 'không có ghi chú'}"
+                      for c, v in results.items() if v == "❌ Không Đạt"]
+        _ts_info = " | ".join(f"Bước {b}: {timestamps.get(b,'—')}" for b in [1,2,3])
+        _client = anthropic.Anthropic(api_key=api_key)
+        _resp = _client.messages.create(
+            model=MODEL, max_tokens=700,
+            messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
+Kết quả kiểm thực 3 bước ngày {date_str} tại {school or '(chưa nhập)'}:
+Thực đơn: {menu or '(chưa nhập)'}
+Thời gian: {_ts_info}
+Kết quả: {total_pass}/{total_items} tiêu chí đạt chuẩn
+Các tiêu chí không đạt: {chr(10).join(_fail_list) if _fail_list else 'Không có'}
+
+{_LEGAL_BASIS}
+
+Viết phần "NHẬN XÉT VÀ KIẾN NGHỊ" cho Sổ Kiểm Thực 3 bước (200-250 từ),
+văn phong hành chính nhà nước chuẩn TTLT 13/2016:
+1. Nhận xét kết quả thực hiện 3 bước (tuân thủ thời gian, đầy đủ tiêu chí)
+2. Các điểm cần lưu ý hoặc khắc phục (nếu có), trích điều khoản vi phạm
+3. Kết luận: đạt/chưa đạt yêu cầu kiểm thực theo Điều 9 TTLT 13/2016
+Viết thành đoạn văn liên tục, không dùng bullet points."""}]
+        )
+        return _resp.content[0].text.strip()
+    except Exception:
+        return ""
+
+
+def generate_ncc_narrative(results: dict, notes: dict, rating: str,
+                            sup_name: str, school: str, date_str: str,
+                            pass_count: int, fail_count: int,
+                            api_key: str) -> str:
+    """Claude viết phân tích rủi ro NCC chuẩn hành chính."""
+    if not api_key:
+        return ""
+    try:
+        _fail_list = [f"Mục {c}: {notes.get(c,'').strip() or 'không có ghi chú'}"
+                      for c, v in results.items() if v == "❌ Không Đạt"]
+        _crit = [c for c in results if results[c] == "❌ Không Đạt" and c in SUPPLIER_CRITICAL]
+        _client = anthropic.Anthropic(api_key=api_key)
+        _resp = _client.messages.create(
+            model=MODEL, max_tokens=600,
+            messages=[{"role": "user", "content": f"""Bạn là chuyên gia ATTP trường học Việt Nam.
+Kết quả đánh giá nhà cung cấp {sup_name} ngày {date_str} tại {school}:
+Xếp loại: {rating} | Đạt: {pass_count} | Không đạt: {fail_count}
+Mục bắt buộc vi phạm: {', '.join(_crit) if _crit else 'Không có'}
+Các tiêu chí không đạt: {chr(10).join(_fail_list) if _fail_list else 'Không có'}
+
+{_LEGAL_BASIS}
+
+Viết phần "PHÂN TÍCH RỦI RO VÀ KIẾN NGHỊ" (150-200 từ), văn phong hành chính:
+1. Đánh giá mức độ rủi ro từ nhà cung cấp dựa trên kết quả
+2. Các điểm vi phạm cụ thể và nguy cơ với ATTP học đường, trích NĐ 15/2018
+3. Kiến nghị: tiếp tục hợp đồng / yêu cầu khắc phục / tạm dừng — với thời hạn cụ thể
+Không dùng bullet points. Văn bản liên tục."""}]
+        )
+        return _resp.content[0].text.strip()
+    except Exception:
+        return ""
+
+
 def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
                                 menu: str, results: dict, notes: dict,
-                                timestamps: dict | None = None) -> bytes:
+                                timestamps: dict | None = None,
+                                ai_narrative: str = "") -> bytes:
     """Tạo Sổ Kiểm Thực 3 Bước chuẩn TTLT 13/2016 — Times New Roman.
     timestamps: {1: "HH:MM:SS", 2: "HH:MM:SS", 3: "HH:MM:SS"} để xác minh timeline.
+    ai_narrative: Claude viết nhận xét tự động (optional).
     """
     from docx import Document
     from docx.shared import Pt, Cm
@@ -4357,6 +4447,18 @@ def generate_so_kiem_thuc_docx(school: str, date_str: str, yte_name: str,
                 _docx_set_font(r, bold=is_fail, size_pt=10,
                                color=(192, 0, 0) if is_fail else None)
         doc.add_paragraph()
+
+    # ── IV. Nhận xét và kiến nghị (Claude AI) ────────────────────────────────
+    if ai_narrative:
+        _docx_para(doc, "IV. NHẬN XÉT VÀ KIẾN NGHỊ",
+                   bold=True, size=13, space_before=10, space_after=4)
+        _docx_para(doc, ai_narrative, size=12, align="justify", space_after=8)
+    else:
+        _docx_para(doc, "IV. NHẬN XÉT VÀ KIẾN NGHỊ",
+                   bold=True, size=13, space_before=10, space_after=4)
+        _docx_para(doc, "(Phần này được tạo tự động khi kết nối AI — "
+                        "điền thủ công nếu không có API key)",
+                   size=11, space_after=8)
 
     # Chữ ký
     _docx_para(doc, f"Ngày kiểm thực: {date_str}   |   Giờ hoàn thành: ___:___",
@@ -7331,7 +7433,32 @@ def tab_supplier(api_key: str = "", role: str = ""):
         guard_key = f"sup_saved_{sup_school}_{sup_date}_{sup_inspector}"
         already_saved = st.session_state.get(guard_key, False)
 
-        ai_narrative = st.session_state.get("sup_ai_analysis", f"Xếp loại {rating}")
+        # Auto-call Claude nếu có API key (ưu tiên hơn manual analysis)
+        _ncc_api = (st.session_state.get("api_key_stored","") or
+                    (st.secrets.get("ANTHROPIC_API_KEY","") if hasattr(st,"secrets") else ""))
+        ai_narrative = st.session_state.get("sup_ai_analysis", "")
+        if _ncc_api and (not ai_narrative or "Xếp loại" in ai_narrative):
+            with st.spinner("🤖 AI đang phân tích rủi ro nhà cung cấp (~3s)..."):
+                _res_for_ai = {c: st.session_state.sup_r.get(c,"") for it in _active_items
+                               for c in [it["code"]]}
+                _notes_for_ai = {c: st.session_state.sup_notes.get(c,"") for c in _res_for_ai}
+                ai_narrative = generate_ncc_narrative(
+                    _res_for_ai, _notes_for_ai, rating,
+                    sup_name, sup_school, str(sup_date),
+                    pass_count, fail_count, _ncc_api,
+                )
+            if ai_narrative:
+                st.markdown(
+                    '<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;'
+                    'padding:14px 18px;margin-bottom:10px">'
+                    '<div style="font-size:0.75rem;font-weight:700;color:#9A3412;margin-bottom:6px">'
+                    '🤖 PHÂN TÍCH RỦI RO AI — Tự động theo NĐ 15/2018</div>'
+                    f'<div style="font-size:0.88rem;color:#1E293B;line-height:1.7">{ai_narrative}</div>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+        if not ai_narrative:
+            ai_narrative = f"Xếp loại {rating} — {pass_count}/{pass_count+fail_count} tiêu chí đạt"
 
         # Lưu DB (chỉ 1 lần)
         if not already_saved and db_ok():
