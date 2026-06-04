@@ -7168,57 +7168,116 @@ def tab_ncc_bgh(school: str = ""):
                 if _ncc.get("notes"):
                     st.caption(f"Ghi chú: {_ncc['notes']}")
 
-                # Xóa NCC
+                # Sửa / Xóa NCC
                 st.markdown("---")
-                _del_col1, _del_col2 = st.columns([3, 1])
-                _del_col1.caption("⚠️ Xóa khi NCC điền sai hoặc hết hợp đồng. Dữ liệu lịch sử đánh giá vẫn được lưu.")
-                if _del_col2.button("🗑️ Xóa NCC này", key=f"del_{_ncc['id']}", type="secondary"):
+                _act_col1, _act_col2, _act_col3 = st.columns([3, 1, 1])
+                _act_col1.caption("⚠️ Xóa khi điền sai hoặc hết hợp đồng. Lịch sử đánh giá vẫn lưu.")
+                if _act_col2.button("✏️ Sửa", key=f"edit_{_ncc['id']}", use_container_width=True):
+                    st.session_state["ncc_edit_id"] = _ncc["id"]
+                    st.rerun()
+                if _act_col3.button("🗑️ Xóa", key=f"del_{_ncc['id']}", type="secondary",
+                                     use_container_width=True):
                     if db_delete_ncc_registry(_ncc["id"]):
                         st.success(f"✅ Đã xóa: {_ncc['ncc_name']}")
                         st.rerun()
                     else:
-                        st.error("Lỗi xóa — kiểm tra kết nối DB.")
+                        st.error("Lỗi xóa.")
     else:
         st.info("Chưa có hồ sơ NCC. Thêm bên dưới.")
 
-    # ── Form thêm / cập nhật NCC ───────────────────────────────────────────────
-    st.markdown('<div class="sec-hdr">➕ Thêm / Cập nhật nhà cung cấp</div>', unsafe_allow_html=True)
-    st.caption("💡 Sau khi lưu, bấm vào tên NCC trong danh sách để upload file chứng nhận (PDF/JPG).")
-    with st.form("ncc_bgh_form", clear_on_submit=True):
-        _f1, _f2 = st.columns(2)
-        _fn  = _f1.text_input("Tên công ty / cơ sở", placeholder="Công ty TNHH Bếp Xanh")
-        _fco = _f2.text_input("Số hợp đồng", placeholder="HĐ-2025-001")
-        _f3, _f4 = st.columns(2)
-        _flic = _f3.text_input("Số giấy phép CSSX", placeholder="01/GPCSSX-2024")
-        _fph  = _f4.text_input("SĐT liên hệ", placeholder="0901 234 567")
-        _f5, _f6, _f7 = st.columns(3)
-        _fle  = _f5.date_input("Hết hạn Giấy phép", value=None, format="DD/MM/YYYY")
-        _fae  = _f6.date_input("Hết hạn ATTP cert", value=None, format="DD/MM/YYYY")
-        _fadr = _f7.text_input("Địa chỉ", placeholder="Số 1 Lê Lợi, Q.1...")
-        _fnote = st.text_input("Ghi chú", placeholder="Tuỳ chọn...")
-        if st.form_submit_button("💾 Lưu hồ sơ NCC", type="primary"):
-            if _fn.strip():
+    # ── Form chỉnh sửa NCC (khi click Sửa) ───────────────────────────────────
+    _edit_id = st.session_state.get("ncc_edit_id")
+    _edit_ncc = next((n for n in _reg if n.get("id") == _edit_id), None) if _edit_id else None
+
+    if _edit_ncc:
+        st.markdown('<div class="sec-hdr">✏️ Chỉnh sửa nhà cung cấp</div>', unsafe_allow_html=True)
+        import datetime as _dt_edit
+        with st.form("ncc_edit_form"):
+            _ef1, _ef2 = st.columns(2)
+            _efn  = _ef1.text_input("Tên công ty / cơ sở", value=_edit_ncc.get("ncc_name",""))
+            _efco = _ef2.text_input("Số hợp đồng", value=_edit_ncc.get("contract_no",""),
+                                     placeholder="HĐ-2025-001")
+            _ef3, _ef4 = st.columns(2)
+            _eflic = _ef3.text_input("Mã số giấy phép cơ sở sản xuất",
+                                      value=_edit_ncc.get("license_no",""),
+                                      placeholder="01/GPCSSX-2024")
+            _efph  = _ef4.text_input("Số điện thoại liên hệ",
+                                      value=_edit_ncc.get("phone",""),
+                                      placeholder="0901 234 567")
+            _ef5, _ef6, _ef7 = st.columns(3)
+            try:
+                _le_val = _dt_edit.date.fromisoformat(_edit_ncc["license_expiry"]) if _edit_ncc.get("license_expiry") else None
+                _ae_val = _dt_edit.date.fromisoformat(_edit_ncc["attp_expiry"]) if _edit_ncc.get("attp_expiry") else None
+            except Exception:
+                _le_val = _ae_val = None
+            _efle = _ef5.date_input("Ngày hết hạn giấy phép", value=_le_val,
+                                     format="DD/MM/YYYY", key="edit_le")
+            _efae = _ef6.date_input("Ngày hết hạn chứng nhận ATTP", value=_ae_val,
+                                     format="DD/MM/YYYY", key="edit_ae")
+            _efadr = _ef7.text_input("Địa chỉ cơ sở",
+                                      value=_edit_ncc.get("address",""),
+                                      placeholder="Số 1 Lê Lợi, Q.1...")
+            _efnote = st.text_input("Ghi chú", value=_edit_ncc.get("notes",""))
+            _efc1, _efc2 = st.columns(2)
+            if _efc1.form_submit_button("💾 Lưu thay đổi", type="primary"):
                 _sc = school or st.session_state.get("user_school","")
-                _data = {
-                    "school_name": _sc, "ncc_name": _fn.strip(),
-                    "contract_no": _fco.strip(), "license_no": _flic.strip(),
-                    "license_expiry": str(_fle) if _fle else None,
-                    "attp_expiry": str(_fae) if _fae else None,
-                    "phone": _fph.strip(), "address": _fadr.strip(),
-                    "notes": _fnote.strip(), "is_active": True,
-                    "updated_at": now_vn().isoformat(),
-                }
-                _ex = _get_sb().table("ncc_registry").select("id")                    .eq("school_name",_sc).eq("ncc_name",_fn.strip()).execute().data
                 try:
-                    if _ex:
-                        _get_sb().table("ncc_registry").update(_data).eq("id",_ex[0]["id"]).execute()
-                    else:
-                        _get_sb().table("ncc_registry").insert(_data).execute()
-                    st.success(f"✅ Đã lưu: {_fn}"); st.rerun()
-                except Exception as _e2:
-                    st.error(f"Lỗi: {_e2}")
-            else:
-                st.warning("Điền tên nhà cung cấp.")
+                    _get_sb().table("ncc_registry").update({
+                        "ncc_name": _efn.strip(), "contract_no": _efco.strip(),
+                        "license_no": _eflic.strip(), "phone": _efph.strip(),
+                        "license_expiry": str(_efle) if _efle else None,
+                        "attp_expiry": str(_efae) if _efae else None,
+                        "address": _efadr.strip(), "notes": _efnote.strip(),
+                        "updated_at": now_vn().isoformat(),
+                    }).eq("id", _edit_id).execute()
+                    st.success("✅ Đã cập nhật!")
+                    st.session_state.pop("ncc_edit_id", None)
+                    st.rerun()
+                except Exception as _ee:
+                    st.error(f"Lỗi: {_ee}")
+            if _efc2.form_submit_button("✕ Huỷ"):
+                st.session_state.pop("ncc_edit_id", None)
+                st.rerun()
+    else:
+        # ── Form thêm mới ────────────────────────────────────────────────────
+        st.markdown('<div class="sec-hdr">➕ Thêm nhà cung cấp</div>', unsafe_allow_html=True)
+        st.caption("💡 Sau khi lưu, bấm vào tên NCC để upload file chứng nhận (PDF/JPG).")
+        with st.form("ncc_bgh_form", clear_on_submit=True):
+            _f1, _f2 = st.columns(2)
+            _fn  = _f1.text_input("Tên công ty / cơ sở", placeholder="Công ty TNHH Bếp Xanh")
+            _fco = _f2.text_input("Số hợp đồng", placeholder="HĐ-2025-001")
+            _f3, _f4 = st.columns(2)
+            _flic = _f3.text_input("Mã số giấy phép cơ sở sản xuất", placeholder="01/GPCSSX-2024")
+            _fph  = _f4.text_input("Số điện thoại liên hệ", placeholder="0901 234 567")
+            _f5, _f6, _f7 = st.columns(3)
+            _fle  = _f5.date_input("Ngày hết hạn giấy phép", value=None, format="DD/MM/YYYY")
+            _fae  = _f6.date_input("Ngày hết hạn chứng nhận ATTP", value=None, format="DD/MM/YYYY")
+            _fadr = _f7.text_input("Địa chỉ cơ sở", placeholder="Số 1 Lê Lợi, Q.1...")
+            _fnote = st.text_input("Ghi chú", placeholder="Tuỳ chọn...")
+            if st.form_submit_button("💾 Thêm nhà cung cấp", type="primary"):
+                if _fn.strip():
+                    _sc = school or st.session_state.get("user_school","")
+                    _data = {
+                        "school_name": _sc, "ncc_name": _fn.strip(),
+                        "contract_no": _fco.strip(), "license_no": _flic.strip(),
+                        "license_expiry": str(_fle) if _fle else None,
+                        "attp_expiry": str(_fae) if _fae else None,
+                        "phone": _fph.strip(), "address": _fadr.strip(),
+                        "notes": _fnote.strip(), "is_active": True,
+                        "updated_at": now_vn().isoformat(),
+                    }
+                    _ex = _get_sb().table("ncc_registry").select("id")\
+                        .eq("school_name",_sc).eq("ncc_name",_fn.strip()).execute().data
+                    try:
+                        if _ex:
+                            _get_sb().table("ncc_registry").update(_data).eq("id",_ex[0]["id"]).execute()
+                        else:
+                            _get_sb().table("ncc_registry").insert(_data).execute()
+                        st.success(f"✅ Đã thêm: {_fn}"); st.rerun()
+                    except Exception as _e2:
+                        st.error(f"Lỗi: {_e2}")
+                else:
+                    st.warning("Điền tên nhà cung cấp.")
 
 
 def show_onboarding_banner(school: str, profiles: list, sessions_count: int):
