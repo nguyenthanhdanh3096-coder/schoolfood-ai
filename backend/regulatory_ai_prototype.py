@@ -1611,7 +1611,7 @@ _REMINDER_TIMES = {
         "hour": 9, "min": 0,
         "days": [0, 1, 2, 3, 4],
         "task": "Xem tổng hợp báo cáo tuần & duyệt checklist",
-        "tab":  "📐 Quy Chuẩn & Lịch",
+        "tab":  "📐 Quy chuẩn & lịch",
         "last_week_only": True,
     },
 }
@@ -4781,75 +4781,30 @@ def tab_guide():
     """Tab hướng dẫn sử dụng đầy đủ — sổ tay điện tử tích hợp trong app."""
     mc = MANUAL_CONTENT
 
-    # ── Về SchoolFood AI — Card giới thiệu nổi bật ────────────────────────────
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#1B3B6F 0%,#1E40AF 60%,#0D9488 100%);
-                border-radius:16px;padding:24px 28px;margin-bottom:16px;color:#fff">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <span style="font-size:2rem">🍱</span>
-            <div>
-                <div style="font-size:1.3rem;font-weight:800;letter-spacing:-0.5px">
-                    SchoolFood AI v2.5</div>
-                <div style="font-size:0.82rem;opacity:0.85">
-                    Nền tảng giám sát ATTP bữa ăn học đường · Hỗ trợ bởi Claude Sonnet 4.6 (Anthropic)</div>
-            </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                ✅ Checklist 20 điểm chuẩn NĐ 15/2018</span>
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                🏥 Kiểm thực 3 bước TTLT 13/2016</span>
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                🤖 AI Vision phân tích ảnh thực phẩm</span>
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                📄 Báo cáo Word chuẩn hành chính</span>
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                📲 Thông báo Zalo OA realtime</span>
-            <span style="background:rgba(255,255,255,0.18);border-radius:20px;
-                         padding:4px 12px;font-size:0.78rem;font-weight:600">
-                🛡️ Chống gian lận AI ngẫu nhiên</span>
-        </div>
-        <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:0.8rem;opacity:0.9">
-            <span>⚖️ Luật ATTP 55/2010 · NĐ 15/2018 · TTLT 13/2016 · QĐ 3958/QĐ-BYT 2025</span>
-        </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.2);
-                    display:flex;gap:20px;font-size:0.78rem;opacity:0.85">
-            <span>📞 Cục ATTP: <b>1800 6838</b> (miễn phí)</span>
-            <span>🚨 Cấp cứu: <b>115</b></span>
-            <span>🗓️ Cập nhật: 06/2026</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
-
-    # ── 4 vai trò badges ────────────────────────────────────────────────────────
-    _rc1, _rc2, _rc3, _rc4 = st.columns(4)
-    for _col, _icon, _role, _clr, _bg in [
-        (_rc1, "👨‍👩‍👧", "Phụ Huynh",     "#2563EB", "#EFF6FF"),
-        (_rc2, "👥", "Ban Giám Sát",  "#7C3AED", "#F5F3FF"),
-        (_rc3, "🏥", "Y Tế Học Đường","#0D9488", "#F0FDFA"),
-        (_rc4, "🏫", "Ban Giám Hiệu", "#B45309", "#FFFBEB"),
-    ]:
-        _col.markdown(
-            f'<div style="background:{_bg};border:1px solid {_clr}33;border-radius:10px;'
-            f'padding:10px;text-align:center">'
-            f'<div style="font-size:1.4rem">{_icon}</div>'
-            f'<div style="font-size:0.75rem;font-weight:700;color:{_clr}">{_role}</div>'
-            f'</div>', unsafe_allow_html=True
-        )
-
+    # ── Giới thiệu app — khác với header, tập trung vào giá trị ─────────────
+    st.markdown(
+        '<div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;'
+        'padding:16px 20px;margin-bottom:14px">'
+        '<div style="font-size:0.95rem;font-weight:700;color:#0C4A6E;margin-bottom:8px">'
+        '📖 Sổ tay này hướng dẫn gì?</div>'
+        '<div style="font-size:0.85rem;color:#1E3A5F;line-height:1.7">'
+        'Đây là tài liệu tham chiếu đầy đủ cho <b>tất cả 4 vai trò</b> trong hệ thống — '
+        'từ cách sử dụng từng tab, quy trình xử lý complaint, đến căn cứ pháp lý áp dụng.<br>'
+        'Nếu bạn là người mới: bắt đầu từ <b>Mục 2 — Hướng dẫn theo vai trò</b>.<br>'
+        'Cần tra cứu luật nhanh: xem <b>Mục 8 — Căn cứ pháp lý</b>.<br>'
+        'Có sự cố ngộ độc: xem ngay <b>Mục 6 — Xử lý khẩn cấp</b>.'
+        '</div></div>',
+        unsafe_allow_html=True
+    )
     st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
 
     # ── Nút tải sổ tay Word ─────────────────────────────────────────────────
-    if st.button("⬇️ Tải Sổ Tay Hướng Dẫn (.docx) để in và đào tạo nội bộ",
+    if st.button("⬇️ Tải sổ tay hướng dẫn (.docx)",
                  type="primary", use_container_width=True):
         with st.spinner("Đang tạo file Word..."):
             docx_bytes = generate_manual_docx()
         st.download_button(
-            "📥 Tải ngay — Sổ Tay SchoolFood AI v2.5.docx",
+            "📥 Tải về — Sổ tay SchoolFood AI v2.5.docx",
             data=docx_bytes,
             file_name="So_Tay_SchoolFood_AI_v2.5.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -6373,48 +6328,39 @@ def tab_history(role: str = "", school_filter: str = ""):
         RATING_BG = {"Loại A": "DCFCE7", "Loại B": "FEF9C3", "Loại C": "FEE2E2"}
 
         def _write_sheet(ws, df_ws, title_txt, subtitle_txt, hdr_fill, rating_col=None):
-            """Ghi dữ liệu vào worksheet với header chuyên nghiệp."""
+            """Ghi dữ liệu vào worksheet — tiêu đề + dữ liệu (bỏ quốc ngữ)."""
             if df_ws.empty:
                 ws.cell(row=1, column=1, value="Chưa có dữ liệu.")
                 return
             ncols = len(df_ws.columns)
             col_last = get_column_letter(ncols)
 
-            # Quốc hiệu
+            # Tiêu đề (row 1)
             ws.merge_cells(f"A1:{col_last}1")
             _c = ws["A1"]
-            _c.value = "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM — Độc lập – Tự do – Hạnh phúc"
-            _c.font = XFont(name="Times New Roman", size=11, bold=True)
+            _c.value = title_txt
+            _c.font = XFont(name="Times New Roman", size=13, bold=True, color="1B3B6F")
             _c.alignment = Alignment(horizontal="center")
-            ws.row_dimensions[1].height = 18
+            ws.row_dimensions[1].height = 24
 
-            # Tiêu đề
+            # Subtitle (row 2)
             ws.merge_cells(f"A2:{col_last}2")
             _c = ws["A2"]
-            _c.value = title_txt
-            _c.font = XFont(name="Times New Roman", size=14, bold=True, color="1B3B6F")
-            _c.alignment = Alignment(horizontal="center")
-            ws.row_dimensions[2].height = 26
-
-            # Subtitle
-            ws.merge_cells(f"A3:{col_last}3")
-            _c = ws["A3"]
             _c.value = subtitle_txt
-            _c.font = XFont(name="Times New Roman", size=11, italic=True, color="475569")
+            _c.font = XFont(name="Times New Roman", size=10, italic=True, color="475569")
             _c.alignment = Alignment(horizontal="center")
-            ws.row_dimensions[3].height = 15
+            ws.row_dimensions[2].height = 14
 
-            # Header cột
+            # Header cột (row 3)
             for ci, cname in enumerate(df_ws.columns, 1):
-                _c = ws.cell(row=4, column=ci, value=cname)
+                _c = ws.cell(row=3, column=ci, value=cname)
                 _c.font = HDR_FONT; _c.fill = hdr_fill
                 _c.alignment = HDR_ALIGN; _c.border = BORDER
-            ws.row_dimensions[4].height = 22
+            ws.row_dimensions[3].height = 22
 
-            # Dữ liệu
-            for ri, row_data in enumerate(df_ws.itertuples(index=False), 5):
+            # Dữ liệu (từ row 4)
+            for ri, row_data in enumerate(df_ws.itertuples(index=False), 4):
                 row_vals = list(row_data)
-                # Chọn màu nền theo loại sheet
                 if rating_col is not None and rating_col < len(row_vals):
                     bg = RATING_BG.get(str(row_vals[rating_col]), "EFF6FF" if ri % 2 == 0 else "FFFFFF")
                 else:
@@ -6423,19 +6369,20 @@ def tab_history(role: str = "", school_filter: str = ""):
                 fill = PatternFill("solid", fgColor=bg)
                 for ci, val in enumerate(row_vals, 1):
                     _c = ws.cell(row=ri, column=ci, value=val)
-                    _c.font = XFont(name="Times New Roman", size=13)
+                    _c.font = XFont(name="Times New Roman", size=11)
                     _c.fill = fill; _c.border = BORDER
                     _c.alignment = Alignment(vertical="center",
-                                             horizontal="left" if ci <= 3 else "center")
+                                             horizontal="left" if ci <= 3 else "center",
+                                             wrap_text=(ci <= 3))
                 ws.row_dimensions[ri].height = 18
 
             # Auto-width
             for ci, cname in enumerate(df_ws.columns, 1):
                 mx = max(len(str(cname)),
                          max((len(str(ws.cell(row=r, column=ci).value or ""))
-                              for r in range(4, len(df_ws) + 5)), default=0))
-                ws.column_dimensions[get_column_letter(ci)].width = min(mx + 3, 42)
-            ws.freeze_panes = "A5"
+                              for r in range(3, len(df_ws) + 4)), default=0))
+                ws.column_dimensions[get_column_letter(ci)].width = min(mx + 3, 40)
+            ws.freeze_panes = "A4"
 
         # ── Sheet 1: Bữa ăn ──────────────────────────────────────────────────
         ws_meal = wb.create_sheet("🍱 Bữa Ăn")
@@ -6550,40 +6497,93 @@ def tab_history(role: str = "", school_filter: str = ""):
         ws_dash.column_dimensions["A"].width = 28
         ws_dash.column_dimensions["B"].width = 14
 
-        # Biểu đồ 1: Bar chart tỷ lệ đạt bữa ăn (D3)
-        if show_meal and not df_meal.empty and 'Tỷ lệ đạt (%)' in df_meal.columns:
-            _bar_data = [(row.get("Ngày",""), row.get("Tỷ lệ đạt (%)",0))
-                         for _, row in df_meal.head(15).iterrows()]
-            for bi, (d, v) in enumerate(_bar_data, 12):
-                ws_dash.cell(row=bi, column=1, value=d)
-                ws_dash.cell(row=bi, column=2, value=float(v) if str(v).replace('.','').isdigit() else 0)
-            bc = BarChart()
-            bc.type = "col"; bc.title = "Tỷ Lệ Đạt Bữa Ăn (%)"; bc.grouping = "clustered"
-            bc.y_axis.title = "%"; bc.x_axis.title = "Ngày kiểm tra"
-            bc.y_axis.scaling.min = 0; bc.y_axis.scaling.max = 100
-            bc.style = 10; bc.width = 18; bc.height = 10
-            _bdata = Reference(ws_dash, min_col=2, min_row=12, max_row=11+len(_bar_data))
-            _bcats = Reference(ws_dash, min_col=1, min_row=12, max_row=11+len(_bar_data))
-            bc.add_data(_bdata); bc.set_categories(_bcats)
-            ws_dash.add_chart(bc, "D3")
+        from openpyxl.chart import LineChart
 
-        # Biểu đồ 2: Pie chart NCC xếp loại (D18)
+        # Dữ liệu phụ trợ cho biểu đồ (vùng ẩn, bắt đầu từ row 12)
+        # Row 12-26: meal data | Row 30-32: NCC | Row 35-38: complaint status | Row 42-47: category
+        _row_meal_start = 12
+        _row_ncc_start  = 30
+        _row_fb_start   = 35
+        _row_cat_start  = 42
+
+        # ── Biểu đồ 1: Line chart xu hướng tỷ lệ đạt (D2) ──────────────────
+        if show_meal and not df_meal.empty and 'Tỷ lệ đạt (%)' in df_meal.columns:
+            _bar_data = [(str(row.get("Ngày",""))[:10], row.get("Tỷ lệ đạt (%)",0))
+                         for _, row in df_meal.sort_values("Ngày").tail(15).iterrows()]
+            for bi, (d, v) in enumerate(_bar_data, _row_meal_start):
+                ws_dash.cell(row=bi, column=1, value=d)
+                ws_dash.cell(row=bi, column=2, value=round(float(v),1) if str(v).replace('.','').replace('-','').isdigit() else 0)
+            lc = LineChart()
+            lc.title = "Xu hướng tỷ lệ đạt bữa ăn (%)"; lc.style = 10
+            lc.y_axis.title = "%"; lc.x_axis.title = "Ngày kiểm tra"
+            lc.y_axis.scaling.min = 0; lc.y_axis.scaling.max = 100
+            lc.width = 18; lc.height = 10
+            _ld = Reference(ws_dash, min_col=2, min_row=_row_meal_start, max_row=_row_meal_start+len(_bar_data)-1)
+            _lc = Reference(ws_dash, min_col=1, min_row=_row_meal_start, max_row=_row_meal_start+len(_bar_data)-1)
+            lc.add_data(_ld); lc.set_categories(_lc)
+            # Thêm đường ngưỡng 90% bằng series thứ 2
+            _thresh_row = _row_meal_start + len(_bar_data) + 2
+            for ti, (d2, _) in enumerate(_bar_data, _thresh_row):
+                ws_dash.cell(row=ti, column=3, value=90)
+            _thresh_d = Reference(ws_dash, min_col=3, min_row=_thresh_row, max_row=_thresh_row+len(_bar_data)-1)
+            lc.add_data(_thresh_d)
+            lc.series[0].title.v = "Tỷ lệ đạt"; lc.series[-1].title.v = "Ngưỡng 90%"
+            ws_dash.add_chart(lc, "D2")
+
+        # ── Biểu đồ 2: Bar chart số lần kiểm tra theo tháng (D18) ───────────
+        if show_meal and not df_meal.empty and "Ngày" in df_meal.columns:
+            import pandas as _pd3
+            _meal_copy = df_meal.copy()
+            _meal_copy["Tháng"] = _pd3.to_datetime(_meal_copy["Ngày"], errors="coerce").dt.strftime("%m/%Y")
+            _monthly_ct = _meal_copy.groupby("Tháng").size().reset_index(name="Số lần")
+            for mi, row_m in enumerate(_monthly_ct.itertuples(), _row_ncc_start + 10):
+                ws_dash.cell(row=mi, column=4, value=row_m.Tháng)
+                ws_dash.cell(row=mi, column=5, value=row_m._2 if hasattr(row_m, "_2") else getattr(row_m, "Số lần", 0))
+            bc2 = BarChart()
+            bc2.type = "col"; bc2.title = "Số lần kiểm tra theo tháng"; bc2.style = 2
+            bc2.width = 14; bc2.height = 9
+            _bn = len(_monthly_ct)
+            _bd2 = Reference(ws_dash, min_col=5, min_row=_row_ncc_start+10, max_row=_row_ncc_start+10+_bn-1)
+            _bc2 = Reference(ws_dash, min_col=4, min_row=_row_ncc_start+10, max_row=_row_ncc_start+10+_bn-1)
+            bc2.add_data(_bd2); bc2.set_categories(_bc2)
+            ws_dash.add_chart(bc2, "D18")
+
+        # ── Biểu đồ 3: Donut chart NCC xếp loại (N2) ────────────────────────
         if show_ncc and not df_ncc.empty and (ncc_a + ncc_b + ncc_c) > 0:
-            ws_dash.cell(row=30, column=1, value="Loại A"); ws_dash.cell(row=30, column=2, value=ncc_a)
-            ws_dash.cell(row=31, column=1, value="Loại B"); ws_dash.cell(row=31, column=2, value=ncc_b)
-            ws_dash.cell(row=32, column=1, value="Loại C"); ws_dash.cell(row=32, column=2, value=ncc_c)
-            pc = PieChart()
-            pc.title = "Phân Bố Xếp Loại Nhà Cung Cấp"
-            pc.style = 10; pc.width = 14; pc.height = 10
-            _pdata = Reference(ws_dash, min_col=2, min_row=30, max_row=32)
-            _plabels = Reference(ws_dash, min_col=1, min_row=30, max_row=32)
-            pc.add_data(_pdata); pc.set_categories(_plabels)
-            for i, color in enumerate(["70C94B", "FFC000", "FF0000"], 0):
-                if i < len(pc.series[0].dPt) if pc.series else False: pass
-                pt = DataPoint(idx=i)
-                from openpyxl.drawing.fill import PatternFillProperties
-                pc.series[0].dPt.append(pt)
-            ws_dash.add_chart(pc, "D18")
+            ws_dash.cell(row=_row_ncc_start,   column=1, value="Loại A"); ws_dash.cell(row=_row_ncc_start,   column=2, value=int(ncc_a))
+            ws_dash.cell(row=_row_ncc_start+1, column=1, value="Loại B"); ws_dash.cell(row=_row_ncc_start+1, column=2, value=int(ncc_b))
+            ws_dash.cell(row=_row_ncc_start+2, column=1, value="Loại C"); ws_dash.cell(row=_row_ncc_start+2, column=2, value=int(ncc_c))
+            pc3 = PieChart()
+            pc3.title = "Xếp loại nhà cung cấp"; pc3.style = 26
+            pc3.width = 12; pc3.height = 10
+            _pd3r = Reference(ws_dash, min_col=2, min_row=_row_ncc_start, max_row=_row_ncc_start+2)
+            _pl3 = Reference(ws_dash, min_col=1, min_row=_row_ncc_start, max_row=_row_ncc_start+2)
+            pc3.add_data(_pd3r); pc3.set_categories(_pl3)
+            ws_dash.add_chart(pc3, "N2")
+
+        # ── Biểu đồ 4: Bar chart trạng thái complaint (N18) ──────────────────
+        try:
+            _all_fb_dash = db_get_all_feedbacks(school=school_filter or "", limit=200)
+            _fb_pending  = sum(1 for f in _all_fb_dash if f.get("status")=="pending")
+            _fb_reviewed = sum(1 for f in _all_fb_dash if f.get("status")=="reviewed")
+            _fb_resolved = sum(1 for f in _all_fb_dash if f.get("status")=="resolved")
+            if _all_fb_dash:
+                for si, (lbl, val) in enumerate([
+                    ("⏳ Chờ xử lý", _fb_pending),
+                    ("💬 Đang xử lý", _fb_reviewed),
+                    ("✅ Đã xử lý", _fb_resolved),
+                ], _row_fb_start):
+                    ws_dash.cell(row=si, column=1, value=lbl)
+                    ws_dash.cell(row=si, column=2, value=val)
+                bc4 = BarChart()
+                bc4.type = "bar"; bc4.title = "Trạng thái phản hồi phụ huynh"
+                bc4.style = 2; bc4.width = 12; bc4.height = 9
+                _bd4 = Reference(ws_dash, min_col=2, min_row=_row_fb_start, max_row=_row_fb_start+2)
+                _bc4 = Reference(ws_dash, min_col=1, min_row=_row_fb_start, max_row=_row_fb_start+2)
+                bc4.add_data(_bd4); bc4.set_categories(_bc4)
+                ws_dash.add_chart(bc4, "N18")
+        except Exception:
+            pass
 
         buf = BytesIO(); wb.save(buf); buf.seek(0)
         st.download_button(
@@ -8251,6 +8251,9 @@ def main():
         (st.secrets.get("ANTHROPIC_API_KEY", "") if hasattr(st, "secrets") else "")
         or os.environ.get("ANTHROPIC_API_KEY", "")
     )
+    # Lưu vào session để các tab không nhận api_key param dùng được (tab_history, etc.)
+    if api_key:
+        st.session_state["api_key_stored"] = api_key
 
     # ── Thanh thông tin người dùng / điều khiển ──────────────────────────────
     if _use_auth and _user_profile:
@@ -8528,7 +8531,7 @@ def main():
         _tabs = st.tabs([
             "💬 Hỏi đáp AI",
             "🍱 Góc Phụ Huynh",
-            "📐 Quy Chuẩn & Lịch",
+            "📐 Quy chuẩn & lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
@@ -8546,7 +8549,7 @@ def main():
             "🏥 Kiểm thực 3 bước",
             "🏭 Nhà Cung Cấp",
             _hist_label,
-            "📐 Quy Chuẩn & Lịch",
+            "📐 Quy chuẩn & lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
@@ -8565,7 +8568,7 @@ def main():
             "✅ Checklist kiểm tra",
             "🏭 Nhà Cung Cấp",
             _hist_label,
-            "📐 Quy Chuẩn & Lịch",
+            "📐 Quy chuẩn & lịch",
             "🚨 Khẩn cấp",
             "📖 Hướng dẫn",
         ])
@@ -8580,7 +8583,7 @@ def main():
     else:  # Ban Giám Hiệu
         # BGH: dashboard + NCC tab riêng + lịch + khẩn cấp + hướng dẫn + quản lý TK
         _bgh_tabs = ["💬 Hỏi đáp AI", _hist_label, "🏭 Nhà Cung Cấp",
-                     "📐 Quy Chuẩn & Lịch", "🚨 Khẩn cấp", "📖 Hướng dẫn"]
+                     "📐 Quy chuẩn & lịch", "🚨 Khẩn cấp", "📖 Hướng dẫn"]
         if _use_auth:
             _bgh_tabs.append("👤 Quản lý tài khoản")
         _tabs = st.tabs(_bgh_tabs)
