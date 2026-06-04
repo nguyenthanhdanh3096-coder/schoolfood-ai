@@ -221,7 +221,7 @@ def db_save_feedback(school: str, category: str, content: str,
         return False
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def db_get_sessions(school: str = "", limit: int = 30) -> list:
     """Lấy lịch sử phiên kiểm tra — cache 60s để giảm lag khi chuyển tab."""
     sb = _get_sb()
@@ -354,9 +354,9 @@ def db_save_profile(user_id: str, email: str, full_name: str,
         return False
 
 
-@st.cache_data(ttl=120, show_spinner=False)
-def db_get_all_profiles(school: str = "") -> list:
-    """Lấy tất cả user profiles — cache 2 phút."""
+@st.cache_data(ttl=300, show_spinner=False)
+def db_get_all_profiles(school: str = "", include_inactive: bool = False) -> list:
+    """Lấy tất cả user profiles — cache 5 phút, mặc định chỉ lấy active."""
     sb = _get_sb()
     if not sb:
         return []
@@ -364,6 +364,8 @@ def db_get_all_profiles(school: str = "") -> list:
         q = sb.table("user_profiles").select("*").order("created_at", desc=False)
         if school:
             q = q.eq("school_name", school)
+        if not include_inactive:
+            q = q.eq("is_active", True)
         return q.execute().data or []
     except Exception:
         return []
@@ -381,7 +383,7 @@ def db_toggle_profile(user_id: str, is_active: bool) -> bool:
         return False
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def db_get_feedback(school: str = "", status: str = "pending") -> list:
     """Lấy feedback Phụ Huynh — cache 30s."""
     sb = _get_sb()
@@ -411,7 +413,7 @@ def db_update_feedback_status(feedback_id: str, new_status: str):
         pass
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def db_get_all_feedbacks(school: str = "", limit: int = 100) -> list:
     """Lấy TẤT CẢ feedback không filter status — cache 30s để giảm lag."""
     sb = _get_sb()
@@ -571,7 +573,7 @@ def db_update_zalo_id(user_id: str, zalo_user_id: str) -> bool:
 
 # ── Task#5: NCC Registry — track giấy phép & chứng nhận ATTP ─────────────────
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=180, show_spinner=False)
 def db_get_ncc_registry(school: str = "") -> list:
     """Lấy danh sách NCC đã đăng ký — cache 60s."""
     sb = _get_sb()
@@ -3289,6 +3291,21 @@ def tab_emergency(api_key: str = ""):
                               key="full_report_display")
                 st.caption("💡 Copy → dán vào Word → chỉnh font Times New Roman 13 → in/ký/gửi.")
                 st.markdown('</div>', unsafe_allow_html=True)
+                # Tải biên bản Word chuẩn hành chính
+                try:
+                    _school_em = st.session_state.get("user_school", "")
+                    _inc_bytes = generate_word_incident(
+                        st.session_state.incident_log, school=_school_em
+                    )
+                    st.download_button(
+                        "📄 Tải Biên Bản Sự Cố (.docx) — gửi Sở Y Tế trong 24h",
+                        data=_inc_bytes,
+                        file_name=f"BienBan_SuCo_{now_vn().strftime('%d-%m-%Y_%H%M')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True, type="primary",
+                    )
+                except Exception as _we:
+                    st.warning(f"Không tạo được biên bản Word: {_we}")
 
         # Task#5: Visual Timeline của log sự cố
         if st.session_state.get("incident_log") and not st.session_state.incident_active:
@@ -4212,6 +4229,17 @@ def tab_kiem_thuc(api_key: str = "", level: str = "Tiểu Học (6–11 tuổi)"
     )
 
     if can_export:
+        # ⚠️ Cảnh báo B3_05 — mẫu lưu bắt buộc pháp lý
+        if all_results.get("B3_05") != "✅ Đạt":
+            st.error(
+                "🚨 **CẢNH BÁO: Chưa lấy mẫu lưu nghiệm (B3_05)!**\n\n"
+                "Mẫu lưu thức ăn 24h là **bắt buộc theo TTLT 13/2016 Điều 9** — không có mẫu lưu "
+                "sẽ không thể xét nghiệm nếu xảy ra ngộ độc thực phẩm.\n\n"
+                "**Cần làm ngay:** Lấy ≥100g mỗi món ăn → cho vào túi kín → ghi nhãn "
+                "(tên món + giờ lấy + ngày) → bảo quản tủ lạnh ≤5°C trong 24 giờ.\n\n"
+                "Sau khi đã lấy mẫu → quay lại đánh dấu B3_05 = ✅ Đạt trước khi xuất báo cáo."
+            )
+
         # G1: Auto-save kiểm thực — guard chống duplicate
         date_vn_kt    = kt_date.strftime("%d/%m/%Y")
         date_iso_kt   = kt_date.strftime("%Y-%m-%d")
@@ -4520,14 +4548,15 @@ MANUAL_CONTENT = {
             "icon": "👥",
             "title": "2. Hướng dẫn theo vai trò — Tab & Chức năng",
             "subsections": [
-                ("👨‍👩‍👧 Phụ Huynh — 4 Tab",
+                ("👨‍👩‍👧 Phụ Huynh — 5 Tab",
                  "Đăng nhập bằng tài khoản được Ban Giám Hiệu cấp.\n\n"
                  "Tab 💬 Hỏi đáp AI: Đặt câu hỏi tiếng Việt về ATTP, dinh dưỡng, quyền phụ huynh\n"
-                 "Tab 🍱 Góc Phụ Huynh:\n"
+                 "Tab 🍱 Góc phụ huynh:\n"
                  "  • Xem kết quả bữa ăn hôm nay (🟢 An toàn / 🟡 Cần theo dõi / 🔴 Có vấn đề)\n"
                  "  • Xem thực đơn hôm nay\n"
                  "  • Lịch sử 7 ngày gần nhất\n"
                  "  • Gửi phản hồi/complaint về bữa ăn — theo dõi trạng thái ⏳→💬→✅\n"
+                 "Tab 📐 Quy chuẩn & lịch: Tìm hiểu tiêu chuẩn dinh dưỡng + lịch kiểm tra của trường\n"
                  "Tab 🚨 Khẩn cấp: Quy trình 6 bước khi nghi ngờ ngộ độc · Số điện thoại 115, 1800 6838\n"
                  "Tab 📖 Hướng dẫn: Sổ tay đầy đủ + quyền pháp lý\n\n"
                  "⚠️ Phụ huynh KHÔNG trực tiếp vào bếp kiểm tra — chỉ Ban Đại Diện PHHS chính thức mới có quyền."),
@@ -4547,21 +4576,23 @@ MANUAL_CONTENT = {
                  "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
                  "Tab 📖 Hướng dẫn: Sổ tay đầy đủ"),
 
-                ("🏥 Y Tế Học Đường — 6 Tab",
+                ("🏥 Y Tế Học Đường — 7 Tab",
                  "Đăng nhập bằng tài khoản được Ban Giám Hiệu cấp.\n"
                  "Chọn cấp học đúng với lớp bạn phụ trách (Tiểu Học / THCS / THPT) — ảnh hưởng tiêu chuẩn dinh dưỡng.\n\n"
                  "Tab 💬 Hỏi đáp AI: Tư vấn kỹ thuật ATTP, câu hỏi nghiệp vụ\n"
-                 "Tab 🏥 Kiểm thực 3 bước (NHIỆM VỤ CHÍNH · HÀNG NGÀY 9:30–11:00):\n"
+                 "Tab 🏥 Kiểm thực 3 bước (NHIỆM VỤ CHÍNH · HÀNG NGÀY):\n"
                  "  • Bước 1 (8:00–9:30 | Trước chế biến): tem kiểm dịch, hóa đơn, hạn dùng, nhiệt độ tủ lạnh\n"
                  "  • Bước 2 (9:30–10:30 | Trong chế biến): nhiệt độ nấu ≥70°C, vệ sinh dụng cụ, nhân viên\n"
                  "  • Bước 3 (10:30–11:00 | Sau chế biến): nhiệt độ chia, màu mùi, khẩu phần, mẫu lưu 24h\n"
-                 "  → Song song ghi sổ kiểm thực giấy (bắt buộc theo TTLT 13/2016)\n"
-                 "Tab 🏭 Nhà Cung Cấp (KIỂM TRA GIAO HÀNG · Mỗi lần NCC giao):\n"
+                 "  ⚠️ Mẫu lưu B3_05 là bắt buộc pháp lý — không có mẫu lưu không thể truy xuất ngộ độc!\n"
+                 "  → Song song ghi sổ kiểm thực giấy (bắt buộc theo TTLT 13/2016 Điều 9)\n"
+                 "Tab 🏭 Nhà cung cấp (KIỂM TRA GIAO HÀNG · Mỗi lần NCC giao):\n"
                  "  • 10 điểm S03–S12: xe vận chuyển, nhiệt độ, hóa đơn, nhãn mác, mẫu lưu\n"
-                 "  • Cung cấp minh chứng cho complaint của Phụ Huynh (Y Tế là người trực tiếp tại bếp)\n"
+                 "  • Lý do: TTLT 13/2016 Điều 9(a) — Y Tế kiểm tra nguồn gốc nguyên liệu đầu vào\n"
                  "Tab 📊 Lịch sử: Xem kết quả + cung cấp minh chứng complaint\n"
-                 "Tab 🚨 Khẩn cấp: Quy trình sự cố\n"
-                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ"),
+                 "Tab 📐 Quy chuẩn & lịch: Tần suất kiểm tra + hệ thống cảnh báo 4 cấp + tiêu chuẩn dinh dưỡng\n"
+                 "Tab 🚨 Khẩn cấp: Quy trình xử lý sự cố ngộ độc\n"
+                 "Tab 📖 Hướng dẫn: Sổ tay đầy đủ + cài đặt Zalo thông báo"),
 
                 ("🏫 Ban Giám Hiệu — 6 Tab",
                  "Tài khoản đầu tiên do Admin hệ thống (Quản trị viên) cấp.\n"
@@ -5058,7 +5089,7 @@ def tab_guide():
                 f'4️⃣ Quản trị viên cập nhật Zalo ID vào tài khoản (hoặc tự điền bên dưới)<br>'
                 f'<span style="font-size:0.78rem;color:#64748B">'
                 f'Nhận thông báo khi: có complaint mới, BGH phản hồi, NCC hết hạn, nhắc kiểm tra<br>'
-                f'Trạng thái OA: {"✅ Đã kết nối OA" if _oa_active else "⚠️ Chưa cấu hình ZALO_OA_ACCESS_TOKEN"}</span>'
+                f'Trạng thái OA: {"✅ Đã kết nối OA — thông báo hoạt động" if _oa_active else "⚠️ OA đang chờ duyệt hoặc chưa cấu hình token (thường 1–3 ngày làm việc)"}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -8144,7 +8175,7 @@ def tab_user_management(school: str = ""):
     # ── Danh sách người dùng (ẩn super admin) ────────────────────────────────
     st.markdown('<div class="sec-hdr">📋 Danh sách tài khoản trong trường</div>',
                 unsafe_allow_html=True)
-    _all_p  = db_get_all_profiles(school=school if school else "")
+    _all_p  = db_get_all_profiles(school=school if school else "", include_inactive=True)
     # Ẩn super admin khỏi danh sách BGH thấy
     _profiles = [p for p in _all_p if not p.get("is_super_admin", False)]
 
@@ -8354,6 +8385,9 @@ def main():
         '<div style="position:absolute;bottom:-60px;right:80px;width:160px;height:160px;'
         'border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>'
     )
+    _ai_badge_clr = "rgba(34,197,94,0.25)" if api_key and api_key.startswith("sk-ant-") else "rgba(239,68,68,0.2)"
+    _ai_badge_txt = "#86EFAC" if api_key and api_key.startswith("sk-ant-") else "#FCA5A5"
+    _ai_badge_lbl = "✅ AI" if api_key and api_key.startswith("sk-ant-") else "⚠️ AI chưa kết nối"
     _badges = (
         '<span style="background:rgba(255,255,255,0.15);color:white;padding:4px 12px;'
         'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(255,255,255,0.2)">'
@@ -8361,6 +8395,9 @@ def main():
         '<span style="background:rgba(255,255,255,0.15);color:white;padding:4px 12px;'
         'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(255,255,255,0.2)">'
         '🤖 AI Vision</span>'
+        f'<span style="background:{_ai_badge_clr};color:{_ai_badge_txt};padding:4px 12px;'
+        f'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(134,239,172,0.3)">'
+        f'{_ai_badge_lbl}</span>'
         '<span style="background:rgba(34,197,94,0.25);color:#86EFAC;padding:4px 12px;'
         'border-radius:20px;font-size:0.75rem;font-weight:600;border:1px solid rgba(134,239,172,0.3)">'
         '🟢 Live</span>'
@@ -8547,7 +8584,15 @@ def main():
                                 help="Chuyển Dark/Light mode"):
                 st.session_state.dark_mode = not _dm_on; st.rerun()
             if _ctrl[3].button("🚪 Đăng xuất", use_container_width=True):
-                for _k in ("auth_user","user_profile","admin_role_switch"):
+                _LOGOUT_KEYS = (
+                    "auth_user","user_profile","admin_role_switch",
+                    "cl_r","cl_n","cl_photos","cl_extra_r","photo_analysis",
+                    "kt_b1_r","kt_b1_n","kt_b2_r","kt_b2_n","kt_b3_r","kt_b3_n",
+                    "kt_photo_analysis","kt_extra",
+                    "sup_r","sup_notes","sup_imgs","sup_vision","sup_ai_analysis",
+                    "incident_log","incident_active","api_key_stored",
+                )
+                for _k in _LOGOUT_KEYS:
                     st.session_state.pop(_k, None)
                 st.rerun()
         else:
@@ -8563,7 +8608,15 @@ def main():
                                 help="Chuyển Dark/Light mode"):
                 st.session_state.dark_mode = not _dm_on; st.rerun()
             if _ctrl[2].button("🚪 Đăng xuất", use_container_width=True):
-                for _k in ("auth_user","user_profile"):
+                _LOGOUT_KEYS = (
+                    "auth_user","user_profile",
+                    "cl_r","cl_n","cl_photos","cl_extra_r","photo_analysis",
+                    "kt_b1_r","kt_b1_n","kt_b2_r","kt_b2_n","kt_b3_r","kt_b3_n",
+                    "kt_photo_analysis","kt_extra",
+                    "sup_r","sup_notes","sup_imgs","sup_vision","sup_ai_analysis",
+                    "incident_log","incident_active","api_key_stored",
+                )
+                for _k in _LOGOUT_KEYS:
                     st.session_state.pop(_k, None)
                 st.rerun()
 
