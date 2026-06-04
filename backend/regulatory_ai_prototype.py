@@ -197,7 +197,7 @@ def db_save_kiem_thuc(school: str, date_str: str, yte_name: str, menu: str,
 
 
 def db_save_feedback(school: str, category: str, content: str) -> bool:
-    """Lưu feedback Phụ Huynh vào Supabase."""
+    """Lưu feedback Phụ Huynh + gửi Telegram notify cho BGH."""
     sb = _get_sb()
     if not sb:
         return False
@@ -208,6 +208,11 @@ def db_save_feedback(school: str, category: str, content: str) -> bool:
             "content":     content[:2000],
             "status":      "pending",
         }).execute()
+        # Notify BGH qua Telegram (non-blocking)
+        try:
+            notify_bgh_new_complaint(school or "", category, content[:80])
+        except Exception:
+            pass
         return True
     except Exception:
         return False
@@ -433,19 +438,113 @@ def db_add_evidence(feedback_id: str, evidence_text: str, by_name: str) -> bool:
 
 
 def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> bool:
-    """BGH đóng complaint, ghi phản hồi chính thức."""
+    """BGH đóng complaint + Task#4: gửi Telegram notify cho Phụ Huynh nếu có."""
     sb = _get_sb()
     if not sb: return False
     try:
+        # Lấy thông tin complaint trước khi update
+        _fb = sb.table("parent_feedback").select("*").eq("id", feedback_id).execute().data
         sb.table("parent_feedback").update({
             "status":        "resolved",
             "response_text": response_text,
             "response_by":   by_name,
             "reviewed_at":   now_vn().isoformat(),
         }).eq("id", feedback_id).execute()
+        # Notify PH qua Telegram (non-blocking, best-effort)
+        if _fb:
+            _school = _fb[0].get("school_name","")
+            try:
+                notify_ph_complaint_resolved("", _school, response_text)
+            except Exception:
+                pass
         return True
     except Exception:
         return False
+
+# ── Task#1: Telegram Push Notification Infrastructure ─────────────────────────
+# Thiết kế scalable: tách biệt transport layer (Telegram hiện tại)
+# khỏi notification logic — dễ thay bằng Zalo/Email/SMS sau này
+
+def send_telegram_notification(chat_id: str, message: str, bot_token: str = "") -> bool:
+    """Gửi thông báo qua Telegram Bot API.
+    Scalable: có thể thay bằng Zalo/Email bằng cách thay hàm này.
+    """
+    if not chat_id or not chat_id.strip():
+        return False
+    try:
+        if not bot_token:
+            bot_token = (st.secrets.get("TELEGRAM_BOT_TOKEN","") if hasattr(st,"secrets") else "")
+        if not bot_token:
+            return False
+        import requests as _req
+        resp = _req.post(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            json={"chat_id": chat_id.strip(), "text": message,
+                  "parse_mode": "HTML", "disable_notification": False},
+            timeout=5
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def notify_bgh_new_complaint(school: str, category: str, content_preview: str):
+    """Gửi Telegram cho tất cả BGH của trường khi có complaint mới."""
+    try:
+        _sb = _get_sb()
+        if not _sb: return
+        _bghs = _sb.table("user_profiles").select("telegram_chat_id")\
+            .eq("school_name", school).eq("role", "ban_giam_hieu")\
+            .eq("is_active", True).execute().data or []
+        _msg = (f"📬 <b>Phản hồi mới từ Phụ Huynh</b>\n"
+                f"🏫 Trường: {school}\n"
+                f"🏷️ Loại: {category}\n"
+                f"💬 Nội dung: {content_preview[:100]}...\n"
+                f"→ Vào SchoolFood AI → Tab Lịch sử để xem và xử lý")
+        for _b in _bghs:
+            send_telegram_notification(_b.get("telegram_chat_id",""), _msg)
+    except Exception: pass
+
+
+def notify_ph_complaint_resolved(telegram_chat_id: str, school: str, response_text: str):
+    """Gửi Telegram cho Phụ Huynh khi BGH đã xử lý complaint."""
+    if not telegram_chat_id: return
+    _msg = (f"✅ <b>Phản hồi của bạn đã được xử lý</b>\n"
+            f"🏫 Trường: {school}\n"
+            f"💬 Phản hồi từ Ban Giám Hiệu: {response_text[:200]}\n"
+            f"→ Vào SchoolFood AI → Góc Phụ Huynh để xem chi tiết")
+    send_telegram_notification(telegram_chat_id, _msg)
+
+
+def notify_frequency_alert(school: str, role_type: str, days_gap: int):
+    """Gửi Telegram alert tần suất cho BGH."""
+    try:
+        _sb = _get_sb()
+        if not _sb: return
+        _bghs = _sb.table("user_profiles").select("telegram_chat_id")\
+            .eq("school_name", school).eq("role", "ban_giam_hieu")\
+            .eq("is_active", True).execute().data or []
+        _role_vn = "Y Tế Học Đường" if role_type == "kiem_thuc" else "Ban Giám Sát"
+        _msg = (f"🚨 <b>Cảnh báo tần suất kiểm tra</b>\n"
+                f"🏫 Trường: {school}\n"
+                f"👥 {_role_vn} chưa kiểm tra {days_gap} ngày\n"
+                f"⚖️ Vi phạm quy định NĐ 15/2018 / TTLT 13/2016\n"
+                f"→ Liên hệ ngay để lên lịch kiểm tra")
+        for _b in _bghs:
+            send_telegram_notification(_b.get("telegram_chat_id",""), _msg)
+    except Exception: pass
+
+
+def db_update_telegram_id(user_id: str, chat_id: str) -> bool:
+    """Cập nhật Telegram Chat ID cho user."""
+    sb = _get_sb()
+    if not sb: return False
+    try:
+        sb.table("user_profiles").update({"telegram_chat_id": chat_id.strip()})\
+            .eq("id", user_id).execute()
+        return True
+    except Exception: return False
+
 
 # ── Task#5: NCC Registry — track giấy phép & chứng nhận ATTP ─────────────────
 
@@ -2314,6 +2413,19 @@ def tab_checklist(api_key: str = ""):
         st.caption("🔌 Kết nối API key ở thanh cài đặt phía trên để dùng tính năng tạo câu hỏi theo thực đơn.")
 
     # ── Anti-Fraud: Câu hỏi xác thực ngẫu nhiên ──────────────────────────────
+    # Task#3: Nudge khi thiếu điều kiện để câu hỏi hoạt động
+    _af_missing = []
+    if not ai_on:      _af_missing.append("API key chưa có (cài trong tab Hướng dẫn)")
+    if not school:     _af_missing.append("Tên trường chưa điền")
+    if not menu:       _af_missing.append("Thực đơn hôm nay chưa điền")
+    if _af_missing:
+        st.markdown(
+            '<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;'
+            'padding:8px 14px;margin:6px 0;font-size:0.82rem;color:#92400E">'
+            '⚠️ <b>Câu hỏi chống gian lận</b> chưa khả dụng — cần bổ sung: '
+            + " · ".join(_af_missing)
+            + '</div>', unsafe_allow_html=True,
+        )
     if ai_on and menu and school:
         if "cl_af_questions" not in st.session_state:
             st.session_state.cl_af_questions = []
@@ -3106,6 +3218,25 @@ def tab_emergency(api_key: str = ""):
                               key="full_report_display")
                 st.caption("💡 Copy → dán vào Word → chỉnh font Times New Roman 13 → in/ký/gửi.")
                 st.markdown('</div>', unsafe_allow_html=True)
+
+        # Task#5: Visual Timeline của log sự cố
+        if st.session_state.get("incident_log") and not st.session_state.incident_active:
+            with st.expander("📅 Timeline sự cố chi tiết"):
+                _log = st.session_state.incident_log
+                st.markdown(
+                    '<div style="padding:8px 0">'
+                    + "".join(
+                        f'<div style="display:flex;gap:12px;margin:6px 0;align-items:flex-start">'
+                        f'<div style="width:12px;height:12px;border-radius:50%;margin-top:4px;flex-shrink:0;'
+                        f'background:{"#DC2626" if "🚨" in l or "CRITICAL" in l.upper() else "#2563EB" if "AI" in l else "#16A34A"}'
+                        f'"></div>'
+                        f'<div style="font-size:0.82rem;color:#334155;font-family:monospace">{l}</div>'
+                        f'</div>'
+                        for l in _log
+                    )
+                    + '</div>',
+                    unsafe_allow_html=True,
+                )
 
         st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
         st.markdown("**Hoặc dùng hướng dẫn tĩnh bên dưới:**")
@@ -4677,6 +4808,48 @@ def tab_guide():
         '</div></div>',
         unsafe_allow_html=True,
     )
+
+    # ── Task#1: Cài đặt Telegram nhận thông báo ──────────────────────────────
+    _auth_guide = st.session_state.get("auth_user")
+    _pf_guide   = st.session_state.get("user_profile", {})
+    if _auth_guide and not _auth_guide.get("demo"):
+        st.markdown('<div class="sf-div"></div>', unsafe_allow_html=True)
+        with st.expander("📲 Cài đặt thông báo Telegram"):
+            _cur_tg = _pf_guide.get("telegram_chat_id","") or ""
+            st.markdown(
+                '<div style="background:#EFF6FF;border-radius:8px;padding:12px 14px;margin-bottom:10px">'
+                '<b>Cách nhận thông báo tự động qua Telegram:</b><br>'
+                '1️⃣ Mở Telegram → Tìm kiếm <b>@SchoolFoodAI_VN_bot</b><br>'
+                '2️⃣ Bấm <b>Start</b> hoặc gõ <b>/start</b><br>'
+                '3️⃣ Bot sẽ trả về Chat ID của bạn (dạng số)<br>'
+                '4️⃣ Dán Chat ID vào ô bên dưới và bấm Lưu<br>'
+                '<span style="font-size:0.78rem;color:#64748B">'
+                'Bạn sẽ nhận thông báo khi: có complaint mới, BGH phản hồi, '
+                'cảnh báo NCC hết hạn, nhắc kiểm tra...</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            _tg_status = (
+                f'<span style="color:#16A34A;font-size:0.82rem">✅ Đã cài đặt: {_cur_tg}</span>'
+                if _cur_tg else
+                '<span style="color:#94A3B8;font-size:0.82rem">⬜ Chưa cài đặt</span>'
+            )
+            st.markdown(_tg_status, unsafe_allow_html=True)
+            _tg_new = st.text_input("Telegram Chat ID", value=_cur_tg,
+                                     placeholder="VD: 123456789",
+                                     key="tg_chat_id_input")
+            if st.button("💾 Lưu Telegram Chat ID", key="tg_save_btn"):
+                if _tg_new.strip().lstrip("-").isdigit():
+                    _uid = (_auth_guide or {}).get("id","")
+                    if _uid and db_update_telegram_id(_uid, _tg_new.strip()):
+                        # Test notification
+                        send_telegram_notification(_tg_new.strip(),
+                            f"✅ <b>SchoolFood AI</b>\nĐã kết nối thành công!\n"
+                            f"Bạn sẽ nhận thông báo tại đây.")
+                        st.success("✅ Đã lưu! Kiểm tra Telegram để xác nhận.")
+                        st.rerun()
+                else:
+                    st.error("Chat ID không hợp lệ — chỉ gồm chữ số (có thể có dấu - ở đầu).")
 
     # ── Đổi mật khẩu — đặt trong Hướng dẫn, không làm rối header ─────────────
     _auth_user_guide = st.session_state.get("auth_user")
@@ -8016,8 +8189,53 @@ def main():
         if not st.session_state.get("onboarding_dismissed"):
             _ob_profiles = db_get_all_profiles(school=_school_pf)
             _ob_profiles = [p for p in _ob_profiles if not p.get("is_super_admin", False)]
-            _ob_sessions = 0  # Sẽ check trong banner nếu cần
-            show_onboarding_banner(_school_pf, _ob_profiles, _ob_sessions)
+            show_onboarding_banner(_school_pf, _ob_profiles, 0)
+
+    # Task#2: Onboarding Y Tế / BGS mới đăng nhập (lần đầu trong phiên)
+    elif role in ("Y Tế Học Đường", "Ban Giám Sát (Đại Diện PHHS)") and _use_auth:
+        if not st.session_state.get(f"role_onboarding_{role}_done"):
+            _pf_ob = st.session_state.get("user_profile", {})
+            _last_login = _pf_ob.get("last_login","")
+            # Chỉ hiện trong 3 ngày đầu (lần đăng nhập đầu tiên)
+            _is_new = not _last_login or (
+                now_vn() - __import__("datetime").datetime.fromisoformat(
+                    _last_login[:19]).replace(tzinfo=__import__("datetime").timezone.utc)
+            ).days <= 3
+            if _is_new:
+                _ob_role_steps = {
+                    "Y Tế Học Đường": [
+                        ("🏥 Tab Kiểm thực 3 bước", "Nhiệm vụ chính — thực hiện HÀNG NGÀY lúc 9:30–11:00. Điền đủ 3 bước, xác nhận từng bước theo giờ."),
+                        ("🏭 Tab Nhà Cung Cấp", "Kiểm tra giao hàng mỗi ngày (S03–S12 · 10 điểm). Khi Không Đạt phải có ghi chú hoặc ảnh minh chứng."),
+                        ("📊 Tab Lịch sử", "Xem kết quả, cung cấp minh chứng cho complaint của phụ huynh."),
+                        ("🚨 Tab Khẩn cấp", "Giai đoạn 1: AI hỗ trợ khi sự cố xảy ra → Giai đoạn 2: Điều tra & Báo cáo."),
+                    ],
+                    "Ban Giám Sát (Đại Diện PHHS)": [
+                        ("✅ Tab Checklist", "NHIỆM VỤ CHÍNH — 2 lần/tuần tối thiểu (1 báo trước + 1 đột xuất). Phải chụp ảnh minh chứng khi Không Đạt."),
+                        ("🏭 Tab Nhà Cung Cấp", "Đánh giá NCC toàn diện 12 điểm, 1 lần/tháng."),
+                        ("📊 Tab Lịch sử", "Xem kết quả, theo dõi complaint của phụ huynh (chỉ đọc)."),
+                    ],
+                }
+                _steps = _ob_role_steps.get(role, [])
+                if _steps:
+                    st.markdown(
+                        f'<div style="background:linear-gradient(135deg,#0F2651,#1D4ED8);'
+                        f'border-radius:14px;padding:16px 20px;margin-bottom:14px">'
+                        f'<div style="color:white;font-size:1rem;font-weight:700;margin-bottom:10px">'
+                        f'👋 Chào mừng! Hướng dẫn nhanh cho {role}</div>'
+                        + "".join(
+                            f'<div style="background:rgba(255,255,255,0.1);border-radius:8px;'
+                            f'padding:8px 12px;margin:5px 0;color:white">'
+                            f'<b>{t}</b><br>'
+                            f'<span style="font-size:0.8rem;opacity:0.85">{d}</span></div>'
+                            for t, d in _steps
+                        )
+                        + f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button("✓ Đã hiểu, bắt đầu sử dụng",
+                                  key=f"ob_{role}_dismiss"):
+                        st.session_state[f"role_onboarding_{role}_done"] = True
+                        st.rerun()
 
     # Lịch sử — gắn cờ đỏ nếu có CRITICAL gần đây
     # Dùng cache: tránh gọi DB thêm lần nữa chỉ để check critical flag
