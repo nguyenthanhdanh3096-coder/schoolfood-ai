@@ -3,6 +3,7 @@
 
 import base64
 import json
+import requests
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -196,19 +197,21 @@ def db_save_kiem_thuc(school: str, date_str: str, yte_name: str, menu: str,
         return None
 
 
-def db_save_feedback(school: str, category: str, content: str) -> bool:
-    """Lưu feedback Phụ Huynh + gửi Telegram notify cho BGH."""
+def db_save_feedback(school: str, category: str, content: str,
+                     submitted_by: str = "") -> bool:
+    """Lưu feedback Phụ Huynh + gửi Zalo notify cho BGH."""
     sb = _get_sb()
     if not sb:
         return False
     try:
         sb.table("parent_feedback").insert({
-            "school_name": school or "Không rõ",
-            "category":    category,
-            "content":     content[:2000],
-            "status":      "pending",
+            "school_name":  school or "Không rõ",
+            "category":     category,
+            "content":      content[:2000],
+            "status":       "pending",
+            "submitted_by": submitted_by or "",
         }).execute()
-        # Notify BGH qua Telegram (non-blocking)
+        # Notify BGH qua Zalo OA (non-blocking)
         try:
             notify_bgh_new_complaint(school or "", category, content[:80])
         except Exception:
@@ -240,7 +243,9 @@ def db_get_schools() -> list[str]:
     if not sb:
         return []
     try:
-        rows = sb.table("checklist_sessions").select("school_name").execute().data or []
+        # Dùng user_profiles làm source chính (chính xác hơn sessions)
+        rows = sb.table("user_profiles").select("school_name")\
+            .neq("school_name", "").execute().data or []
         seen, result = set(), []
         for r in rows:
             n = r.get("school_name", "").strip()
@@ -438,11 +443,10 @@ def db_add_evidence(feedback_id: str, evidence_text: str, by_name: str) -> bool:
 
 
 def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> bool:
-    """BGH đóng complaint + Task#4: gửi Telegram notify cho Phụ Huynh nếu có."""
+    """BGH đóng complaint + gửi Zalo notify cho Phụ Huynh nếu có zalo_user_id."""
     sb = _get_sb()
     if not sb: return False
     try:
-        # Lấy thông tin complaint trước khi update
         _fb = sb.table("parent_feedback").select("*").eq("id", feedback_id).execute().data
         sb.table("parent_feedback").update({
             "status":        "resolved",
@@ -450,11 +454,21 @@ def db_resolve_complaint(feedback_id: str, response_text: str, by_name: str) -> 
             "response_by":   by_name,
             "reviewed_at":   now_vn().isoformat(),
         }).eq("id", feedback_id).execute()
-        # Notify PH qua Telegram (non-blocking, best-effort)
+        # Notify PH qua Zalo OA — tìm zalo_user_id từ submitted_by
         if _fb:
-            _school = _fb[0].get("school_name","")
+            _school = _fb[0].get("school_name", "")
+            _submitter = _fb[0].get("submitted_by", "")
+            _ph_zalo = ""
+            if _submitter:
+                try:
+                    _pf = sb.table("user_profiles").select("zalo_user_id")\
+                        .eq("id", _submitter).execute().data
+                    if _pf:
+                        _ph_zalo = _pf[0].get("zalo_user_id", "")
+                except Exception:
+                    pass
             try:
-                notify_ph_complaint_resolved("", _school, response_text)
+                notify_ph_complaint_resolved(_ph_zalo, _school, response_text)
             except Exception:
                 pass
         return True
@@ -480,8 +494,7 @@ def send_zalo_notification(zalo_user_id: str, message: str,
                         if hasattr(st,"secrets") else "")
         if not oa_token:
             return False
-        import requests as _req
-        resp = _req.post(
+        resp = requests.post(
             "https://openapi.zalo.me/v2.0/oa/message/cs",
             headers={
                 "access_token": oa_token,
@@ -3571,7 +3584,8 @@ def tab_parent_view(api_key: str = ""):
             st.error("🚨 Nghi ngờ ngộ độc: gọi **115** ngay và xem tab **🚨 Khẩn cấp**.")
         else:
             _school_fb = school or st.session_state.get("kt_school", "") or "Chưa nhập"
-            saved = db_save_feedback(_school_fb, loai, noi_dung)
+            _uid_fb = (st.session_state.get("auth_user") or {}).get("id", "")
+            saved = db_save_feedback(_school_fb, loai, noi_dung, submitted_by=_uid_fb)
             if saved:
                 st.session_state["ph_last_feedback"] = {"loai": loai, "noi_dung": noi_dung,
                                                           "time": now_vn().strftime("%H:%M %d/%m")}
