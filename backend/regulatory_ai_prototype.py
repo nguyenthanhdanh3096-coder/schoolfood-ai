@@ -560,6 +560,28 @@ def notify_frequency_alert(school: str, role_type: str, days_gap: int):
     except Exception: pass
 
 
+def db_save_audit_log(action: str, table_name: str = "", record_id: str = "",
+                      details: dict | None = None) -> bool:
+    """Ghi audit log — ai làm gì, lúc nào. Non-blocking, best-effort."""
+    try:
+        sb = _get_sb()
+        if not sb: return False
+        _auth = st.session_state.get("auth_user") or {}
+        _pf   = st.session_state.get("user_profile") or {}
+        sb.table("audit_log").insert({
+            "user_id":    str(_auth.get("id","anon")),
+            "user_email": str(_auth.get("email","") or _pf.get("email","")),
+            "school_name": str(_pf.get("school_name","") or st.session_state.get("user_school","")),
+            "action":     action,
+            "table_name": table_name,
+            "record_id":  str(record_id),
+            "details":    details or {},
+        }).execute()
+        return True
+    except Exception:
+        return False
+
+
 def db_update_zalo_id(user_id: str, zalo_user_id: str) -> bool:
     """Cập nhật Zalo User ID cho user (lấy từ Zalo OA webhook)."""
     sb = _get_sb()
@@ -3070,8 +3092,9 @@ def tab_checklist(api_key: str = ""):
                 extra_results=extra_r or None,
             )
             if session_id:
-                st.session_state[_save_guard_key] = True   # Đánh dấu đã lưu
-                # DB saved silently
+                st.session_state[_save_guard_key] = True
+                db_save_audit_log("checklist_submit", "checklist_sessions", session_id,
+                                  {"alert": alert_key, "pass": pass_count, "fail": fail_count})
             elif db_ok():
                 st.warning("⚠️ Lưu database thất bại — báo cáo vẫn tải được bình thường")
         else:
@@ -5814,6 +5837,8 @@ def tab_history(role: str = "", school_filter: str = ""):
                                          type="primary", use_container_width=True):
                                 _rtext = _reptxt.strip() or "Ban Giám Hiệu đã xem xét và xử lý."
                                 if db_resolve_complaint(_fid, _rtext, _user_name):
+                                    db_save_audit_log("complaint_resolve", "parent_feedback", _fid,
+                                                      {"response_by": _user_name})
                                     st.success("✅ Đã đóng task!")
                                     st.rerun()
 
@@ -8510,6 +8535,8 @@ def tab_user_management(school: str = ""):
                                        ROLE_KEY.get(_nu_role, "phu_huynh"), _nu_school,
                                        default_level=_nu_default_level)
                 if _ok:
+                    db_save_audit_log("user_create", "user_profiles", _uid,
+                                      {"email": _email_clean, "role": _nu_role, "school": _nu_school})
                     st.success(
                         f"✅ Đã tạo tài khoản **{_nu_name}** ({_nu_email}) — "
                         f"Vai trò: {_nu_role} · Trường: {_nu_school}"
